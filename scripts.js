@@ -39,6 +39,11 @@ const products = [
         id: 8, name: 'Reloj Deportivo', category: 'accesorios',
         price: 34.99, originalPrice: null, badge: 'Nuevo',
         imgClass: 'prod-8', emoji: '⌚'
+    },
+    {
+        id: 9, name: 'Camisa Negra', category: 'hombre',
+        price: 2.00, originalPrice: null, badge: 'Nuevo',
+        imgClass: 'prod-9', emoji: '🖤'
     }
 ];
 

@@ -615,6 +615,7 @@ ul { list-style: none; }
 .prod-6 { background: linear-gradient(135deg, #fbe9e7, #ffab91); color: #bf360c; }
 .prod-7 { background: linear-gradient(135deg, #e0f7fa, #b2ebf2); color: #006064; }
 .prod-8 { background: linear-gradient(135deg, #fce4ec, #f48fb1); color: #880e4f; }
+.prod-9 { background: linear-gradient(135deg, #212121, #424242); color: #ffffff; }
 
 /* ========== RESPONSIVE ========== */
 @media (max-width: 1024px) {
