@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BARATUSS · Moda, Accesorios & Skincare</title>
+    <meta name="description" content="Todo para elevar tu estilo. Moda, accesorios y skincare en El Salvador. Envíos a todo el país.">
+    <meta property="og:title" content="BARATUSS · Moda, Accesorios & Skincare">
+    <meta property="og:description" content="Todo para elevar tu estilo. Moda, accesorios y skincare con envíos a todo El Salvador.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://cindyrubiomusicsv.github.io/tienda-ropa/">
+    <meta property="og:site_name" content="BARATUSS">
+    <link rel="icon" type="image/jpeg" href="assets/isotipo.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -36,7 +43,7 @@
                     <i class="fas fa-shopping-bag"></i>
                     <span class="cart-count" id="cart-count">0</span>
                 </button>
-                <button class="icon-btn user-btn" id="user-btn" aria-label="Usuario" title="Mi cuenta" onclick="document.getElementById('user-menu').classList.toggle('user-menu--open');event.stopPropagation();">
+                <button class="icon-btn user-btn" id="user-btn" aria-label="Usuario" title="Mi cuenta" onclick="var m=document.getElementById('user-menu');m.classList.toggle('user-menu--open');event.stopPropagation();console.log('click usuario',m.classList);">
                     <i class="fas fa-user"></i>
                 </button>
                 <button class="hamburger" id="hamburger" aria-label="Menú">
