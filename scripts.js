@@ -405,22 +405,10 @@ function updateAuthUI() {
     }
 }
 
-// ===== USER MENU =====
+// ===== USER MENU (handled by onclick in HTML) =====
 const userMenu = document.getElementById('user-menu');
-document.getElementById('user-btn').addEventListener('click', function(e) {
-    e.stopPropagation();
-    const isOpen = userMenu.classList.contains('user-menu--open');
-    // Close all other dropdowns first
-    document.querySelectorAll('.user-menu--open').forEach(m => m.classList.remove('user-menu--open'));
-    if (!isOpen) {
-        userMenu.classList.add('user-menu--open');
-    }
-});
 document.addEventListener('click', function() {
     userMenu.classList.remove('user-menu--open');
-}, false);
-userMenu.addEventListener('click', function(e) {
-    e.stopPropagation();
 }, false);
 
 // ===== AUTH — Form Toggles =====
