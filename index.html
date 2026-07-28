@@ -28,9 +28,16 @@
                 </ul>
             </nav>
             <div class="header__actions">
-                <button class="cart-btn" id="cart-btn" aria-label="Carrito">
+                <button class="icon-btn" id="wishlist-btn" aria-label="Favoritos" title="Favoritos">
+                    <i class="fas fa-heart"></i>
+                    <span class="wish-count" id="wish-count">0</span>
+                </button>
+                <button class="icon-btn" id="cart-btn" aria-label="Carrito" title="Carrito">
                     <i class="fas fa-shopping-bag"></i>
                     <span class="cart-count" id="cart-count">0</span>
+                </button>
+                <button class="icon-btn user-btn" id="user-btn" aria-label="Usuario" title="Mi cuenta">
+                    <i class="fas fa-user"></i>
                 </button>
                 <button class="hamburger" id="hamburger" aria-label="Menú">
                     <span></span><span></span><span></span>
@@ -39,6 +46,22 @@
         </div>
     </div>
 </header>
+
+<!-- ========== USER MENU DROPDOWN ========== -->
+<div class="user-menu" id="user-menu">
+    <div class="user-menu__not-logged" id="user-not-logged">
+        <a href="#" class="user-menu__item" id="open-login"><i class="fas fa-sign-in-alt"></i> Iniciar sesión</a>
+        <a href="#" class="user-menu__item" id="open-register"><i class="fas fa-user-plus"></i> Crear cuenta</a>
+    </div>
+    <div class="user-menu__logged" id="user-logged" style="display:none;">
+        <div class="user-menu__greeting" id="user-greeting">¡Hola!</div>
+        <a href="#" class="user-menu__item" id="open-profile"><i class="fas fa-id-card"></i> Mi perfil</a>
+        <a href="#" class="user-menu__item" id="open-orders"><i class="fas fa-box"></i> Mis pedidos</a>
+        <a href="#" class="user-menu__item" id="open-wishlist-menu"><i class="fas fa-heart"></i> Mis favoritos</a>
+        <hr class="user-menu__divider">
+        <a href="#" class="user-menu__item user-menu__item--danger" id="logout-btn"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+    </div>
+</div>
 
 <!-- ========== HERO ========== -->
 <section class="hero" id="hero">
@@ -206,10 +229,10 @@
                 <a href="#tienda" class="filter-link" data-filter="skincare">Skincare</a>
             </div>
             <div class="footer__links">
-                <h4>Ayuda</h4>
-                <a href="#">Envíos</a>
-                <a href="#">Devoluciones</a>
-                <a href="#">FAQ</a>
+                <h4>Mi cuenta</h4>
+                <a href="#" id="footer-login">Iniciar sesión</a>
+                <a href="#" id="footer-register">Crear cuenta</a>
+                <a href="#" id="footer-orders">Mis pedidos</a>
             </div>
             <div class="footer__links">
                 <h4>Seguinos</h4>
@@ -230,25 +253,134 @@
         <button id="cart-close" class="cart-close"><i class="fas fa-times"></i></button>
     </div>
     <div class="cart-sidebar__items" id="cart-items">
-        <div class="cart-empty">
-            <i class="fas fa-shopping-bag"></i>
-            <p>Tu carrito está vacío</p>
-        </div>
+        <div class="cart-empty"><i class="fas fa-shopping-bag"></i><p>Tu carrito está vacío</p></div>
     </div>
     <div class="cart-sidebar__footer" id="cart-footer" style="display:none;">
-        <div class="cart-total">
-            <span>Total</span>
-            <span id="cart-total">$0.00</span>
+        <div class="cart-total"><span>Total</span><span id="cart-total">$0.00</span></div>
+        <button class="btn btn--primary btn--full checkout-btn" id="checkout-btn">Pagar ahora <i class="fas fa-lock"></i></button>
+    </div>
+</div>
+
+<!-- ========== AUTH MODAL ========== -->
+<div class="modal-overlay" id="modal-overlay"></div>
+<div class="modal" id="auth-modal">
+    <div class="modal__header">
+        <h3 id="auth-title">Iniciar sesión</h3>
+        <button class="modal__close" id="auth-close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal__body">
+        <!-- LOGIN FORM -->
+        <form id="login-form" class="auth-form">
+            <div class="form-group">
+                <label>Correo electrónico</label>
+                <input type="email" id="login-email" placeholder="tucorreo@ejemplo.com" required>
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="login-password" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--full" id="login-submit">Iniciar sesión</button>
+            <p class="auth-form__switch">¿No tenés cuenta? <a href="#" id="switch-to-register">Crear cuenta</a></p>
+            <p class="auth-form__switch"><a href="#" id="switch-to-reset">¿Olvidaste tu contraseña?</a></p>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="register-form" class="auth-form" style="display:none;">
+            <div class="form-group">
+                <label>Nombre completo</label>
+                <input type="text" id="register-name" placeholder="Tu nombre" required>
+            </div>
+            <div class="form-group">
+                <label>Correo electrónico</label>
+                <input type="email" id="register-email" placeholder="tucorreo@ejemplo.com" required>
+            </div>
+            <div class="form-group">
+                <label>Teléfono</label>
+                <input type="tel" id="register-phone" placeholder="+503 1234-5678">
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="register-password" placeholder="Mínimo 6 caracteres" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn--primary btn--full" id="register-submit">Crear cuenta</button>
+            <p class="auth-form__switch">¿Ya tenés cuenta? <a href="#" id="switch-to-login">Iniciar sesión</a></p>
+        </form>
+
+        <!-- RESET PASSWORD FORM -->
+        <form id="reset-form" class="auth-form" style="display:none;">
+            <p style="color:var(--gray-600);margin-bottom:20px;font-size:0.9rem;">Te enviaremos un link para restablecer tu contraseña.</p>
+            <div class="form-group">
+                <label>Correo electrónico</label>
+                <input type="email" id="reset-email" placeholder="tucorreo@ejemplo.com" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--full" id="reset-submit">Enviar link</button>
+            <p class="auth-form__switch"><a href="#" id="switch-to-login-reset">Volver a iniciar sesión</a></p>
+        </form>
+    </div>
+</div>
+
+<!-- ========== PROFILE MODAL ========== -->
+<div class="modal" id="profile-modal">
+    <div class="modal__header">
+        <h3>Mi perfil</h3>
+        <button class="modal__close" id="profile-close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal__body">
+        <form id="profile-form">
+            <div class="form-group">
+                <label>Nombre completo</label>
+                <input type="text" id="profile-name" required>
+            </div>
+            <div class="form-group">
+                <label>Correo electrónico</label>
+                <input type="email" id="profile-email" disabled style="background:var(--gray-100);color:var(--gray-600);">
+            </div>
+            <div class="form-group">
+                <label>Teléfono</label>
+                <input type="tel" id="profile-phone">
+            </div>
+            <div class="form-group">
+                <label>Dirección</label>
+                <input type="text" id="profile-address" placeholder="Calle y número">
+            </div>
+            <div class="form-group">
+                <label>Ciudad</label>
+                <input type="text" id="profile-city" placeholder="San Salvador">
+            </div>
+            <button type="submit" class="btn btn--primary btn--full">Guardar cambios</button>
+        </form>
+    </div>
+</div>
+
+<!-- ========== ORDERS MODAL ========== -->
+<div class="modal modal--large" id="orders-modal">
+    <div class="modal__header">
+        <h3>Mis pedidos</h3>
+        <button class="modal__close" id="orders-close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal__body" id="orders-body">
+        <div class="orders-empty">
+            <i class="fas fa-box-open"></i>
+            <p>Todavía no tenés pedidos</p>
         </div>
-        <button class="btn btn--primary btn--full checkout-btn" id="checkout-btn">
-            Pagar ahora <i class="fas fa-lock"></i>
-        </button>
+    </div>
+</div>
+
+<!-- ========== WISHLIST SIDEBAR ========== -->
+<div class="cart-sidebar" id="wishlist-sidebar">
+    <div class="cart-sidebar__header">
+        <h3>Favoritos ♥</h3>
+        <button id="wishlist-close" class="cart-close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="cart-sidebar__items" id="wishlist-items">
+        <div class="cart-empty"><i class="fas fa-heart"></i><p>No tenés favoritos aún</p></div>
     </div>
 </div>
 
 <!-- ========== TOAST ========== -->
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="scripts.js"></script>
 </body>
 </html>
