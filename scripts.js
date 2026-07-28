@@ -6,7 +6,16 @@
 const SUPABASE_URL = 'https://lizybztwnlrlvsrmgnug.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_m85uJKNu8Izi5ujT8ukWWQ_XvEMOToA';
 const RECURRENTE_LINK = 'https://app.recurrente.com/s/cindy-rubio/o/o_ashc4npo';
-const supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabaseClient = null;
+
+function getSupabase() {
+    if (supabaseClient) return supabaseClient;
+    if (window.supabase && window.supabase.createClient) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return supabaseClient;
+    }
+    return null;
+}
 
 // ===== PRODUCT DATA =====
 const products = [
@@ -45,25 +54,25 @@ const header = $('header');
 
 // ===== SUPABASE CHECK =====
 function checkSupabase() {
-    if (supabase && supabase.auth) {
+    const client = getSupabase();
+    if (client) {
         isSupabaseReady = true;
         return true;
     }
-    // Retry after supabase loads
+    // Retry after a brief delay for CDN to load
     setTimeout(() => {
-        window._supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        if (window._supabase?.auth) {
+        const retry = getSupabase();
+        if (retry) {
             isSupabaseReady = true;
-            window.supabaseClient = window._supabase;
             initApp();
         }
-    }, 1000);
+    }, 1500);
     return false;
 }
 
 // ===== AUTH — GET SUPABASE CLIENT =====
 function sb() {
-    return window.supabaseClient || supabase || window._supabase;
+    return getSupabase();
 }
 
 // ===== AUTH — Register =====
