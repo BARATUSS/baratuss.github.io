@@ -1,3 +1,6 @@
+// ========== RECURRENTE PAYMENT LINK ==========
+const RECURRENTE_LINK = 'https://app.recurrente.com/s/cindy-rubio/o/o_ashc4npo';
+
 // ========== PRODUCT DATA ==========
 const products = [
     {
@@ -84,6 +87,10 @@ function renderProducts(filter = 'all') {
                 <button class="add-to-cart" data-id="${p.id}">
                     <i class="fas fa-shopping-bag"></i> Añadir al carrito
                 </button>
+                ${p.id === 9 ? `
+                <a href="${RECURRENTE_LINK}" target="_blank" class="btn btn--buy-now" style="display:block;text-align:center;margin-top:8px;padding:10px;background:#d94a7a;color:white;border-radius:8px;font-size:0.85rem;font-weight:600;text-decoration:none;">
+                    <i class="fas fa-bolt"></i> Comprar ahora
+                </a>` : ''}
             </div>
         </div>
     `).join('');
@@ -220,11 +227,14 @@ function showToast(msg) {
 // ========== CHECKOUT ==========
 document.getElementById('checkout-btn').addEventListener('click', () => {
     if (cart.length === 0) return;
-    showToast('✅ ¡Compra realizada con éxito! Gracias por tu pedido.');
+    // Redirect to Recurrente payment page
+    window.open(RECURRENTE_LINK, '_blank');
+    // Clear cart after redirecting
     cart = [];
     saveCart();
     updateCartUI();
-    setTimeout(closeCart, 1000);
+    setTimeout(closeCart, 500);
+    showToast('🛒 Redirigiendo a pago seguro...');
 });
 
 // ========== NEWSLETTER ==========
