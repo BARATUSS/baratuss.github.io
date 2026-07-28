@@ -715,7 +715,7 @@ ul { list-style: none; }
     border-radius: var(--radius);
     min-width: 220px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.1);
-    z-index: 999;
+    z-index: 1001;
     opacity: 0; pointer-events: none;
     transform: translateY(-8px);
     transition: var(--transition);

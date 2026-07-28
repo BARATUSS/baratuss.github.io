@@ -398,12 +398,21 @@ function updateAuthUI() {
 
 // ===== USER MENU =====
 const userMenu = document.getElementById('user-menu');
-document.getElementById('user-btn').addEventListener('click', (e) => {
+document.getElementById('user-btn').addEventListener('click', function(e) {
     e.stopPropagation();
-    userMenu.classList.toggle('user-menu--open');
+    const isOpen = userMenu.classList.contains('user-menu--open');
+    // Close all other dropdowns first
+    document.querySelectorAll('.user-menu--open').forEach(m => m.classList.remove('user-menu--open'));
+    if (!isOpen) {
+        userMenu.classList.add('user-menu--open');
+    }
 });
-document.addEventListener('click', () => userMenu.classList.remove('user-menu--open'));
-userMenu.addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', function() {
+    userMenu.classList.remove('user-menu--open');
+}, false);
+userMenu.addEventListener('click', function(e) {
+    e.stopPropagation();
+}, false);
 
 // ===== AUTH — Form Toggles =====
 document.getElementById('switch-to-register').addEventListener('click', (e) => {
