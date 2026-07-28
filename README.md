@@ -16,7 +16,7 @@ Sitio web moderno y responsivo para tienda de ropa online, construido con HTML, 
 
 ## 🚀 Demo
 
-[https://cindyrubiomusicsv.github.io/tienda-ropa/](https://cindyrubiomusicsv.github.io/tienda-ropa/)
+[https://cindyrubiomusicsv.github.io/baratuss/](https://cindyrubiomusicsv.github.io/baratuss/)
 
 ## 📁 Estructura
 
