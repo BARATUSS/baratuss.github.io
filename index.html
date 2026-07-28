@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BARATUSS · Tienda de Ropa Online</title>
+    <title>BARATUSS · Moda, Accesorios & Skincare</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,156 +13,124 @@
 
 <!-- ========== HEADER ========== -->
 <header class="header" id="header">
-    <div class="container header__inner">
-        <a href="#" class="logo">
-            <img src="assets/logo.jpg" alt="BARATUSS" style="height:36px;">
-        </a>
-        <nav class="nav" id="nav-menu">
-            <ul class="nav__list">
-                <li><a href="#inicio" class="nav__link active">Inicio</a></li>
-                <li><a href="#tienda" class="nav__link">Tienda</a></li>
-                <li><a href="#categorias" class="nav__link">Categorías</a></li>
-                <li><a href="#testimonios" class="nav__link">Testimonios</a></li>
-                <li><a href="#contacto" class="nav__link">Contacto</a></li>
-            </ul>
-        </nav>
-        <div class="header__actions">
-            <button class="cart-btn" id="cart-btn" aria-label="Carrito">
-                <i class="fas fa-shopping-bag"></i>
-                <span class="cart-count" id="cart-count">0</span>
-            </button>
-            <button class="hamburger" id="hamburger" aria-label="Menú">
-                <span></span><span></span><span></span>
-            </button>
+    <div class="container">
+        <div class="header__inner">
+            <a href="#" class="header__logo">
+                <img src="assets/logo.jpg" alt="BARATUSS">
+            </a>
+            <nav class="nav" id="nav-menu">
+                <ul class="nav__list">
+                    <li><a href="#hero" class="nav__link active">Inicio</a></li>
+                    <li><a href="#categorias" class="nav__link">Categorías</a></li>
+                    <li><a href="#tienda" class="nav__link">Tienda</a></li>
+                    <li><a href="#nosotros" class="nav__link">Nosotros</a></li>
+                    <li><a href="#contacto" class="nav__link">Contacto</a></li>
+                </ul>
+            </nav>
+            <div class="header__actions">
+                <button class="cart-btn" id="cart-btn" aria-label="Carrito">
+                    <i class="fas fa-shopping-bag"></i>
+                    <span class="cart-count" id="cart-count">0</span>
+                </button>
+                <button class="hamburger" id="hamburger" aria-label="Menú">
+                    <span></span><span></span><span></span>
+                </button>
+            </div>
         </div>
     </div>
 </header>
 
 <!-- ========== HERO ========== -->
-<section class="hero" id="inicio">
-    <div class="hero__overlay"></div>
-    <div class="container hero__inner">
-        <span class="hero__tag">Colección Otoño 2026</span>
-        <h1 class="hero__title">Redefine tu<br>estilo <span>hoy</span></h1>
-        <p class="hero__desc">Descubre las últimas tendencias en moda. Ropa única para quienes se atreven a brillar.</p>
-        <div class="hero__actions">
-            <a href="#tienda" class="btn btn--primary">Comprar ahora <i class="fas fa-arrow-right"></i></a>
-            <a href="#categorias" class="btn btn--outline">Ver colecciones</a>
+<section class="hero" id="hero">
+    <div class="container">
+        <div class="hero__content">
+            <span class="hero__tag">Nueva colección</span>
+            <h1 class="hero__title">Moda, accesorios<br>&amp; skincare</h1>
+            <p class="hero__desc">Todo para elevar tu estilo. Descubre productos pensados para quienes aman verse y sentirse bien.</p>
+            <a href="#tienda" class="btn btn--primary">Comprar ahora</a>
+        </div>
+        <div class="hero__visual">
+            <div class="hero__circle"></div>
+            <img src="assets/isotipo.jpg" alt="BARATUSS" class="hero__icon">
         </div>
     </div>
 </section>
 
-<!-- ========== FEATURES ========== -->
-<section class="features">
-    <div class="container features__grid">
-        <div class="feature-card">
-            <i class="fas fa-truck"></i>
-            <h4>Envío Gratis</h4>
-            <p>En pedidos superiores a $50</p>
+<!-- ========== CATEGORÍAS DESTACADAS ========== -->
+<section class="categories section" id="categorias">
+    <div class="container">
+        <div class="section__header">
+            <h2 class="section__title">Categorías</h2>
+            <p class="section__desc">Explorá lo que tenemos para vos</p>
         </div>
-        <div class="feature-card">
-            <i class="fas fa-rotate-left"></i>
-            <h4>Devoluciones Fáciles</h4>
-            <p>30 días para devolver</p>
-        </div>
-        <div class="feature-card">
-            <i class="fas fa-shield"></i>
-            <h4>Pago Seguro</h4>
-            <p>Compra 100% protegida</p>
-        </div>
-        <div class="feature-card">
-            <i class="fas fa-headset"></i>
-            <h4>Soporte 24/7</h4>
-            <p>Ayuda en cualquier momento</p>
+        <div class="categories__grid">
+            <a href="#tienda" class="cat-card" data-filter="ropa">
+                <div class="cat-card__img" style="background: linear-gradient(135deg, #ff9686, #ffb4a8);">
+                    <span class="cat-card__emoji">👗</span>
+                </div>
+                <h3 class="cat-card__title">Ropa</h3>
+                <span class="cat-card__link">Ver todo →</span>
+            </a>
+            <a href="#tienda" class="cat-card" data-filter="accesorios">
+                <div class="cat-card__img" style="background: linear-gradient(135deg, #2d3436, #636e72);">
+                    <span class="cat-card__emoji">👜</span>
+                </div>
+                <h3 class="cat-card__title">Accesorios</h3>
+                <span class="cat-card__link">Ver todo →</span>
+            </a>
+            <a href="#tienda" class="cat-card" data-filter="skincare">
+                <div class="cat-card__img" style="background: linear-gradient(135deg, #a8e6cf, #88d8b0);">
+                    <span class="cat-card__emoji">🧴</span>
+                </div>
+                <h3 class="cat-card__title">Skincare</h3>
+                <span class="cat-card__link">Ver todo →</span>
+            </a>
         </div>
     </div>
 </section>
 
-<!-- ========== SHOP ========== -->
+<!-- ========== TIENDA ========== -->
 <section class="shop section" id="tienda">
     <div class="container">
         <div class="section__header">
-            <span class="section__tag">Nuestra Tienda</span>
-            <h2 class="section__title">Productos <span>Destacados</span></h2>
-            <p class="section__desc">Lo más vendido de esta temporada</p>
+            <h2 class="section__title">Productos</h2>
+            <p class="section__desc">Encontrá lo que buscás</p>
         </div>
-
-        <div class="shop__filters">
+        <div class="shop__filters" id="shop-filters">
             <button class="filter-btn active" data-filter="all">Todos</button>
-            <button class="filter-btn" data-filter="mujer">Mujer</button>
-            <button class="filter-btn" data-filter="hombre">Hombre</button>
+            <button class="filter-btn" data-filter="ropa">Ropa</button>
             <button class="filter-btn" data-filter="accesorios">Accesorios</button>
+            <button class="filter-btn" data-filter="skincare">Skincare</button>
         </div>
-
         <div class="products" id="products-grid"></div>
     </div>
 </section>
 
-<!-- ========== CATEGORIES ========== -->
-<section class="categories section" id="categorias">
+<!-- ========== NOSOTROS ========== -->
+<section class="about section" id="nosotros">
     <div class="container">
-        <div class="section__header">
-            <span class="section__tag">Categorías</span>
-            <h2 class="section__title">Explora por <span>Categoría</span></h2>
-        </div>
-        <div class="categories__grid">
-            <a href="#" class="category-card category-card--women">
-                <div class="category-card__overlay"></div>
-                <h3>Mujer</h3>
-                <span>Ver colección →</span>
-            </a>
-            <a href="#" class="category-card category-card--men">
-                <div class="category-card__overlay"></div>
-                <h3>Hombre</h3>
-                <span>Ver colección →</span>
-            </a>
-            <a href="#" class="category-card category-card--accessories">
-                <div class="category-card__overlay"></div>
-                <h3>Accesorios</h3>
-                <span>Ver colección →</span>
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- ========== TESTIMONIALS ========== -->
-<section class="testimonials section" id="testimonios">
-    <div class="container">
-        <div class="section__header">
-            <span class="section__tag">Testimonios</span>
-            <h2 class="section__title">Lo que dicen <span>nuestros clientes</span></h2>
-        </div>
-        <div class="testimonials__grid">
-            <div class="testimonial-card">
-                <div class="stars">★★★★★</div>
-                <p>"La calidad de la ropa es increíble. Pedí un vestido y llegó en 3 días. ¡Recomendado!"</p>
-                <div class="testimonial-card__author">
-                    <div class="avatar" style="background:#e8a0bf;">M</div>
-                    <div>
-                        <strong>María García</strong>
-                        <span>Compradora verificada</span>
-                    </div>
-                </div>
+        <div class="about__grid">
+            <div class="about__visual">
+                <div class="about__circle"></div>
+                <img src="assets/isotipo.jpg" alt="BARATUSS" class="about__icon">
             </div>
-            <div class="testimonial-card">
-                <div class="stars">★★★★★</div>
-                <p>"Excelente atención al cliente. Tuve que cambiar una campera y lo hicieron súper fácil."</p>
-                <div class="testimonial-card__author">
-                    <div class="avatar" style="background:#7eb8da;">C</div>
-                    <div>
-                        <strong>Carlos López</strong>
-                        <span>Comprador verificado</span>
+            <div class="about__content">
+                <span class="section__tag">Sobre BARATUSS</span>
+                <h2 class="section__title">Pensamos en <span>tu estilo</span></h2>
+                <p>En BARATUSS creemos que la moda, los accesorios y el cuidado personal van de la mano. Por eso seleccionamos cada producto pensando en lo que realmente te hace sentir única.</p>
+                <p>Nuestra misión es ofrecerte calidad, variedad y una experiencia de compra fácil y segura, directo a tu puerta.</p>
+                <div class="about__features">
+                    <div class="about__feature">
+                        <i class="fas fa-truck"></i>
+                        <span>Envíos a todo El Salvador</span>
                     </div>
-                </div>
-            </div>
-            <div class="testimonial-card">
-                <div class="stars">★★★★★</div>
-                <p>"Mi tienda favorita. Siempre encuentro algo único que no veo en ningún otro lado."</p>
-                <div class="testimonial-card__author">
-                    <div class="avatar" style="background:#b8a9e8;">A</div>
-                    <div>
-                        <strong>Ana Martínez</strong>
-                        <span>Compradora verificada</span>
+                    <div class="about__feature">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Pago seguro</span>
+                    </div>
+                    <div class="about__feature">
+                        <i class="fas fa-undo-alt"></i>
+                        <span>Devoluciones sin complicaciones</span>
                     </div>
                 </div>
             </div>
@@ -172,127 +140,104 @@
 
 <!-- ========== NEWSLETTER ========== -->
 <section class="newsletter">
-    <div class="container newsletter__inner">
-        <h2>¿Lista para <span>renovar</span> tu clóset?</h2>
-        <p>Suscríbete y recibe 10% OFF en tu primera compra</p>
-        <form class="newsletter__form" id="newsletter-form">
-            <input type="email" placeholder="Tu correo electrónico" required>
-            <button type="submit" class="btn btn--primary">Suscribirme</button>
-        </form>
+    <div class="container">
+        <div class="newsletter__inner">
+            <h2>10% OFF en tu primera compra</h2>
+            <p>Suscribite y recibí novedades, promos y lanzamientos exclusivos.</p>
+            <form class="newsletter__form" id="newsletter-form">
+                <input type="email" placeholder="Tu correo electrónico" required>
+                <button type="submit" class="btn btn--primary">Suscribirme</button>
+            </form>
+        </div>
     </div>
 </section>
 
-<!-- ========== CONTACT ========== -->
+<!-- ========== CONTACTO ========== -->
 <section class="contact section" id="contacto">
     <div class="container">
         <div class="section__header">
-            <span class="section__tag">Contacto</span>
-            <h2 class="section__title">Estamos <span>para ayudarte</span></h2>
+            <h2 class="section__title">Contacto</h2>
+            <p class="section__desc">Escribinos y te respondemos a la brevedad</p>
         </div>
         <div class="contact__grid">
+            <form class="contact__form" id="contact-form">
+                <input type="text" placeholder="Nombre" required>
+                <input type="email" placeholder="Email" required>
+                <textarea rows="4" placeholder="Mensaje" required></textarea>
+                <button type="submit" class="btn btn--primary">Enviar mensaje <i class="fas fa-paper-plane"></i></button>
+            </form>
             <div class="contact__info">
                 <div class="contact-item">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <div>
-                        <h4>Dirección</h4>
-                        <p>Av. Siempre Viva 123, Ciudad</p>
-                    </div>
-                </div>
-                <div class="contact-item">
-                    <i class="fas fa-phone"></i>
-                    <div>
-                        <h4>Teléfono</h4>
-                        <p>+1 (555) 123-4567</p>
-                    </div>
-                </div>
-                <div class="contact-item">
                     <i class="fas fa-envelope"></i>
-                    <div>
-                        <h4>Email</h4>
-                        <p>hola@modaviva.store</p>
-                    </div>
+                    <span>hola@baratuss.com</span>
+                </div>
+                <div class="contact-item">
+                    <i class="fas fa-phone-alt"></i>
+                    <span>+503 1234-5678</span>
+                </div>
+                <div class="contact-item">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>San Salvador, El Salvador</span>
                 </div>
                 <div class="contact-item">
                     <i class="fas fa-clock"></i>
-                    <div>
-                        <h4>Horario</h4>
-                        <p>Lun–Sáb: 9:00–20:00</p>
-                    </div>
+                    <span>Lun–Sáb 9:00–19:00</span>
+                </div>
+                <div class="contact__social">
+                    <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="#" aria-label="Facebook"><i class="fab fa-facebook"></i></a>
+                    <a href="#" aria-label="TikTok"><i class="fab fa-tiktok"></i></a>
+                    <a href="#" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
                 </div>
             </div>
-            <form class="contact__form" id="contact-form">
-                <input type="text" placeholder="Tu nombre" required>
-                <input type="email" placeholder="Tu email" required>
-                <textarea rows="4" placeholder="Tu mensaje" required></textarea>
-                <button type="submit" class="btn btn--primary">Enviar mensaje <i class="fas fa-paper-plane"></i></button>
-            </form>
         </div>
     </div>
 </section>
 
 <!-- ========== FOOTER ========== -->
 <footer class="footer">
-    <div class="container footer__grid">
-        <div class="footer__brand">
-            <a href="#" class="logo">
-                <img src="assets/logo.jpg" alt="BARATUSS" style="height:36px;">
-            </a>
-            <p>Tu tienda de ropa online favorita. Moda con estilo, calidad y compromiso.</p>
-            <div class="footer__social">
-                <a href="#"><i class="fab fa-instagram"></i></a>
-                <a href="#"><i class="fab fa-facebook"></i></a>
-                <a href="#"><i class="fab fa-tiktok"></i></a>
-                <a href="#"><i class="fab fa-pinterest"></i></a>
+    <div class="container">
+        <div class="footer__content">
+            <div class="footer__brand">
+                <img src="assets/logo.jpg" alt="BARATUSS" class="footer__logo">
+                <p>Moda, accesorios &amp; skincare para elevar tu estilo.</p>
+            </div>
+            <div class="footer__links">
+                <h4>Tienda</h4>
+                <a href="#tienda" class="filter-link" data-filter="ropa">Ropa</a>
+                <a href="#tienda" class="filter-link" data-filter="accesorios">Accesorios</a>
+                <a href="#tienda" class="filter-link" data-filter="skincare">Skincare</a>
+            </div>
+            <div class="footer__links">
+                <h4>Ayuda</h4>
+                <a href="#">Envíos</a>
+                <a href="#">Devoluciones</a>
+                <a href="#">FAQ</a>
+            </div>
+            <div class="footer__links">
+                <h4>Redes</h4>
+                <a href="#">Instagram</a>
+                <a href="#">Facebook</a>
+                <a href="#">TikTok</a>
             </div>
         </div>
-        <div class="footer__links">
-            <h4>Tienda</h4>
-            <a href="#">Mujer</a>
-            <a href="#">Hombre</a>
-            <a href="#">Accesorios</a>
-            <a href="#">Ofertas</a>
-            <a href="#">Nuevos Ingresos</a>
-        </div>
-        <div class="footer__links">
-            <h4>Ayuda</h4>
-            <a href="#">FAQ</a>
-            <a href="#">Envíos</a>
-            <a href="#">Devoluciones</a>
-            <a href="#">Tallas</a>
-            <a href="#">Métodos de pago</a>
-        </div>
-        <div class="footer__links">
-            <h4>Empresa</h4>
-            <a href="#">Sobre nosotros</a>
-            <a href="#">Trabaja con nosotros</a>
-            <a href="#">Privacidad</a>
-            <a href="#">Términos</a>
-        </div>
-    </div>
-    <div class="footer__bottom">
-        <div class="container">
+        <div class="footer__bottom">
             <p>&copy; 2026 BARATUSS. Todos los derechos reservados.</p>
-            <div class="footer__payments">
-                <i class="fab fa-cc-visa"></i>
-                <i class="fab fa-cc-mastercard"></i>
-                <i class="fab fa-cc-amex"></i>
-                <i class="fab fa-cc-paypal"></i>
-            </div>
         </div>
     </div>
 </footer>
 
 <!-- ========== CART SIDEBAR ========== -->
+<div class="cart-overlay" id="cart-overlay"></div>
 <div class="cart-sidebar" id="cart-sidebar">
     <div class="cart-sidebar__header">
-        <h3>Tu Carrito</h3>
+        <h3>Carrito</h3>
         <button id="cart-close" class="cart-close"><i class="fas fa-times"></i></button>
     </div>
     <div class="cart-sidebar__items" id="cart-items">
         <div class="cart-empty">
             <i class="fas fa-shopping-bag"></i>
             <p>Tu carrito está vacío</p>
-            <a href="#tienda" class="btn btn--primary" id="cart-empty-shop">Ir a la tienda</a>
         </div>
     </div>
     <div class="cart-sidebar__footer" id="cart-footer" style="display:none;">
@@ -305,7 +250,6 @@
         </button>
     </div>
 </div>
-<div class="cart-overlay" id="cart-overlay"></div>
 
 <!-- ========== TOAST ========== -->
 <div class="toast" id="toast"></div>
