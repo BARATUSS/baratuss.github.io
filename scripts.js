@@ -407,8 +407,11 @@ function updateAuthUI() {
 
 // ===== USER MENU (handled by onclick in HTML) =====
 const userMenu = document.getElementById('user-menu');
-document.addEventListener('click', function() {
-    userMenu.classList.remove('user-menu--open');
+// Close when clicking outside
+document.addEventListener('click', function(e) {
+    if (!userMenu.contains(e.target) && e.target.id !== 'user-btn') {
+        userMenu.classList.remove('user-menu--open');
+    }
 }, false);
 
 // ===== AUTH — Form Toggles =====
