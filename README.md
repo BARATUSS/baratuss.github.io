@@ -1,13 +1,14 @@
-# 🛍️ MODA VIVA — Tienda de Ropa Online
+# 🛍️ BARATUSS — Tienda de Ropa Online
 
 Sitio web moderno y responsivo para tienda de ropa online, construido con HTML, CSS y JavaScript puro.
 
 ## ✨ Características
 
-- 🎨 Diseño moderno y elegante
+- 🎨 Diseño moderno con color principal #ff9686
 - 📱 Totalmente responsivo (móvil, tablet, desktop)
 - 🛒 Carrito de compras interactivo (localStorage)
 - 🏷️ Filtros por categoría (Mujer, Hombre, Accesorios)
+- 💳 Checkout con Recurrente (pagos con tarjeta)
 - 💬 Formulario de contacto
 - 📬 Suscripción a newsletter
 - ⚡ Sin dependencias externas (excepto Font Awesome y Google Fonts)
@@ -15,15 +16,19 @@ Sitio web moderno y responsivo para tienda de ropa online, construido con HTML, 
 
 ## 🚀 Demo
 
-[https://cindyrubiomusicsv.github.io/BARATUSS/](https://cindyrubiomusicsv.github.io/BARATUSS/)
+[https://cindyrubiomusicsv.github.io/tienda-ropa/](https://cindyrubiomusicsv.github.io/tienda-ropa/)
 
 ## 📁 Estructura
 
 ```
 BARATUSS/
-├── index.html      # Página principal
-├── styles.css      # Estilos CSS
-└── scripts.js      # Funcionalidad JS
+├── index.html          # Página principal
+├── styles.css          # Estilos CSS
+├── scripts.js          # Funcionalidad JS
+└── assets/
+    ├── logo.jpg        # Logo de BARATUSS
+    ├── isotipo.jpg     # Isotipo
+    └── color-reference.jpg
 ```
 
 ## 🛠️ Tecnologías
@@ -33,8 +38,9 @@ BARATUSS/
 - JavaScript vanilla
 - Font Awesome 6
 - Google Fonts (Inter + Playfair Display)
+- Recurrente (pasarela de pagos)
 - GitHub Pages
 
 ---
 
-Hecho con ❤️ por Moda Viva
+Hecho con ❤️ por BARATUSS

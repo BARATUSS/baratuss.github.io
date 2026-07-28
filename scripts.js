@@ -88,7 +88,7 @@ function renderProducts(filter = 'all') {
                     <i class="fas fa-shopping-bag"></i> Añadir al carrito
                 </button>
                 ${p.id === 9 ? `
-                <a href="${RECURRENTE_LINK}" target="_blank" class="btn btn--buy-now" style="display:block;text-align:center;margin-top:8px;padding:10px;background:#d94a7a;color:white;border-radius:8px;font-size:0.85rem;font-weight:600;text-decoration:none;">
+                <a href="${RECURRENTE_LINK}" target="_blank" class="btn btn--buy-now" style="display:block;text-align:center;margin-top:8px;padding:10px;background:#ff9686;color:white;border-radius:8px;font-size:0.85rem;font-weight:600;text-decoration:none;">
                     <i class="fas fa-bolt"></i> Comprar ahora
                 </a>` : ''}
             </div>
