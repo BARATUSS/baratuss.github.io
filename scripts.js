@@ -5,9 +5,7 @@
 // ===== SUPABASE CONFIG =====
 const SUPABASE_URL = 'https://lizybztwnlrlvsrmgnug.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_m85uJKNu8Izi5ujT8ukWWQ_XvEMOToA';
-const WOMPI_API_URL = window.location.origin === 'https://baratuss.github.io'
-  ? 'https://baratuss-api.onrender.com'
-  : 'http://localhost:3000';
+const WOMPI_API_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/wompi-checkout';
 let supabaseClient = null;
 
 function getSupabase() {
