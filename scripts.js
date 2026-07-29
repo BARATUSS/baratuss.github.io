@@ -742,3 +742,4 @@ function initApp() {
 }
 
 initApp();
+// Force cache refresh mi., 29 de jul. de 2026 17:26:30
