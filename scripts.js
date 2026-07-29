@@ -5,7 +5,7 @@
 // ===== SUPABASE CONFIG =====
 const SUPABASE_URL = 'https://lizybztwnlrlvsrmgnug.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_m85uJKNu8Izi5ujT8ukWWQ_XvEMOToA';
-const RECURRENTE_LINK = 'https://app.recurrente.com/s/cindy-rubio/o/o_ashc4npo';
+const WOMPI_API_URL = 'https://lizybztwnlrlvsrmgnug.supabase.co/functions/v1/wompi-checkout';
 let supabaseClient = null;
 
 function getSupabase() {
@@ -266,7 +266,7 @@ function renderProducts(filter = 'all') {
                 <button class="add-to-cart" data-id="${p.id}">
                     <i class="fas fa-shopping-bag"></i> Añadir
                 </button>
-                ${p.id === 6 ? `<a href="${RECURRENTE_LINK}" target="_blank" style="display:block;text-align:center;margin-top:8px;padding:10px;background:#ff9686;color:white;border-radius:10px;font-size:0.8rem;font-weight:500;text-decoration:none;">⚡ Comprar ahora</a>` : ''}
+                ${p.id === 6 ? `<button class="add-to-cart buy-now-wompi" data-id="${p.id}" style="display:block;text-align:center;margin-top:8px;padding:10px;background:#ff9686;color:white;border-radius:10px;font-size:0.8rem;font-weight:500;border:none;cursor:pointer;width:100%;">⚡ Comprar ahora</button>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -620,22 +620,56 @@ function updateWishlistUI() {
     document.getElementById('wish-count').textContent = wishlist.size;
 }
 
-// ===== CHECKOUT =====
-document.getElementById('checkout-btn').addEventListener('click', async () => {
+// ===== CHECKOUT — Wompi SV =====
+async function wompiCheckout() {
     if (cart.length === 0) return;
     
-    if (currentUser) {
-        const result = await createOrder(cart, getCartTotal());
-        if (result.error) { showToast('❌ ' + result.error); return; }
-    }
+    showToast('🔄 Procesando pago...');
     
-    window.open(RECURRENTE_LINK, '_blank');
-    cart = [];
-    saveCart();
-    updateCartUI();
-    setTimeout(closeCart, 500);
-    showToast('🛒 Redirigiendo a pago seguro...');
-});
+    try {
+        const response = await fetch(WOMPI_API_URL + '/create-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                items: cart,
+                total: getCartTotal(),
+                userId: currentUser?.id || null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            showToast('❌ Error: ' + (data.error || 'Error al procesar pago'));
+            return;
+        }
+        
+        // Save order reference
+        if (data.reference) {
+            localStorage.setItem('baratuss_last_ref', data.reference);
+        }
+        
+        // Save order info for logged in users
+        if (currentUser) {
+            const result = await createOrder(cart, getCartTotal());
+            if (result.error) { showToast('❌ ' + result.error); return; }
+        }
+        
+        // Clear cart and redirect to Wompi
+        cart = [];
+        saveCart();
+        updateCartUI();
+        setTimeout(closeCart, 500);
+        
+        // Redirect to Wompi payment page
+        window.location.href = data.paymentUrl;
+        
+    } catch (e) {
+        showToast('❌ Error de conexión: ' + e.message);
+    }
+}
+
+document.getElementById('checkout-btn').addEventListener('click', wompiCheckout);
 
 // ===== NEWSLETTER =====
 document.getElementById('newsletter-form').addEventListener('submit', (e) => {
