@@ -629,7 +629,11 @@ async function wompiCheckout() {
     try {
         const response = await fetch(WOMPI_API_URL + '/create-payment', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
             body: JSON.stringify({
                 items: cart,
                 total: getCartTotal(),
