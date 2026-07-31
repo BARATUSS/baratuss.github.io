@@ -48,7 +48,7 @@ async function loadProductsFromSupabase() {
     try {
         const { data, error } = await client
             .from('inventory')
-            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock')
+            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url')
             .eq('active', true)
             .order('id', { ascending: true });
         
@@ -64,7 +64,8 @@ async function loadProductsFromSupabase() {
                 imgClass: p.img_class || 'p-1',
                 emoji: p.emoji || '🛍️',
                 tipo: p.tipo || 'nuevo',
-                stock: p.stock || 0
+                stock: p.stock || 0,
+                image: p.image_url || null
             }));
             renderProducts(currentFilter);
             updateCartUI();
@@ -294,7 +295,7 @@ function renderProducts(filter = 'all') {
                 <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
             </button>
             <div class="product-card__img ${p.imgClass}">
-                <span style="font-size:3.5rem;">${p.emoji}</span>
+                ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-card__photo" loading="lazy" onerror="this.remove()">` : `<span style="font-size:3.5rem;">${p.emoji}</span>`}
                 ${p.badge ? `<span class="badge">${p.badge}</span>` : ''}
             </div>
             <div class="product-card__body">

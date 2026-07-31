@@ -205,7 +205,16 @@
                     <input type="number" id="product-stock" min="0" value="1">
                 </div>
                 <div class="admin-form__field">
-                    <label>Emoji (icono en tienda)</label>
+                    <label>Foto del producto</label>
+                    <input type="file" id="product-image" accept="image/*" onchange="previewProductImage(this)">
+                    <div class="admin-form__photo-preview" id="product-image-preview">
+                        <img id="product-image-preview-img" alt="Vista previa" style="display:none;">
+                        <span id="product-image-preview-empty">Sin foto</span>
+                    </div>
+                    <small class="admin-form__hint">Subí una foto desde tu computadora (JPG/PNG). Si no subís foto, se muestra el emoji.</small>
+                </div>
+                <div class="admin-form__field">
+                    <label>Emoji (si no hay foto)</label>
                     <input type="text" id="product-emoji" placeholder="👗">
                 </div>
                 <div class="admin-form__field">

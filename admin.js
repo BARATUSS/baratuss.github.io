@@ -137,7 +137,12 @@ function renderInventory() {
         <tr class="${selectedIds.has(p.id) ? 'admin-row--selected' : ''}">
             <td><input type="checkbox" class="row-check" data-id="${p.id}" ${selectedIds.has(p.id) ? 'checked' : ''}></td>
             <td class="admin-mono">${p.sku || '—'}</td>
-            <td><strong>${p.emoji || ''} ${p.name}</strong> ${p.active === false ? '<span class="admin-badge admin-badge--rechazado">oculto</span>' : ''}</td>
+            <td>
+                ${p.image_url
+                    ? `<img src="${p.image_url}" alt="${p.name}" class="admin-thumb" onerror="this.style.display='none'">`
+                    : `<span class="admin-thumb admin-thumb--emoji ${p.img_class || 'p-1'}">${p.emoji || '🛍️'}</span>`}
+                <strong>${p.name}</strong> ${p.active === false ? '<span class="admin-badge admin-badge--rechazado">oculto</span>' : ''}
+            </td>
             <td><span class="admin-badge admin-badge--cat">${capitalize(p.category)}</span></td>
             <td><span class="admin-badge ${p.tipo === 'usado' ? 'admin-badge--usado' : 'admin-badge--nuevo'}">${p.tipo}</span></td>
             <td>$${Number(p.cost_price || 0).toFixed(2)}</td>
@@ -256,6 +261,18 @@ function openProductModal(product) {
     $('product-badge').value = product?.badge || '';
     $('product-img-class').value = product?.img_class || 'p-1';
     $('product-active').value = product?.active === false ? 'false' : 'true';
+    // Foto existente
+    selectedImageFile = null;
+    existingImageUrl = product?.image_url || null;
+    $('product-image').value = '';
+    if (existingImageUrl) {
+        $('product-image-preview-img').src = existingImageUrl;
+        $('product-image-preview-img').style.display = '';
+        $('product-image-preview-empty').style.display = 'none';
+    } else {
+        $('product-image-preview-img').style.display = 'none';
+        $('product-image-preview-empty').style.display = '';
+    }
     updateSalePreview();
     $('product-modal-overlay').style.display = 'flex';
 }
@@ -268,6 +285,66 @@ function updateSalePreview() {
 }
 $('product-sale').addEventListener('input', updateSalePreview);
 
+// Vista previa de la foto seleccionada
+let selectedImageFile = null;
+let existingImageUrl = null;
+
+function previewProductImage(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    selectedImageFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        $('product-image-preview-img').src = e.target.result;
+        $('product-image-preview-img').style.display = '';
+        $('product-image-preview-empty').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+}
+
+// Subir foto a Supabase Storage
+async function uploadProductImage() {
+    if (!selectedImageFile) return existingImageUrl || null;
+    if (!session?.token) return null;
+    try {
+        const ext = selectedImageFile.name.split('.').pop() || 'jpg';
+        const filename = 'prod-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+        const resp = await fetch(SUPABASE_URL + '/storage/v1/object/productos/' + filename, {
+            method: 'POST',
+            headers: {
+                'apikey': ANON_KEY,
+                'Authorization': 'Bearer ' + session.token,
+                'Content-Type': selectedImageFile.type || 'image/jpeg',
+                'x-upsert': 'true'
+            },
+            body: selectedImageFile
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.message || 'Error subiendo foto');
+        }
+        return SUPABASE_URL + '/storage/v1/object/public/productos/' + filename;
+    } catch (e) {
+        console.error('Upload error:', e);
+        showToast('❌ No se pudo subir la foto: ' + e.message);
+        return existingImageUrl || null;
+    }
+}
+
+// Eliminar foto anterior si se reemplaza (limpieza opcional)
+function removeOldImageIfReplaced(oldUrl, newUrl) {
+    if (!oldUrl || !newUrl || oldUrl === newUrl || !session?.token) return;
+    try {
+        const path = oldUrl.split('/object/public/productos/')[1];
+        if (path) {
+            fetch(SUPABASE_URL + '/storage/v1/object/productos/' + path, {
+                method: 'DELETE',
+                headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + session.token }
+            }).catch(() => {});
+        }
+    } catch (e) { console.log('No se pudo limpiar foto vieja:', e.message); }
+}
+
 function closeProductModal() {
     $('product-modal-overlay').style.display = 'none';
     $('product-form').reset();
@@ -275,7 +352,17 @@ function closeProductModal() {
 
 $('product-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = 'Guardando...';
     const id = $('product-id').value;
+    
+    // Subir foto primero (si hay)
+    const imageUrl = await uploadProductImage();
+    if (selectedImageFile && !imageUrl) {
+        btn.disabled = false; btn.textContent = 'Guardar';
+        return;
+    }
+    
     const data = {
         name: $('product-name').value,
         sku: $('product-sku').value || null,
@@ -290,9 +377,12 @@ $('product-form').addEventListener('submit', async (e) => {
         active: $('product-active').value === 'true',
         updated_at: new Date().toISOString()
     };
+    if (imageUrl) data.image_url = imageUrl;
 
     let ok;
     if (id) {
+        const old = inventory.find(p => p.id === parseInt(id));
+        if (old?.image_url && selectedImageFile) removeOldImageIfReplaced(old.image_url, imageUrl);
         const r = await api('PATCH', 'inventory?id=eq.' + id, data);
         ok = r === null || !r?.error;
     } else {
@@ -300,8 +390,10 @@ $('product-form').addEventListener('submit', async (e) => {
         ok = !r?.error;
     }
 
+    btn.disabled = false; btn.textContent = 'Guardar';
     if (!ok) { showToast('❌ Error al guardar'); return; }
     showToast(id ? '✅ Producto actualizado' : '✅ Producto creado');
+    selectedImageFile = null;
     closeProductModal();
     loadInventory();
     loadStats();

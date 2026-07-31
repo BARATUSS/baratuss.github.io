@@ -248,6 +248,32 @@ body {
     outline: none; transition: var(--transition);
 }
 .admin-form__field input:focus, .admin-form__field select:focus { border-color: var(--accent); }
+.admin-form__photo-preview {
+    width: 90px; height: 90px;
+    border: 1px dashed var(--gray-300);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    margin-top: 8px;
+    background: var(--gray-50);
+    color: var(--gray-400);
+    font-size: 0.75rem;
+}
+.admin-form__photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+.admin-thumb {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+    vertical-align: middle;
+    margin-right: 8px;
+    display: inline-block;
+}
+.admin-thumb--emoji {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    background: #f5f5f5;
+}
 .admin-form__hint {
     display: block;
     font-size: 0.75rem;
