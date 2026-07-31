@@ -49,9 +49,7 @@ $('admin-login-form').addEventListener('submit', async (e) => {
     $('admin-login-error').textContent = '';
     
     try {
-        // Limpiar sesión vieja que pueda trabar el login
-        try { await supabase?.auth.signOut(); } catch (err) { console.log('signOut:', err.message); }
-        
+        // Login directo SIN limpiar sesión (evita cuelgues)
         const result = await loginAdmin(
             $('admin-email').value,
             $('admin-password').value
@@ -65,7 +63,7 @@ $('admin-login-form').addEventListener('submit', async (e) => {
         
         const isAdmin = await checkAdmin();
         if (!isAdmin) {
-            await supabase.auth.signOut();
+            try { await supabase.auth.signOut(); } catch (err) {}
             $('admin-login-error').textContent = '❌ Esta cuenta no tiene permisos de administradora';
             btn.disabled = false; btn.textContent = 'Ingresar';
             return;
@@ -311,26 +309,9 @@ function showToast(msg) {
 // ===== INIT =====
 async function init() {
     try {
-        // Si hay una sesión inválida (cuenta borrada), limpiarla
-        const { data: { session } } = await supabase?.auth.getSession();
-        if (session?.user) {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('is_admin')
-                .eq('id', session.user.id)
-                .maybeSingle();
-            
-            if (!profile) {
-                // Sesión de cuenta que ya no existe — limpiar
-                await supabase.auth.signOut();
-                return;
-            }
-            
-            if (profile.is_admin) {
-                currentUser = { ...session.user, profile };
-                enterDashboard();
-                return;
-            }
+        const isAdmin = await checkAdmin();
+        if (isAdmin) {
+            enterDashboard();
         }
     } catch (e) {
         console.log('Init check:', e.message);
