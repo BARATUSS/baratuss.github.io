@@ -67,10 +67,19 @@
                 </select>
             </div>
 
+            <div class="admin-batch" id="admin-batch" style="display:none;">
+                <span id="batch-count">0 seleccionados</span>
+                <button class="admin-btn admin-btn--ghost" id="batch-hide"><i class="fas fa-eye-slash"></i> Ocultar</button>
+                <button class="admin-btn admin-btn--ghost" id="batch-show"><i class="fas fa-eye"></i> Mostrar</button>
+                <button class="admin-btn admin-btn--ghost" id="batch-delete"><i class="fas fa-trash"></i> Eliminar</button>
+                <button class="admin-btn admin-btn--ghost" id="batch-clear"><i class="fas fa-times"></i> Limpiar</button>
+            </div>
+
             <div class="admin-table-wrap">
                 <table class="admin-table" id="inventory-table">
                     <thead>
                         <tr>
+                            <th style="width:36px;"><input type="checkbox" id="select-all" title="Seleccionar todos"></th>
                             <th>SKU</th>
                             <th>Producto</th>
                             <th>Categoría</th>

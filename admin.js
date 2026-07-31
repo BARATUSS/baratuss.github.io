@@ -7,9 +7,11 @@ const ANON_KEY = 'sb_publishable_m85uJKNu8Izi5ujT8ukWWQ_XvEMOToA';
 
 const $ = id => document.getElementById(id);
 
+// ===== STATE =====
 let session = JSON.parse(localStorage.getItem('baratuss_admin_session') || 'null');
 let inventory = [];
 let orders = [];
+let selectedIds = new Set();
 
 // ===== API HELPERS (fetch directo, sin librería CDN) =====
 async function api(method, path, body) {
@@ -119,12 +121,13 @@ function renderInventory() {
     });
 
     if (filtered.length === 0) {
-        $('inventory-body').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#999;">No hay productos</td></tr>';
+        $('inventory-body').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#999;">No hay productos</td></tr>';
         return;
     }
 
     $('inventory-body').innerHTML = filtered.map(p => `
-        <tr>
+        <tr class="${selectedIds.has(p.id) ? 'admin-row--selected' : ''}">
+            <td><input type="checkbox" class="row-check" data-id="${p.id}" ${selectedIds.has(p.id) ? 'checked' : ''}></td>
             <td class="admin-mono">${p.sku || '—'}</td>
             <td><strong>${p.emoji || ''} ${p.name}</strong> ${p.active === false ? '<span class="admin-badge admin-badge--rechazado">oculto</span>' : ''}</td>
             <td><span class="admin-badge admin-badge--cat">${capitalize(p.category)}</span></td>
@@ -138,7 +141,83 @@ function renderInventory() {
             </td>
         </tr>
     `).join('');
+
+    // Eventos de checkboxes de fila
+    document.querySelectorAll('.row-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const id = parseInt(cb.dataset.id);
+            if (cb.checked) selectedIds.add(id);
+            else selectedIds.delete(id);
+            updateBatchUI();
+            cb.closest('tr').classList.toggle('admin-row--selected', cb.checked);
+        });
+    });
+    updateBatchUI();
 }
+
+// ===== SELECCIÓN POR LOTES =====
+function updateBatchUI() {
+    const batch = $('admin-batch');
+    $('batch-count').textContent = selectedIds.size + ' seleccionado' + (selectedIds.size !== 1 ? 's' : '');
+    batch.style.display = selectedIds.size > 0 ? 'flex' : 'none';
+    // Actualizar estado del checkbox "select all"
+    const checkboxes = document.querySelectorAll('.row-check');
+    const allChecked = checkboxes.length > 0 && [...checkboxes].every(cb => cb.checked);
+    $('select-all').checked = allChecked;
+}
+
+// Select all
+$('select-all').addEventListener('change', () => {
+    const checked = $('select-all').checked;
+    document.querySelectorAll('.row-check').forEach(cb => {
+        cb.checked = checked;
+        const id = parseInt(cb.dataset.id);
+        if (checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        cb.closest('tr').classList.toggle('admin-row--selected', checked);
+    });
+    updateBatchUI();
+});
+
+// Batch: ocultar
+$('batch-hide').addEventListener('click', async () => {
+    if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
+    await api('PATCH', 'inventory?id=in.(' + ids.join(',') + ')', { active: false, updated_at: new Date().toISOString() });
+    showToast('👁️ ' + ids.length + ' producto(s) oculto(s)');
+    selectedIds.clear();
+    loadInventory();
+});
+
+// Batch: mostrar
+$('batch-show').addEventListener('click', async () => {
+    if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
+    await api('PATCH', 'inventory?id=in.(' + ids.join(',') + ')', { active: true, updated_at: new Date().toISOString() });
+    showToast('👁️ ' + ids.length + ' producto(s) visible(s)');
+    selectedIds.clear();
+    loadInventory();
+});
+
+// Batch: eliminar
+$('batch-delete').addEventListener('click', async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm('¿Eliminar ' + selectedIds.size + ' producto(s)?')) return;
+    const ids = [...selectedIds];
+    await api('DELETE', 'inventory?id=in.(' + ids.join(',') + ')');
+    showToast('🗑️ ' + ids.length + ' producto(s) eliminado(s)');
+    selectedIds.clear();
+    loadInventory();
+    loadStats();
+});
+
+// Batch: limpiar selección
+$('batch-clear').addEventListener('click', () => {
+    selectedIds.clear();
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = false);
+    updateBatchUI();
+    renderInventory();
+});
 
 // ===== FILTERS =====
 ['inventory-search', 'inventory-category', 'inventory-tipo'].forEach(id => {

@@ -119,6 +119,30 @@ body {
 
 /* ===== FILTERS ===== */
 .admin-filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+
+/* ===== BATCH SELECTION ===== */
+.admin-batch {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,150,134,0.08);
+    border: 1px solid rgba(255,150,134,0.3);
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.admin-batch span {
+    font-size: 0.85rem; font-weight: 600;
+    color: var(--accent-dark);
+    margin-right: auto;
+}
+.admin-batch .admin-btn { width: auto; padding: 8px 14px; font-size: 0.8rem; }
+.admin-row--selected { background: rgba(255,150,134,0.06) !important; }
+.admin-row--selected:hover td { background: rgba(255,150,134,0.08) !important; }
+.admin-table input[type="checkbox"] {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
 .admin-input {
     padding: 10px 14px;
     border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
