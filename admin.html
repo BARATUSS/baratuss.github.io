@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BARATUSS · Administración</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- ===== LOGIN SCREEN ===== -->
+<div class="admin-login" id="admin-login">
+    <div class="admin-login__card">
+        <img src="assets/logo.jpg" alt="BARATUSS" class="admin-login__logo">
+        <h2>Panel de Administración</h2>
+        <p>Iniciá sesión con tu cuenta de administradora</p>
+        <form id="admin-login-form">
+            <input type="email" id="admin-email" placeholder="Correo electrónico" required>
+            <input type="password" id="admin-password" placeholder="Contraseña" required>
+            <button type="submit" class="admin-btn admin-btn--primary">Ingresar</button>
+            <p class="admin-login__error" id="admin-login-error"></p>
+            <a href="index.html" class="admin-login__back">← Volver a la tienda</a>
+        </form>
+    </div>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="admin-dashboard" id="admin-dashboard" style="display:none;">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__logo">
+            <img src="assets/logo.jpg" alt="BARATUSS">
+        </div>
+        <nav class="admin-nav">
+            <a href="#" class="admin-nav__item active" data-section="inventario"><i class="fas fa-box"></i> Inventario</a>
+            <a href="#" class="admin-nav__item" data-section="pedidos"><i class="fas fa-shopping-bag"></i> Pedidos</a>
+            <a href="#" class="admin-nav__item" data-section="resumen"><i class="fas fa-chart-pie"></i> Resumen</a>
+        </nav>
+        <div class="admin-sidebar__footer">
+            <span id="admin-user-name">Admin</span>
+            <button id="admin-logout" class="admin-btn admin-btn--ghost"><i class="fas fa-sign-out-alt"></i> Salir</button>
+        </div>
+    </aside>
+
+    <main class="admin-main">
+        <!-- ===== INVENTARIO ===== -->
+        <section class="admin-section" id="section-inventario">
+            <div class="admin-section__header">
+                <h1>Inventario</h1>
+                <button class="admin-btn admin-btn--primary" id="btn-add-product"><i class="fas fa-plus"></i> Nuevo producto</button>
+            </div>
+
+            <div class="admin-filters">
+                <input type="text" id="inventory-search" placeholder="Buscar producto..." class="admin-input">
+                <select id="inventory-category" class="admin-input">
+                    <option value="">Todas las categorías</option>
+                    <option value="ropa">Ropa</option>
+                    <option value="accesorios">Accesorios</option>
+                    <option value="skincare">Skincare</option>
+                </select>
+                <select id="inventory-tipo" class="admin-input">
+                    <option value="">Todos los tipos</option>
+                    <option value="nuevo">Nuevo</option>
+                    <option value="usado">Usado</option>
+                </select>
+            </div>
+
+            <div class="admin-table-wrap">
+                <table class="admin-table" id="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th>Tipo</th>
+                            <th>Costo</th>
+                            <th>Venta</th>
+                            <th>Stock</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ===== PEDIDOS ===== -->
+        <section class="admin-section" id="section-pedidos" style="display:none;">
+            <div class="admin-section__header">
+                <h1>Pedidos</h1>
+            </div>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Referencia</th>
+                            <th>Productos</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th>Pago</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ===== RESUMEN ===== -->
+        <section class="admin-section" id="section-resumen" style="display:none;">
+            <div class="admin-section__header">
+                <h1>Resumen</h1>
+            </div>
+            <div class="admin-stats">
+                <div class="admin-stat">
+                    <i class="fas fa-box"></i>
+                    <div>
+                        <strong id="stat-products">0</strong>
+                        <span>Productos</span>
+                    </div>
+                </div>
+                <div class="admin-stat">
+                    <i class="fas fa-dollar-sign"></i>
+                    <div>
+                        <strong id="stat-inventory-value">$0.00</strong>
+                        <span>Valor inventario</span>
+                    </div>
+                </div>
+                <div class="admin-stat">
+                    <i class="fas fa-shopping-bag"></i>
+                    <div>
+                        <strong id="stat-orders">0</strong>
+                        <span>Pedidos</span>
+                    </div>
+                </div>
+                <div class="admin-stat">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <strong id="stat-paid">0</strong>
+                        <span>Pedidos pagados</span>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-stock-alert" id="stock-alert"></div>
+        </section>
+    </main>
+</div>
+
+<!-- ===== MODAL PRODUCTO ===== -->
+<div class="admin-modal-overlay" id="product-modal-overlay" style="display:none;">
+    <div class="admin-modal">
+        <div class="admin-modal__header">
+            <h3 id="product-modal-title">Nuevo producto</h3>
+            <button class="admin-modal__close" id="product-modal-close"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="product-form" class="admin-form">
+            <input type="hidden" id="product-id">
+            <div class="admin-form__grid">
+                <div class="admin-form__field">
+                    <label>Nombre *</label>
+                    <input type="text" id="product-name" required>
+                </div>
+                <div class="admin-form__field">
+                    <label>SKU</label>
+                    <input type="text" id="product-sku" placeholder="BAR-001">
+                </div>
+                <div class="admin-form__field">
+                    <label>Categoría</label>
+                    <select id="product-category">
+                        <option value="ropa">Ropa</option>
+                        <option value="accesorios">Accesorios</option>
+                        <option value="skincare">Skincare</option>
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label>Tipo</label>
+                    <select id="product-tipo">
+                        <option value="nuevo">Nuevo</option>
+                        <option value="usado">Usado</option>
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label>Precio de costo ($)</label>
+                    <input type="number" id="product-cost" step="0.01" min="0">
+                </div>
+                <div class="admin-form__field">
+                    <label>Precio de venta ($)</label>
+                    <input type="number" id="product-sale" step="0.01" min="0" required>
+                </div>
+                <div class="admin-form__field">
+                    <label>Stock</label>
+                    <input type="number" id="product-stock" min="0" value="1">
+                </div>
+            </div>
+            <div class="admin-form__actions">
+                <button type="button" class="admin-btn admin-btn--ghost" id="product-modal-cancel">Cancelar</button>
+                <button type="submit" class="admin-btn admin-btn--primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="admin-toast" id="admin-toast"></div>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="admin.js"></script>
+</body>
+</html>
