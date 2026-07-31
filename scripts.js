@@ -663,7 +663,49 @@ function updateWishlistUI() {
     document.getElementById('wish-count').textContent = wishlist.size;
 }
 
-// ===== CHECKOUT — Wompi SV =====
+// ===== CHECKOUT — Método de pago =====
+const DELIVERY_FEE = 2.50; // Envío a domicilio (editable)
+
+function openCheckoutModal() {
+    if (cart.length === 0) return;
+    closeCart();
+    // Autocompletar datos del usuario logueado
+    if (currentUser) {
+        const p = currentUser.profile || {};
+        $('checkout-name').value = p.name || '';
+        $('checkout-phone').value = p.phone || '';
+        $('checkout-address').value = p.address || '';
+        $('checkout-city').value = p.city || '';
+    }
+    updateCheckoutUI();
+    $('checkout-overlay').style.display = '';
+    $('checkout-modal').style.display = '';
+}
+
+function closeCheckoutModal() {
+    $('checkout-overlay').style.display = 'none';
+    $('checkout-modal').style.display = 'none';
+}
+
+function updateCheckoutUI() {
+    const method = document.querySelector('input[name="pay-method"]:checked').value;
+    const isCash = method === 'efectivo';
+    $('checkout-delivery').style.display = isCash ? '' : 'none';
+    const isDelivery = document.querySelector('input[name="delivery-method"]:checked')?.value === 'domicilio';
+    $('checkout-address-group').style.display = isCash && isDelivery ? '' : 'none';
+    
+    const baseTotal = getCartTotal();
+    const fee = isCash && isDelivery ? DELIVERY_FEE : 0;
+    $('checkout-total').textContent = '$' + (baseTotal + fee).toFixed(2);
+}
+
+document.querySelectorAll('input[name="pay-method"], input[name="delivery-method"]').forEach(r => {
+    r.addEventListener('change', updateCheckoutUI);
+});
+$('checkout-close').addEventListener('click', closeCheckoutModal);
+$('checkout-overlay').addEventListener('click', closeCheckoutModal);
+
+// ===== CHECKOUT — Wompi SV (tarjeta) =====
 async function wompiCheckout() {
     if (cart.length === 0) return;
     
@@ -716,7 +758,98 @@ async function wompiCheckout() {
     }
 }
 
-document.getElementById('checkout-btn').addEventListener('click', wompiCheckout);
+// ===== CHECKOUT — Efectivo (contra entrega / retiro) =====
+async function cashCheckout() {
+    const name = $('checkout-name').value.trim();
+    const phone = $('checkout-phone').value.trim();
+    if (!name || !phone) {
+        showToast('📝 Completá tu nombre y teléfono');
+        return;
+    }
+    
+    const isDelivery = document.querySelector('input[name="delivery-method"]:checked').value === 'domicilio';
+    if (isDelivery) {
+        const address = $('checkout-address').value.trim();
+        const city = $('checkout-city').value.trim();
+        if (!address || !city) {
+            showToast('📝 Completá tu dirección de entrega');
+            return;
+        }
+    }
+    
+    const items = [...cart];
+    const baseTotal = getCartTotal();
+    const fee = isDelivery ? DELIVERY_FEE : 0;
+    const total = baseTotal + fee;
+    const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    
+    showToast('🔄 Procesando pedido...');
+    
+    try {
+        // Insertar pedido con fetch directo (evita problemas de la librería CDN)
+        const orderPayload = {
+            items: items,
+            total: total,
+            status: 'pendiente',
+            payment_status: 'efectivo',
+            payment_method: 'efectivo',
+            reference: ref,
+            delivery_type: isDelivery ? 'domicilio' : 'retiro',
+            delivery_fee: fee,
+            customer_name: name,
+            customer_phone: phone,
+            customer_address: isDelivery ? $('checkout-address').value.trim() : null,
+            customer_city: isDelivery ? $('checkout-city').value.trim() : null
+        };
+        if (currentUser) orderPayload.user_id = currentUser.id;
+        
+        try {
+            await fetch(SUPABASE_URL + '/rest/v1/orders', {
+                method: 'POST',
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(orderPayload)
+            });
+        } catch (insertErr) {
+            console.log('No se pudo guardar el pedido online:', insertErr.message);
+        }
+        
+        // Si no está logueado y no hay supabase, igual confirmamos
+        cart = [];
+        saveCart();
+        updateCartUI();
+        closeCheckoutModal();
+        
+        // Confirmación
+        const deliveryText = isDelivery ? 'a domicilio' : 'para retiro';
+        showToast('✅ Pedido confirmado');
+        alert(
+            '🎉 ¡Pedido confirmado, ' + name + '!\n\n' +
+            '📍 Referencia: ' + ref + '\n' +
+            '💰 Total a pagar en efectivo: $' + total.toFixed(2) + ' (' + deliveryText + ')\n\n' +
+            '📲 Te vamos a contactar al ' + phone + ' para coordinar la ' + (isDelivery ? 'entrega' : 'entrega/retiro') + '.\n' +
+            '¡Gracias por comprar en BARATUSS! 💕'
+        );
+        
+    } catch (e) {
+        showToast('❌ Error: ' + e.message);
+    }
+}
+
+// ===== BOTÓN PRINCIPAL DE CHECKOUT =====
+$('checkout-btn').addEventListener('click', openCheckoutModal);
+$('checkout-confirm').addEventListener('click', () => {
+    const method = document.querySelector('input[name="pay-method"]:checked').value;
+    if (method === 'tarjeta') {
+        closeCheckoutModal();
+        wompiCheckout();
+    } else {
+        cashCheckout();
+    }
+});
 
 // ===== NEWSLETTER =====
 document.getElementById('newsletter-form').addEventListener('submit', (e) => {

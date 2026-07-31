@@ -420,22 +420,50 @@ async function loadOrders() {
 
 function renderOrders() {
     if (orders.length === 0) {
-        $('orders-body').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999;">No hay pedidos</td></tr>';
+        $('orders-body').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">No hay pedidos</td></tr>';
         return;
     }
     $('orders-body').innerHTML = orders.map(o => {
         const items = (o.items || []).map(i => `${i.name} ×${i.qty}`).join(', ');
         const payStatus = o.payment_status || 'pendiente';
+        const isCash = o.payment_method === 'efectivo';
+        const delivery = o.delivery_type === 'domicilio'
+            ? `🏠 Domicilio${o.delivery_fee ? ` (+$${Number(o.delivery_fee).toFixed(2)})` : ''}`
+            : o.delivery_type === 'retiro' ? '🏪 Retiro' : '';
+        const customer = (o.customer_name ? `${o.customer_name}<br><small>📱 ${o.customer_phone || ''}</small>` : '') +
+            (o.customer_address ? `<br><small>📍 ${o.customer_address}, ${o.customer_city || ''}</small>` : '');
+        const canMarkPaid = isCash && payStatus !== 'pagado';
         return `
         <tr>
             <td class="admin-mono">${o.reference || o.id?.slice(0, 8) || '—'}</td>
             <td>${items || '—'}</td>
             <td>$${Number(o.total).toFixed(2)}</td>
             <td><span class="admin-badge admin-badge--${o.status || 'pendiente'}">${capitalize(o.status || 'pendiente')}</span></td>
-            <td><span class="admin-badge admin-badge--${payStatus}">${capitalize(payStatus)}</span></td>
-            <td>${new Date(o.created_at).toLocaleDateString('es-SV')}</td>
+            <td>
+                <span class="admin-badge ${isCash ? 'admin-badge--efectivo' : 'admin-badge--aprobado'}">${isCash ? '💵 Efectivo' : capitalize(payStatus)}</span>
+                ${delivery ? `<br><small style="color:#888;">${delivery}</small>` : ''}
+            </td>
+            <td>${customer || new Date(o.created_at).toLocaleDateString('es-SV')}</td>
+            <td>
+                <small style="color:#aaa;">${new Date(o.created_at).toLocaleDateString('es-SV')}</small>
+                ${canMarkPaid ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markCashPaid('${o.id}')">✅ Marcar pagado</button>` : ''}
+            </td>
         </tr>`;
     }).join('');
+}
+
+// Marcar pedido en efectivo como pagado/entregado
+async function markCashPaid(id) {
+    if (!confirm('¿Marcar este pedido como PAGADO y ENTREGADO?')) return;
+    await api('PATCH', 'orders?id=eq.' + id, {
+        payment_status: 'pagado',
+        status: 'entregado',
+        payment_date: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    });
+    showToast('✅ Pedido marcado como pagado');
+    loadOrders();
+    loadStats();
 }
 
 // ===== STATS =====

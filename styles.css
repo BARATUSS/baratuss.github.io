@@ -761,6 +761,30 @@ ul { list-style: none; }
 }
 .modal-overlay.open { opacity: 1; pointer-events: auto; }
 
+/* Checkout modal (controlado por display inline) */
+#checkout-modal, #checkout-overlay {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+.checkout-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.checkout-option { cursor: pointer; }
+.checkout-option input { display: none; }
+.checkout-option__box {
+    display: flex; align-items: center; gap: 14px;
+    border: 2px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 14px 16px;
+    transition: var(--transition);
+}
+.checkout-option input:checked + .checkout-option__box {
+    border-color: var(--accent);
+    background: rgba(255,150,134,0.06);
+}
+.checkout-option__icon { font-size: 1.8rem; }
+.checkout-option small { display: block; color: var(--gray-400); margin-top: 2px; font-size: 0.78rem; }
+.checkout-subtitle { margin: 14px 0 8px; font-size: 0.95rem; color: var(--gray-500); }
+#checkout-customer-fields { margin-top: 14px; }
+
 .modal {
     position: fixed; top: 50%; left: 50%; z-index: 3001;
     transform: translate(-50%, -50%) scale(0.95);

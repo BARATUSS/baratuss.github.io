@@ -269,6 +269,86 @@
     </div>
 </div>
 
+<!-- ========== CHECKOUT MODAL (método de pago) ========== -->
+<div class="modal-overlay" id="checkout-overlay" style="display:none;"></div>
+<div class="modal" id="checkout-modal" style="display:none;">
+    <div class="modal__header">
+        <h3>¿Cómo querés pagar?</h3>
+        <button class="modal__close" id="checkout-close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal__body">
+        <div class="checkout-options">
+            <label class="checkout-option">
+                <input type="radio" name="pay-method" value="tarjeta" checked>
+                <div class="checkout-option__box">
+                    <span class="checkout-option__icon">💳</span>
+                    <div>
+                        <strong>Tarjeta (Wompi)</strong>
+                        <small>Crédito, débito o puntos Agrícola. Pago seguro online.</small>
+                    </div>
+                </div>
+            </label>
+            <label class="checkout-option">
+                <input type="radio" name="pay-method" value="efectivo">
+                <div class="checkout-option__box">
+                    <span class="checkout-option__icon">💵</span>
+                    <div>
+                        <strong>Efectivo</strong>
+                        <small>Pagás cuando recibís tu pedido o al retirarlo.</small>
+                    </div>
+                </div>
+            </label>
+        </div>
+
+        <div id="checkout-delivery" style="display:none;">
+            <h4 class="checkout-subtitle">¿Cómo recibís tu pedido?</h4>
+            <div class="checkout-options">
+                <label class="checkout-option">
+                    <input type="radio" name="delivery-method" value="domicilio" checked>
+                    <div class="checkout-option__box">
+                        <span class="checkout-option__icon">🛵</span>
+                        <div>
+                            <strong>Entrega a domicilio</strong>
+                            <small>+$2.50 de envío</small>
+                        </div>
+                    </div>
+                </label>
+                <label class="checkout-option">
+                    <input type="radio" name="delivery-method" value="retiro">
+                    <div class="checkout-option__box">
+                        <span class="checkout-option__icon">🏪</span>
+                        <div>
+                            <strong>Retiro en punto</strong>
+                            <small>Sin costo — coordinamos por Instagram @baratuss_sv</small>
+                        </div>
+                    </div>
+                </label>
+            </div>
+            <div id="checkout-customer-fields">
+                <div class="form-group">
+                    <label>Tu nombre</label>
+                    <input type="text" id="checkout-name" placeholder="Nombre completo" required>
+                </div>
+                <div class="form-group">
+                    <label>Tu teléfono (WhatsApp)</label>
+                    <input type="tel" id="checkout-phone" placeholder="7000-0000" required>
+                </div>
+                <div class="form-group" id="checkout-address-group">
+                    <label>Dirección de entrega</label>
+                    <input type="text" id="checkout-address" placeholder="Colonia, calle, casa...">
+                    <input type="text" id="checkout-city" placeholder="Ciudad / Municipio" style="margin-top:8px;">
+                </div>
+            </div>
+        </div>
+
+        <div class="cart-total" style="margin:16px 0;">
+            <span>Total a pagar</span>
+            <span id="checkout-total">$0.00</span>
+        </div>
+        <button class="btn btn--primary btn--full" id="checkout-confirm">Confirmar pedido</button>
+    </div>
+</div>
+
 <!-- ========== AUTH MODAL ========== -->
 <div class="modal-overlay" id="modal-overlay"></div>
 <div class="modal" id="auth-modal">
