@@ -17,6 +17,14 @@ function getSupabase() {
     return null;
 }
 
+// ===== PRICING (IVA 13% + comisión Wompi 5.25% + $0.25) =====
+const PRICE_FACTOR = 1.189325;
+const PRICE_FEE = 0.25;
+function finalPrice(price) {
+    if (!price) return 0;
+    return Math.round((Number(price) * PRICE_FACTOR + PRICE_FEE) * 100) / 100;
+}
+
 // ===== PRODUCT DATA (fallback si Supabase falla) =====
 let products = [
     { id: 1, name: 'Vestido Floral Primavera', category: 'ropa', price: 49.99, originalPrice: 69.99, badge: 'Oferta', imgClass: 'p-1', emoji: '👗' },
@@ -50,8 +58,8 @@ async function loadProductsFromSupabase() {
                 id: p.id,
                 name: p.name,
                 category: p.category || 'ropa',
-                price: Number(p.sale_price) || 0,
-                originalPrice: p.original_price ? Number(p.original_price) : null,
+                price: finalPrice(p.sale_price),
+                originalPrice: p.original_price ? finalPrice(p.original_price) : null,
                 badge: p.badge || null,
                 imgClass: p.img_class || 'p-1',
                 emoji: p.emoji || '🛍️',
@@ -296,6 +304,7 @@ function renderProducts(filter = 'all') {
                     <span class="current">$${p.price.toFixed(2)}</span>
                     ${p.originalPrice ? `<span class="original">$${p.originalPrice.toFixed(2)}</span>` : ''}
                 </div>
+                <div class="product-card__tax">IVA y comisión incluidos</div>
                 <button class="add-to-cart" data-id="${p.id}">
                     <i class="fas fa-shopping-bag"></i> Añadir
                 </button>
@@ -773,6 +782,18 @@ document.getElementById('footer-orders')?.addEventListener('click', (e) => {
 
 // ===== INIT =====
 function initApp() {
+    // Precios finales con IVA + comisión para el fallback local
+    products = products.map(p => ({
+        ...p,
+        price: finalPrice(p.price),
+        originalPrice: p.originalPrice ? finalPrice(p.originalPrice) : null
+    }));
+    // Actualizar carritos viejos guardados con precios base
+    cart = cart.map(item => {
+        const p = products.find(x => x.id === item.id);
+        return p ? { ...item, price: p.price } : item;
+    });
+    saveCart();
     renderProducts();
     updateCartUI();
     loadProductsFromSupabase();

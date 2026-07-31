@@ -248,6 +248,12 @@ body {
     outline: none; transition: var(--transition);
 }
 .admin-form__field input:focus, .admin-form__field select:focus { border-color: var(--accent); }
+.admin-form__hint {
+    display: block;
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 6px;
+}
 .admin-form__actions {
     display: flex; justify-content: flex-end; gap: 12px;
     margin-top: 24px;

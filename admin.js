@@ -24,6 +24,14 @@ async function api(method, path, body) {
     return r.json().catch(() => null);
 }
 
+// ===== PRICING (misma fórmula que la tienda) =====
+const PRICE_FACTOR = 1.189325;
+const PRICE_FEE = 0.25;
+function finalPrice(price) {
+    if (!price) return 0;
+    return Math.round((Number(price) * PRICE_FACTOR + PRICE_FEE) * 100) / 100;
+}
+
 // ===== LOGIN FORM =====
 $('admin-login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -134,6 +142,7 @@ function renderInventory() {
             <td><span class="admin-badge ${p.tipo === 'usado' ? 'admin-badge--usado' : 'admin-badge--nuevo'}">${p.tipo}</span></td>
             <td>$${Number(p.cost_price || 0).toFixed(2)}</td>
             <td>$${Number(p.sale_price || 0).toFixed(2)}</td>
+            <td><strong style="color:var(--accent-dark);">$${finalPrice(p.sale_price).toFixed(2)}</strong></td>
             <td><span class="admin-stock ${p.stock <= 3 ? 'admin-stock--low' : ''}">${p.stock}</span></td>
             <td class="admin-actions">
                 <button class="admin-icon-btn" onclick="editProduct(${p.id})" title="Editar"><i class="fas fa-edit"></i></button>
@@ -247,8 +256,17 @@ function openProductModal(product) {
     $('product-badge').value = product?.badge || '';
     $('product-img-class').value = product?.img_class || 'p-1';
     $('product-active').value = product?.active === false ? 'false' : 'true';
+    updateSalePreview();
     $('product-modal-overlay').style.display = 'flex';
 }
+
+// Vista previa en vivo: cuánto paga el cliente
+function updateSalePreview() {
+    const sale = parseFloat($('product-sale').value) || 0;
+    const total = finalPrice(sale);
+    $('sale-preview').textContent = `El cliente pagará: $${total.toFixed(2)} (IVA 13% + comisión Wompi incluidos)`;
+}
+$('product-sale').addEventListener('input', updateSalePreview);
 
 function closeProductModal() {
     $('product-modal-overlay').style.display = 'none';

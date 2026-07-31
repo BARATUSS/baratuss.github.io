@@ -314,6 +314,11 @@ ul { list-style: none; }
     margin-bottom: 4px;
 }
 .product-card__price { margin-bottom: 16px; }
+.product-card__tax {
+    font-size: 0.7rem;
+    color: #999;
+    margin: -10px 0 12px;
+}
 .product-card__price .current {
     font-size: 1.1rem; font-weight: 600;
     color: var(--black);
