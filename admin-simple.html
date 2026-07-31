@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BARATUSS · Administración</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- ===== LOGIN SCREEN ===== -->
+<div class="admin-login" id="admin-login">
+    <div class="admin-login__card">
+        <img src="assets/logo.jpg" alt="BARATUSS" class="admin-login__logo">
+        <h2>Panel de Administración</h2>
+        <p>Iniciá sesión con tu cuenta de administradora</p>
+        <form id="admin-login-form">
+            <input type="email" id="admin-email" placeholder="Correo electrónico" required>
+            <input type="password" id="admin-password" placeholder="Contraseña" required>
+            <button type="submit" class="admin-btn admin-btn--primary">Ingresar</button>
+            <p class="admin-login__error" id="admin-login-error"></p>
+            <a href="index.html" class="admin-login__back">← Volver a la tienda</a>
+        </form>
+    </div>
+</div>
+
+<!-- ===== DASHBOARD (simple) ===== -->
+<div class="admin-dashboard" id="admin-dashboard" style="display:none;">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__logo"><img src="assets/logo.jpg" alt="BARATUSS"></div>
+        <nav class="admin-nav">
+            <a href="#" class="admin-nav__item active" data-section="inventario"><i class="fas fa-box"></i> Inventario</a>
+            <a href="#" class="admin-nav__item" data-section="pedidos"><i class="fas fa-shopping-bag"></i> Pedidos</a>
+        </nav>
+        <div class="admin-sidebar__footer">
+            <span id="admin-user-name">Admin</span>
+            <button id="admin-logout" class="admin-btn admin-btn--ghost"><i class="fas fa-sign-out-alt"></i> Salir</button>
+        </div>
+    </aside>
+    <main class="admin-main">
+        <section class="admin-section" id="section-inventario">
+            <div class="admin-section__header">
+                <h1>Inventario</h1>
+                <button class="admin-btn admin-btn--primary" id="btn-add-product"><i class="fas fa-plus"></i> Nuevo producto</button>
+            </div>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead><tr><th>ID</th><th>Producto</th><th>Categoría</th><th>Venta</th><th>Stock</th></tr></thead>
+                    <tbody id="inventory-body"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="admin-section" id="section-pedidos" style="display:none;">
+            <div class="admin-section__header"><h1>Pedidos</h1></div>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead><tr><th>Referencia</th><th>Total</th><th>Estado</th><th>Fecha</th></tr></thead>
+                    <tbody id="orders-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="admin-toast" id="admin-toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://lizybztwnlrlvsrmgnug.supabase.co';
+const ANON_KEY = 'sb_publishable_m85uJKNu8Izi5ujT8ukWWQ_XvEMOToA';
+const $ = id => document.getElementById(id);
+
+// ===== LOGIN con fetch directo (sin librería CDN) =====
+$('admin-login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    btn.disabled = true; btn.textContent = 'Ingresando...';
+    $('admin-login-error').textContent = '';
+
+    try {
+        // 1. Login
+        const resp = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+            method: 'POST',
+            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: $('admin-email').value, password: $('admin-password').value })
+        });
+        const data = await resp.json();
+
+        if (!resp.ok || !data.access_token) {
+            $('admin-login-error').textContent = '❌ ' + (data.error_description || data.msg || 'Credenciales inválidas');
+            btn.disabled = false; btn.textContent = 'Ingresar';
+            return;
+        }
+
+        // 2. Verificar admin
+        const token = data.access_token;
+        const user = data.user;
+        const profResp = await fetch(SUPABASE_URL + '/rest/v1/profiles?select=is_admin,name&id=eq.' + user.id, {
+            headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + token }
+        });
+        const profiles = await profResp.json();
+        const profile = profiles?.[0];
+
+        if (!profile || !profile.is_admin) {
+            $('admin-login-error').textContent = '❌ Esta cuenta no tiene permisos de administradora';
+            btn.disabled = false; btn.textContent = 'Ingresar';
+            return;
+        }
+
+        // 3. Guardar sesión y entrar
+        localStorage.setItem('baratuss_admin_session', JSON.stringify({ token, user, profile }));
+        enterDashboard(profile);
+    } catch (err) {
+        console.error(err);
+        $('admin-login-error').textContent = '❌ Error: ' + err.message;
+        btn.disabled = false; btn.textContent = 'Ingresar';
+    }
+});
+
+function enterDashboard(profile) {
+    $('admin-login').style.display = 'none';
+    $('admin-dashboard').style.display = 'flex';
+    $('admin-user-name').textContent = profile?.name || 'Admin';
+    loadInventory();
+    loadOrders();
+}
+
+// ===== Cargar inventario =====
+async function loadInventory() {
+    const sess = JSON.parse(localStorage.getItem('baratuss_admin_session') || 'null');
+    if (!sess) return;
+    try {
+        const resp = await fetch(SUPABASE_URL + '/rest/v1/inventory?select=*&order=id.desc', {
+            headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + sess.token }
+        });
+        const items = await resp.json();
+        if (Array.isArray(items)) {
+            $('inventory-body').innerHTML = items.map(p => `
+                <tr><td class="admin-mono">${p.id}</td><td><strong>${p.emoji || ''} ${p.name}</strong></td>
+                <td>${p.category}</td><td>$${Number(p.sale_price || 0).toFixed(2)}</td>
+                <td><span class="admin-stock ${p.stock <= 3 ? 'admin-stock--low' : ''}">${p.stock}</span></td></tr>
+            `).join('');
+        }
+    } catch (err) { console.error(err); }
+}
+
+// ===== Cargar pedidos =====
+async function loadOrders() {
+    const sess = JSON.parse(localStorage.getItem('baratuss_admin_session') || 'null');
+    if (!sess) return;
+    try {
+        const resp = await fetch(SUPABASE_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=20', {
+            headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + sess.token }
+        });
+        const orders = await resp.json();
+        if (Array.isArray(orders)) {
+            $('orders-body').innerHTML = orders.map(o => `
+                <tr><td class="admin-mono">${o.reference || o.id?.slice(0,8)}</td>
+                <td>$${Number(o.total).toFixed(2)}</td>
+                <td>${o.status || 'pendiente'}</td>
+                <td>${new Date(o.created_at).toLocaleDateString('es-SV')}</td></tr>
+            `).join('');
+        }
+    } catch (err) { console.error(err); }
+}
+
+// ===== Navegación =====
+document.querySelectorAll('.admin-nav__item').forEach(item => {
+    item.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.querySelectorAll('.admin-nav__item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        document.querySelectorAll('.admin-section').forEach(s => s.style.display = 'none');
+        $('section-' + item.dataset.section).style.display = '';
+        if (item.dataset.section === 'pedidos') loadOrders();
+    });
+});
+
+// ===== Logout =====
+$('admin-logout').addEventListener('click', () => {
+    localStorage.removeItem('baratuss_admin_session');
+    location.reload();
+});
+
+// ===== Auto-login si hay sesión =====
+(function init() {
+    const sess = JSON.parse(localStorage.getItem('baratuss_admin_session') || 'null');
+    if (sess?.profile?.is_admin) {
+        enterDashboard(sess.profile);
+    }
+})();
+</script>
+</body>
+</html>
