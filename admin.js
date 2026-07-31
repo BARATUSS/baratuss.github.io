@@ -129,7 +129,7 @@ function renderInventory() {
     $('inventory-body').innerHTML = filtered.map(p => `
         <tr>
             <td class="admin-mono">${p.sku || '—'}</td>
-            <td><strong>${p.name}</strong></td>
+            <td><strong>${p.emoji || ''} ${p.name}</strong> ${p.active === false ? '<span class="admin-badge admin-badge--rechazado">oculto</span>' : ''}</td>
             <td><span class="admin-badge admin-badge--cat">${capitalize(p.category)}</span></td>
             <td><span class="admin-badge ${p.tipo === 'usado' ? 'admin-badge--usado' : 'admin-badge--nuevo'}">${p.tipo}</span></td>
             <td>$${Number(p.cost_price || 0).toFixed(2)}</td>
@@ -169,6 +169,10 @@ function openProductModal(product) {
     $('product-cost').value = product?.cost_price || '';
     $('product-sale').value = product?.sale_price || '';
     $('product-stock').value = product?.stock || 1;
+    $('product-emoji').value = product?.emoji || '';
+    $('product-badge').value = product?.badge || '';
+    $('product-img-class').value = product?.img_class || 'p-1';
+    $('product-active').value = product?.active === false ? 'false' : 'true';
     $('product-modal-overlay').style.display = 'flex';
 }
 
@@ -188,6 +192,10 @@ $('product-form').addEventListener('submit', async (e) => {
         cost_price: parseFloat($('product-cost').value) || 0,
         sale_price: parseFloat($('product-sale').value) || 0,
         stock: parseInt($('product-stock').value) || 0,
+        emoji: $('product-emoji').value || '🛍️',
+        badge: $('product-badge').value || null,
+        img_class: $('product-img-class').value || 'p-1',
+        active: $('product-active').value === 'true',
         updated_at: new Date().toISOString()
     };
     

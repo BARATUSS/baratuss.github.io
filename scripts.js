@@ -17,14 +17,14 @@ function getSupabase() {
     return null;
 }
 
-// ===== PRODUCT DATA =====
-const products = [
+// ===== PRODUCT DATA (fallback si Supabase falla) =====
+let products = [
     { id: 1, name: 'Vestido Floral Primavera', category: 'ropa', price: 49.99, originalPrice: 69.99, badge: 'Oferta', imgClass: 'p-1', emoji: '👗' },
     { id: 2, name: 'Camisa Premium Blanca', category: 'ropa', price: 39.99, originalPrice: null, badge: null, imgClass: 'p-2', emoji: '👔' },
     { id: 3, name: 'Chaqueta Oversize', category: 'ropa', price: 89.99, originalPrice: null, badge: 'Nuevo', imgClass: 'p-4', emoji: '🧥' },
     { id: 4, name: 'Sudadera con Capucha', category: 'ropa', price: 44.99, originalPrice: null, badge: null, imgClass: 'p-5', emoji: '🏷️' },
     { id: 5, name: 'Jeans Skinny Azul', category: 'ropa', price: 54.99, originalPrice: null, badge: null, imgClass: 'p-7', emoji: '👖' },
-    { id: 6, name: 'Camisa Negra', category: 'ropa', price: 2.00, originalPrice: null, badge: 'Nuevo', imgClass: 'p-9', emoji: '🖤' },
+    { id: 6, name: 'Camisa Negra', category: 'ropa', price: 5.00, originalPrice: null, badge: 'Nuevo', imgClass: 'p-9', emoji: '🖤' },
     { id: 7, name: 'Bolso Tote de Cuero', category: 'accesorios', price: 59.99, originalPrice: 79.99, badge: 'Oferta', imgClass: 'p-3', emoji: '👜' },
     { id: 8, name: 'Gafas de Sol Aviador', category: 'accesorios', price: 29.99, originalPrice: 39.99, badge: 'Oferta', imgClass: 'p-6', emoji: '🕶️' },
     { id: 9, name: 'Reloj Deportivo', category: 'accesorios', price: 34.99, originalPrice: null, badge: 'Nuevo', imgClass: 'p-8', emoji: '⌚' },
@@ -32,6 +32,39 @@ const products = [
     { id: 11, name: 'Crema Facial Hidratante', category: 'skincare', price: 24.99, originalPrice: null, badge: null, imgClass: 'p-10', emoji: '🧴' },
     { id: 12, name: 'Sérum Vitamina C', category: 'skincare', price: 34.99, originalPrice: 44.99, badge: 'Oferta', imgClass: 'p-11', emoji: '✨' },
 ];
+
+// Cargar productos desde Supabase (inventario)
+async function loadProductsFromSupabase() {
+    const client = getSupabase();
+    if (!client) return;
+    try {
+        const { data, error } = await client
+            .from('inventory')
+            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock')
+            .eq('active', true)
+            .order('id', { ascending: true });
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+            products = data.map(p => ({
+                id: p.id,
+                name: p.name,
+                category: p.category || 'ropa',
+                price: Number(p.sale_price) || 0,
+                originalPrice: p.original_price ? Number(p.original_price) : null,
+                badge: p.badge || null,
+                imgClass: p.img_class || 'p-1',
+                emoji: p.emoji || '🛍️',
+                tipo: p.tipo || 'nuevo',
+                stock: p.stock || 0
+            }));
+            renderProducts(currentFilter);
+            updateCartUI();
+        }
+    } catch (e) {
+        console.log('Usando productos de respaldo:', e.message);
+    }
+}
 
 // ===== STATE =====
 let cart = JSON.parse(localStorage.getItem('baratuss_cart')) || [];
@@ -742,8 +775,8 @@ document.getElementById('footer-orders')?.addEventListener('click', (e) => {
 function initApp() {
     renderProducts();
     updateCartUI();
+    loadProductsFromSupabase();
     checkSession();
 }
 
 initApp();
-// Force cache refresh mi., 29 de jul. de 2026 17:26:30

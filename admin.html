@@ -193,6 +193,38 @@
                     <label>Stock</label>
                     <input type="number" id="product-stock" min="0" value="1">
                 </div>
+                <div class="admin-form__field">
+                    <label>Emoji (icono en tienda)</label>
+                    <input type="text" id="product-emoji" placeholder="👗">
+                </div>
+                <div class="admin-form__field">
+                    <label>Etiqueta (Oferta/Nuevo)</label>
+                    <input type="text" id="product-badge" placeholder="Oferta">
+                </div>
+                <div class="admin-form__field">
+                    <label>Color de fondo</label>
+                    <select id="product-img-class">
+                        <option value="p-1">Rosado</option>
+                        <option value="p-2">Azul claro</option>
+                        <option value="p-3">Naranja</option>
+                        <option value="p-4">Verde agua</option>
+                        <option value="p-5">Morado</option>
+                        <option value="p-6">Terracota</option>
+                        <option value="p-7">Cian</option>
+                        <option value="p-8">Rosa fuerte</option>
+                        <option value="p-9">Negro</option>
+                        <option value="p-10">Verde</option>
+                        <option value="p-11">Turquesa</option>
+                        <option value="p-12">Rosa claro</option>
+                    </select>
+                </div>
+                <div class="admin-form__field">
+                    <label>Visible en la tienda</label>
+                    <select id="product-active">
+                        <option value="true">Sí</option>
+                        <option value="false">No (oculto)</option>
+                    </select>
+                </div>
             </div>
             <div class="admin-form__actions">
                 <button type="button" class="admin-btn admin-btn--ghost" id="product-modal-cancel">Cancelar</button>
