@@ -46,27 +46,37 @@ $('admin-login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = 'Ingresando...';
+    $('admin-login-error').textContent = '';
     
-    const result = await loginAdmin(
-        $('admin-email').value,
-        $('admin-password').value
-    );
-    
-    btn.disabled = false; btn.textContent = 'Ingresar';
-    
-    if (result.error) {
-        $('admin-login-error').textContent = '❌ ' + result.error;
-        return;
+    try {
+        // Limpiar sesión vieja que pueda trabar el login
+        try { await supabase?.auth.signOut(); } catch (err) { console.log('signOut:', err.message); }
+        
+        const result = await loginAdmin(
+            $('admin-email').value,
+            $('admin-password').value
+        );
+        
+        if (result.error) {
+            $('admin-login-error').textContent = '❌ ' + result.error;
+            btn.disabled = false; btn.textContent = 'Ingresar';
+            return;
+        }
+        
+        const isAdmin = await checkAdmin();
+        if (!isAdmin) {
+            await supabase.auth.signOut();
+            $('admin-login-error').textContent = '❌ Esta cuenta no tiene permisos de administradora';
+            btn.disabled = false; btn.textContent = 'Ingresar';
+            return;
+        }
+        
+        enterDashboard();
+    } catch (err) {
+        console.error('Login error:', err);
+        $('admin-login-error').textContent = '❌ Error: ' + err.message;
+        btn.disabled = false; btn.textContent = 'Ingresar';
     }
-    
-    const isAdmin = await checkAdmin();
-    if (!isAdmin) {
-        await supabase.auth.signOut();
-        $('admin-login-error').textContent = '❌ Esta cuenta no tiene permisos de administradora';
-        return;
-    }
-    
-    enterDashboard();
 });
 
 // ===== ENTER DASHBOARD =====
@@ -300,9 +310,30 @@ function showToast(msg) {
 
 // ===== INIT =====
 async function init() {
-    const isAdmin = await checkAdmin();
-    if (isAdmin) {
-        enterDashboard();
+    try {
+        // Si hay una sesión inválida (cuenta borrada), limpiarla
+        const { data: { session } } = await supabase?.auth.getSession();
+        if (session?.user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('is_admin')
+                .eq('id', session.user.id)
+                .maybeSingle();
+            
+            if (!profile) {
+                // Sesión de cuenta que ya no existe — limpiar
+                await supabase.auth.signOut();
+                return;
+            }
+            
+            if (profile.is_admin) {
+                currentUser = { ...session.user, profile };
+                enterDashboard();
+                return;
+            }
+        }
+    } catch (e) {
+        console.log('Init check:', e.message);
     }
 }
 
