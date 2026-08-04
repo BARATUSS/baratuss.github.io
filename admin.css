@@ -282,6 +282,38 @@ body {
     color: #999;
     margin-top: 6px;
 }
+.admin-colors { display: flex; flex-direction: column; gap: 6px; }
+.admin-color-option { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; }
+.admin-color-option input[type="radio"] { accent-color: var(--accent); }
+.admin-color-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    margin-top: 4px;
+}
+.admin-color-list label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.8rem;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 100px;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+.admin-color-list label:has(input:checked) {
+    border-color: var(--accent);
+    background: rgba(255,150,134,0.08);
+}
+.admin-color-list input { accent-color: var(--accent); }
+.admin-colors-row { display: inline-flex; gap: 4px; margin-top: 6px; }
+.admin-color-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.1);
+    display: inline-block;
+}
 .admin-form__actions {
     display: flex; justify-content: flex-end; gap: 12px;
     margin-top: 24px;

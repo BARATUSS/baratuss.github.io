@@ -143,7 +143,10 @@ function renderInventory() {
                     : `<span class="admin-thumb admin-thumb--emoji ${p.img_class || 'p-1'}">${p.emoji || '🛍️'}</span>`}
                 <strong>${p.name}</strong> ${p.active === false ? '<span class="admin-badge admin-badge--rechazado">oculto</span>' : ''}
             </td>
-            <td><span class="admin-badge admin-badge--cat">${capitalize(p.category)}</span></td>
+            <td>
+                <span class="admin-badge admin-badge--cat">${capitalize(p.category)}</span>
+                ${p.colors ? `<br><span class="admin-colors-row">${p.colors.split(',').map(c => `<span class="admin-color-dot" title="${c.trim()}" style="background:${colorHex(c.trim())}"></span>`).join('')}</span>` : ''}
+            </td>
             <td><span class="admin-badge ${p.tipo === 'usado' ? 'admin-badge--usado' : 'admin-badge--nuevo'}">${p.tipo}</span></td>
             <td>$${Number(p.cost_price || 0).toFixed(2)}</td>
             <td>$${Number(p.sale_price || 0).toFixed(2)}</td>
@@ -261,6 +264,19 @@ function openProductModal(product) {
     $('product-badge').value = product?.badge || '';
     $('product-img-class').value = product?.img_class || 'p-1';
     $('product-active').value = product?.active === false ? 'false' : 'true';
+    // Colores
+    const colors = product?.colors ? product.colors.split(',').map(c => c.trim()).filter(Boolean) : [];
+    if (colors.length > 0) {
+        document.querySelector('input[name="color-mode"][value="list"]').checked = true;
+        $('color-list').style.display = '';
+        document.querySelectorAll('.color-check').forEach(cb => {
+            cb.checked = colors.includes(cb.value);
+        });
+    } else {
+        document.querySelector('input[name="color-mode"][value="na"]').checked = true;
+        $('color-list').style.display = 'none';
+        document.querySelectorAll('.color-check').forEach(cb => cb.checked = false);
+    }
     // Foto existente
     selectedImageFile = null;
     existingImageUrl = product?.image_url || null;
@@ -276,6 +292,13 @@ function openProductModal(product) {
     updateSalePreview();
     $('product-modal-overlay').style.display = 'flex';
 }
+
+// Radio color-mode: mostrar/ocultar lista
+document.querySelectorAll('input[name="color-mode"]').forEach(r => {
+    r.addEventListener('change', () => {
+        $('color-list').style.display = document.querySelector('input[name="color-mode"]:checked').value === 'list' ? '' : 'none';
+    });
+});
 
 // Vista previa en vivo: cuánto paga el cliente
 function updateSalePreview() {
@@ -375,6 +398,9 @@ $('product-form').addEventListener('submit', async (e) => {
         badge: $('product-badge').value || null,
         img_class: $('product-img-class').value || 'p-1',
         active: $('product-active').value === 'true',
+        colors: document.querySelector('input[name="color-mode"]:checked').value === 'list'
+            ? [...document.querySelectorAll('.color-check:checked')].map(cb => cb.value).join(', ')
+            : null,
         updated_at: new Date().toISOString()
     };
     if (imageUrl) data.image_url = imageUrl;
@@ -487,6 +513,16 @@ async function loadStats() {
 
 // ===== HELPERS =====
 function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+// Color nombre → hex (para los puntitos)
+function colorHex(name) {
+    const map = {
+        'negro': '#1a1a1a', 'blanco': '#f5f5f5', 'gris': '#9e9e9e', 'rojo': '#e74c3c',
+        'azul': '#2980b9', 'verde': '#27ae60', 'amarillo': '#f1c40f', 'rosado': '#ff9686',
+        'morado': '#8e44ad', 'naranja': '#e67e22', 'marrón': '#6d4c41', 'beige': '#d7c4a3'
+    };
+    return map[name.toLowerCase()] || '#cccccc';
+}
 
 function showToast(msg) {
     const toast = $('admin-toast');

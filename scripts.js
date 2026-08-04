@@ -25,6 +25,16 @@ function finalPrice(price) {
     return Math.round((Number(price) * PRICE_FACTOR + PRICE_FEE) * 100) / 100;
 }
 
+// Color nombre → hex (puntitos en la tienda)
+function colorHex(name) {
+    const map = {
+        'negro': '#1a1a1a', 'blanco': '#f5f5f5', 'gris': '#9e9e9e', 'rojo': '#e74c3c',
+        'azul': '#2980b9', 'verde': '#27ae60', 'amarillo': '#f1c40f', 'rosado': '#ff9686',
+        'morado': '#8e44ad', 'naranja': '#e67e22', 'marrón': '#6d4c41', 'beige': '#d7c4a3'
+    };
+    return map[name.toLowerCase()] || '#cccccc';
+}
+
 // ===== PRODUCT DATA (fallback si Supabase falla) =====
 let products = [
     { id: 1, name: 'Vestido Floral Primavera', category: 'ropa', price: 49.99, originalPrice: 69.99, badge: 'Oferta', imgClass: 'p-1', emoji: '👗' },
@@ -48,7 +58,7 @@ async function loadProductsFromSupabase() {
     try {
         const { data, error } = await client
             .from('inventory')
-            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url')
+            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, colors')
             .eq('active', true)
             .order('id', { ascending: true });
         
@@ -65,7 +75,8 @@ async function loadProductsFromSupabase() {
                 emoji: p.emoji || '🛍️',
                 tipo: p.tipo || 'nuevo',
                 stock: p.stock || 0,
-                image: p.image_url || null
+                image: p.image_url || null,
+                colors: p.colors || null
             }));
             renderProducts(currentFilter);
             updateCartUI();
@@ -301,6 +312,7 @@ function renderProducts(filter = 'all') {
             <div class="product-card__body">
                 <div class="product-card__category">${capitalize(p.category)}</div>
                 <div class="product-card__name">${p.name}</div>
+                ${p.colors ? `<div class="product-card__colors" title="${p.colors}">${p.colors.split(',').map(c => `<span class="product-color-dot" style="background:${colorHex(c.trim())}"></span>`).join('')}<small>${p.colors}</small></div>` : ''}
                 <div class="product-card__price">
                     <span class="current">$${p.price.toFixed(2)}</span>
                     ${p.originalPrice ? `<span class="original">$${p.originalPrice.toFixed(2)}</span>` : ''}

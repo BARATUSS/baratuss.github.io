@@ -325,6 +325,21 @@ ul { list-style: none; }
     color: #999;
     margin: -10px 0 12px;
 }
+.product-card__colors {
+    display: flex; align-items: center; gap: 5px;
+    margin: 6px 0 4px;
+    flex-wrap: wrap;
+}
+.product-card__colors small {
+    font-size: 0.7rem; color: #999;
+    margin-left: 2px;
+}
+.product-color-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.12);
+    display: inline-block;
+}
 .product-card__price .current {
     font-size: 1.1rem; font-weight: 600;
     color: var(--black);
