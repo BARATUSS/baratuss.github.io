@@ -708,7 +708,16 @@ function updateCheckoutUI() {
     
     const baseTotal = getCartTotal();
     const fee = isCash && isDelivery ? DELIVERY_FEE : 0;
-    $('checkout-total').textContent = '$' + (baseTotal + fee).toFixed(2);
+    const totalConFee = baseTotal + fee;
+    // Desglose: IVA 13% + comisión Wompi 3.50% ya incluidos en el precio final
+    $('checkout-total').textContent = '$' + totalConFee.toFixed(2);
+    const breakdown = $('checkout-breakdown');
+    if (breakdown) {
+        breakdown.innerHTML =
+            `<small style="opacity:.7;display:block;margin-top:4px;">` +
+            `Incluye: IVA 13% · Comisión Wompi 3.50% · Tarifa $${PRICE_FEE.toFixed(2)}` +
+            `</small>`;
+    }
 }
 
 document.querySelectorAll('input[name="pay-method"], input[name="delivery-method"]').forEach(r => {
