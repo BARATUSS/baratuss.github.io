@@ -25,7 +25,7 @@ async function api(method, path, body) {
 }
 
 // ===== PRICING (misma fórmula que la tienda) =====
-const PRICE_FACTOR = 1.189325;
+const PRICE_FACTOR = 1.16955;  // 1.13 × 1.035 (IVA 13% + comisión Wompi 3.50%)
 const PRICE_FEE = 0.25;
 function finalPrice(price) {
     if (!price) return 0;
