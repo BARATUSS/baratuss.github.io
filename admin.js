@@ -302,7 +302,7 @@ document.querySelectorAll('input[name="color-mode"]').forEach(r => {
     });
 });
 
-// Vista previa en vivo: cuánto paga el cliente (con desglose)
+// Vista previa en vivo: cuánto paga el cliente (con desglose completo)
 function updateSalePreview() {
     const sale = parseFloat($('product-sale').value) || 0;
     const iva = Math.round((sale * 0.13) * 100) / 100;              // IVA 13% sobre precio base
@@ -310,12 +310,14 @@ function updateSalePreview() {
     const comision = Math.round((subtotal * 0.035) * 100) / 100;    // Wompi 3.50% sobre (base+IVA)
     const total = finalPrice(sale);                                 // redondeado a 0.05
     $('sale-preview').innerHTML =
-        `El cliente pagará: <strong>$${total.toFixed(2)}</strong><br>` +
-        `<small style="opacity:.7;">` +
+        `<div style="background:#fff3f0;border:1px solid #ff9686;border-radius:8px;padding:8px 10px;margin-top:6px;line-height:1.5;">` +
+        `<strong>💰 El cliente pagará: $${total.toFixed(2)}</strong> ` +
+        `<span style="font-size:.85em;opacity:.8;">(redondeado de $${(subtotal + comision + PRICE_FEE).toFixed(2)})</span><br>` +
+        `<span style="font-size:.85em;opacity:.75;">` +
         `Precio base: $${sale.toFixed(2)} · IVA 13%: $${iva.toFixed(2)} · ` +
         `Comisión Wompi 3.50%: $${comision.toFixed(2)}` +
         (PRICE_FEE > 0 ? ` · Tarifa: $${PRICE_FEE.toFixed(2)}` : '') +
-        `</small>`;
+        `</span></div>`;
 }
 $('product-sale').addEventListener('input', updateSalePreview);
 
