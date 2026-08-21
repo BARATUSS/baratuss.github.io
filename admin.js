@@ -29,7 +29,9 @@ const PRICE_FACTOR = 1.16955;  // 1.13 × 1.035 (IVA 13% + comisión Wompi 3.50%
 const PRICE_FEE = 0.25;
 function finalPrice(price) {
     if (!price) return 0;
-    return Math.round((Number(price) * PRICE_FACTOR + PRICE_FEE) * 100) / 100;
+    const raw = Number(price) * PRICE_FACTOR + PRICE_FEE;
+    // Redondear al 0.05 más cercano hacia arriba: 7.52 → 7.55
+    return Math.ceil(raw * 20) / 20;
 }
 
 // ===== LOGIN FORM =====
@@ -306,7 +308,7 @@ function updateSalePreview() {
     const iva = Math.round((sale * 0.13) * 100) / 100;              // IVA 13% sobre precio base
     const subtotal = Math.round((sale * 1.13) * 100) / 100;         // base + IVA
     const comision = Math.round((subtotal * 0.035) * 100) / 100;    // Wompi 3.50% sobre (base+IVA)
-    const total = Math.round((subtotal + comision + PRICE_FEE) * 100) / 100;
+    const total = finalPrice(sale);                                 // redondeado a 0.05
     $('sale-preview').innerHTML =
         `El cliente pagará: <strong>$${total.toFixed(2)}</strong><br>` +
         `<small style="opacity:.7;">` +

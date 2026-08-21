@@ -22,7 +22,9 @@ const PRICE_FACTOR = 1.16955;  // 1.13 × 1.035 (IVA 13% + comisión Wompi 3.50%
 const PRICE_FEE = 0.25;
 function finalPrice(price) {
     if (!price) return 0;
-    return Math.round((Number(price) * PRICE_FACTOR + PRICE_FEE) * 100) / 100;
+    const raw = Number(price) * PRICE_FACTOR + PRICE_FEE;
+    // Redondear al 0.05 más cercano hacia arriba: 7.52 → 7.55
+    return Math.ceil(raw * 20) / 20;
 }
 
 // Color nombre → hex (puntitos en la tienda)
