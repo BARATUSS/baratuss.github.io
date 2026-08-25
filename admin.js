@@ -350,8 +350,7 @@ async function uploadProductImage() {
             headers: {
                 'apikey': ANON_KEY,
                 'Authorization': 'Bearer ' + session.token,
-                'Content-Type': selectedImageFile.type || 'image/jpeg',
-                'x-upsert': 'true'
+                'Content-Type': selectedImageFile.type || 'image/jpeg'
             },
             body: selectedImageFile
         });
