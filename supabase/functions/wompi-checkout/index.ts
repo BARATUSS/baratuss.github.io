@@ -78,14 +78,27 @@ serve(async (req) => {
     if (req.method === 'POST' && path === '/webhook') {
       const p = await req.json();
       const ref = p.enlacePago?.identificadorEnlaceComercio;
+      const aprobado = p.esAprobada === 'true';
       if (ref) {
         await supabase.from('orders').update({
-          payment_status: p.esAprobada === 'true' ? 'aprobado' : 'rechazado',
+          payment_status: aprobado ? 'aprobado' : 'rechazado',
           transaction_id: p.idTransaccion,
           payment_method: p.formaPagoUtilizada || null,
           payment_date: new Date().toISOString(),
-          status: p.esAprobada === 'true' ? 'pagado' : 'rechazado'
+          status: aprobado ? 'pagado' : 'rechazado'
         }).eq('reference', ref);
+
+        // ✅ Descontar stock SOLO si el pago fue aprobado
+        if (aprobado) {
+          const { data: order } = await supabase.from('orders').select('items').eq('reference', ref).single();
+          const items = order?.items || [];
+          for (const item of items) {
+            const qty = item.qty || 1;
+            const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
+            const nuevo = Math.max(0, (Number(inv?.stock) || 0) - qty);
+            await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+          }
+        }
       }
       return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: corsHeaders });
     }
