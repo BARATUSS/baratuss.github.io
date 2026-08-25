@@ -325,7 +325,7 @@ function renderProducts(filter = 'all') {
                     <span class="current">$${p.price.toFixed(2)}</span>
                     ${p.originalPrice ? `<span class="original">$${p.originalPrice.toFixed(2)}</span>` : ''}
                 </div>
-                <div class="product-card__tax">IVA y comisión incluidos</div>
+                <div class="product-card__tax"></div>
                 <button class="add-to-cart" data-id="${p.id}">
                     <i class="fas fa-shopping-bag"></i> Añadir
                 </button>
