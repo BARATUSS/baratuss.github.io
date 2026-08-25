@@ -309,6 +309,21 @@ ul { list-style: none; }
     padding: 4px 10px; border-radius: 100px;
     text-transform: uppercase; letter-spacing: 0.5px;
 }
+/* Galería de fotos (miniaturas) */
+.product-card__thumbs {
+    display: flex; gap: 6px; padding: 8px 12px 0;
+    justify-content: center; flex-wrap: wrap;
+}
+.product-card__thumb {
+    width: 44px; height: 44px; object-fit: cover;
+    border-radius: 8px; cursor: pointer;
+    border: 2px solid transparent;
+    opacity: 0.6; transition: all 0.2s;
+}
+.product-card__thumb:hover { opacity: 1; }
+.product-card__thumb--active {
+    border-color: var(--accent); opacity: 1;
+}
 .product-card__body { padding: 20px; }
 .product-card__category {
     font-size: 0.7rem; font-weight: 600; letter-spacing: 1px;

@@ -279,9 +279,11 @@ function openProductModal(product) {
         $('color-list').style.display = 'none';
         document.querySelectorAll('.color-check').forEach(cb => cb.checked = false);
     }
-    // Foto existente
-    selectedImageFile = null;
-    existingImageUrl = product?.image_url || null;
+    // Fotos existentes
+    selectedImageFiles = [];
+    existingImages = Array.isArray(product?.images) ? product.images.filter(Boolean) : [];
+    if (!existingImages.length && product?.image_url) existingImages = [product.image_url];
+    existingImageUrl = existingImages[0] || null;
     $('product-image').value = '';
     if (existingImageUrl) {
         $('product-image-preview-img').src = existingImageUrl;
@@ -291,6 +293,16 @@ function openProductModal(product) {
         $('product-image-preview-img').style.display = 'none';
         $('product-image-preview-empty').style.display = '';
     }
+    // Miniaturas de las existentes
+    const thumbs = $('product-image-thumbs');
+    thumbs.innerHTML = '';
+    existingImages.forEach((url, i) => {
+        const el = document.createElement('img');
+        el.src = url;
+        el.style.cssText = 'width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid #ddd;';
+        el.title = (i === 0 ? 'Principal' : 'Foto ' + (i + 1));
+        thumbs.appendChild(el);
+    });
     updateSalePreview();
     $('product-modal-overlay').style.display = 'flex';
 }
@@ -322,47 +334,68 @@ function updateSalePreview() {
 $('product-sale').addEventListener('input', updateSalePreview);
 
 // Vista previa de la foto seleccionada
-let selectedImageFile = null;
-let existingImageUrl = null;
+let selectedImageFiles = [];       // archivos nuevos seleccionados
+let existingImageUrl = null;       // foto principal actual (edición)
+let existingImages = [];           // todas las fotos actuales (edición)
 
 function previewProductImage(input) {
-    const file = input.files?.[0];
-    if (!file) return;
-    selectedImageFile = file;
+    const files = [...(input.files || [])];
+    if (!files.length) return;
+    selectedImageFiles = files;
     const reader = new FileReader();
     reader.onload = (e) => {
         $('product-image-preview-img').src = e.target.result;
         $('product-image-preview-img').style.display = '';
         $('product-image-preview-empty').style.display = 'none';
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(files[0]);
+    // Miniaturas de las seleccionadas
+    const thumbs = $('product-image-thumbs');
+    thumbs.innerHTML = '';
+    files.forEach((f, i) => {
+        const r = new FileReader();
+        r.onload = (e2) => {
+            const el = document.createElement('img');
+            el.src = e2.target.result;
+            el.style.cssText = 'width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid #ff9686;';
+            el.title = f.name + (i === 0 ? ' (principal)' : '');
+            thumbs.appendChild(el);
+        };
+        r.readAsDataURL(f);
+    });
 }
 
-// Subir foto a Supabase Storage
+// Subir todas las fotos seleccionadas a Supabase Storage
 async function uploadProductImage() {
-    if (!selectedImageFile) return existingImageUrl || null;
+    if (!selectedImageFiles.length) return existingImages.length ? existingImages : (existingImageUrl || null);
     if (!session?.token) return null;
+    const urls = [];
     try {
-        const ext = selectedImageFile.name.split('.').pop() || 'jpg';
-        const filename = 'prod-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
-        const resp = await fetch(SUPABASE_URL + '/storage/v1/object/productos/' + filename, {
-            method: 'POST',
-            headers: {
-                'apikey': ANON_KEY,
-                'Authorization': 'Bearer ' + session.token,
-                'Content-Type': selectedImageFile.type || 'image/jpeg'
-            },
-            body: selectedImageFile
-        });
-        if (!resp.ok) {
-            const err = await resp.json().catch(() => ({}));
-            throw new Error(err.message || 'Error subiendo foto');
+        for (const file of selectedImageFiles) {
+            const ext = file.name.split('.').pop() || 'jpg';
+            const filename = 'prod-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+            const resp = await fetch(SUPABASE_URL + '/storage/v1/object/productos/' + filename, {
+                method: 'POST',
+                headers: {
+                    'apikey': ANON_KEY,
+                    'Authorization': 'Bearer ' + session.token,
+                    'Content-Type': file.type || 'image/jpeg'
+                },
+                body: file
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.message || 'Error subiendo foto');
+            }
+            urls.push(SUPABASE_URL + '/storage/v1/object/public/productos/' + filename);
         }
-        return SUPABASE_URL + '/storage/v1/object/public/productos/' + filename;
+        // Si hay fotos existentes y solo agregamos nuevas: las nuevas van después de las existentes
+        const base = existingImages.length ? existingImages : (existingImageUrl ? [existingImageUrl] : []);
+        return [...base, ...urls];
     } catch (e) {
         console.error('Upload error:', e);
         showToast('❌ No se pudo subir la foto: ' + e.message);
-        return existingImageUrl || null;
+        return existingImages.length ? existingImages : (existingImageUrl || null);
     }
 }
 
@@ -391,9 +424,9 @@ $('product-form').addEventListener('submit', async (e) => {
     btn.disabled = true; btn.textContent = 'Guardando...';
     const id = $('product-id').value;
     
-    // Subir foto primero (si hay)
-    const imageUrl = await uploadProductImage();
-    if (selectedImageFile && !imageUrl) {
+    // Subir fotos primero (si hay)
+    const images = await uploadProductImage();
+    if (selectedImageFiles.length && !images) {
         btn.disabled = false; btn.textContent = 'Guardar';
         return;
     }
@@ -415,12 +448,16 @@ $('product-form').addEventListener('submit', async (e) => {
             : null,
         updated_at: new Date().toISOString()
     };
-    if (imageUrl) data.image_url = imageUrl;
+    if (images) {
+        const arr = Array.isArray(images) ? images : [images];
+        data.images = arr;
+        data.image_url = arr[0];  // primera foto = principal (compatibilidad)
+    }
 
     let ok;
     if (id) {
         const old = inventory.find(p => p.id === parseInt(id));
-        if (old?.image_url && selectedImageFile) removeOldImageIfReplaced(old.image_url, imageUrl);
+        if (old?.image_url && selectedImageFiles.length) removeOldImageIfReplaced(old.image_url, Array.isArray(images) ? images[0] : images);
         const r = await api('PATCH', 'inventory?id=eq.' + id, data);
         ok = r === null || !r?.error;
     } else {
@@ -431,7 +468,9 @@ $('product-form').addEventListener('submit', async (e) => {
     btn.disabled = false; btn.textContent = 'Guardar';
     if (!ok) { showToast('❌ Error al guardar'); return; }
     showToast(id ? '✅ Producto actualizado' : '✅ Producto creado');
-    selectedImageFile = null;
+    selectedImageFiles = [];
+    existingImages = [];
+    existingImageUrl = null;
     closeProductModal();
     loadInventory();
     loadStats();

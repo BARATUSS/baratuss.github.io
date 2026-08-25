@@ -60,7 +60,7 @@ async function loadProductsFromSupabase() {
     try {
         const { data, error } = await client
             .from('inventory')
-            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, colors')
+            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors')
             .eq('active', true)
             .order('id', { ascending: true });
         
@@ -78,6 +78,7 @@ async function loadProductsFromSupabase() {
                 tipo: p.tipo || 'nuevo',
                 stock: p.stock || 0,
                 image: p.image_url || null,
+                images: Array.isArray(p.images) ? p.images.filter(Boolean) : (p.image_url ? [p.image_url] : []),
                 colors: p.colors || null
             }));
             renderProducts(currentFilter);
@@ -311,6 +312,9 @@ function renderProducts(filter = 'all') {
                 ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-card__photo" loading="lazy" onerror="this.remove()">` : `<span style="font-size:3.5rem;">${p.emoji}</span>`}
                 ${p.badge ? `<span class="badge">${p.badge}</span>` : ''}
             </div>
+            ${(p.images && p.images.length > 1) ? `<div class="product-card__thumbs">${p.images.map((url, ti) => `
+                <img src="${url}" class="product-card__thumb ${ti === 0 ? 'product-card__thumb--active' : ''}" data-idx="${ti}" onclick="switchProductPhoto(${p.id}, ${ti}, this)" alt="" loading="lazy">`).join('')}
+            </div>` : ''}
             <div class="product-card__body">
                 <div class="product-card__category">${capitalize(p.category)}</div>
                 <div class="product-card__name">${p.name}</div>
@@ -351,6 +355,20 @@ document.querySelectorAll('.cat-card, .filter-link').forEach(el => {
         document.getElementById('tienda').scrollIntoView({ behavior: 'smooth' });
     });
 });
+
+// ===== GALERÍA DE FOTOS =====
+function switchProductPhoto(id, idx, el) {
+    const product = products.find(p => p.id === id);
+    if (!product || !product.images || !product.images[idx]) return;
+    const card = el.closest('.product-card');
+    const photo = card?.querySelector('.product-card__photo');
+    if (photo) {
+        photo.src = product.images[idx];
+        photo.removeAttribute('onerror');
+    }
+    card?.querySelectorAll('.product-card__thumb').forEach(t => t.classList.remove('product-card__thumb--active'));
+    el.classList.add('product-card__thumb--active');
+}
 
 // ===== CART OPERATIONS =====
 function addToCart(id) {
