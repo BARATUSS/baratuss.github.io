@@ -546,8 +546,36 @@ function showToast(msg) {
 }
 
 // ===== INIT =====
-(function init() {
-    if (session?.profile?.is_admin) {
-        enterDashboard();
+(async function init() {
+    // Verificar que la sesión guardada SIGUE SIENDO VÁLIDA (token vivo)
+    if (session?.token) {
+        try {
+            const r = await fetch(SUPABASE_URL + '/auth/v1/user', {
+                headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + session.token }
+            });
+            if (r.ok) {
+                const user = await r.json();
+                if (user?.id) {
+                    // Sesión válida → verificar que siga siendo admin
+                    const profResp = await fetch(SUPABASE_URL + '/rest/v1/profiles?select=is_admin,name,email&id=eq.' + user.id, {
+                        headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + session.token }
+                    });
+                    const profiles = await profResp.json().catch(() => []);
+                    const profile = Array.isArray(profiles) ? profiles[0] : null;
+                    if (profile?.is_admin) {
+                        session = { token: session.token, user, profile };
+                        localStorage.setItem('baratuss_admin_session', JSON.stringify(session));
+                        enterDashboard();
+                        return;
+                    }
+                }
+            }
+        } catch (e) { /* sesión inválida → ir a login */ }
+        // Token muerto o sin permisos → limpiar y pedir login
+        session = null;
+        localStorage.removeItem('baratuss_admin_session');
     }
+    // Sin sesión válida → mostrar login
+    $('admin-login').style.display = '';
+    $('admin-dashboard').style.display = 'none';
 })();
