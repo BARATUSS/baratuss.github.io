@@ -60,7 +60,7 @@ async function loadProductsFromSupabase() {
     try {
         const { data, error } = await client
             .from('inventory')
-            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors')
+            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors, description, sizes')
             .eq('active', true)
             .order('id', { ascending: true });
         
@@ -79,6 +79,8 @@ async function loadProductsFromSupabase() {
                 stock: p.stock || 0,
                 image: p.image_url || null,
                 images: Array.isArray(p.images) ? p.images.filter(Boolean) : (p.image_url ? [p.image_url] : []),
+                description: p.description || null,
+                sizes: Array.isArray(p.sizes) ? p.sizes.filter(Boolean) : null,
                 colors: p.colors || null
             }));
             renderProducts(currentFilter);
