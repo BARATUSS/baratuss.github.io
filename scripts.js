@@ -425,12 +425,16 @@ function openDetailModal(id) {
     }
     $('detail-overlay').style.display = 'block';
     $('detail-modal').style.display = 'grid';
+    $('detail-modal').classList.add('modal--open');
+    $('detail-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
 }
 
 function closeDetailModal() {
     $('detail-overlay').style.display = 'none';
     $('detail-modal').style.display = 'none';
+    $('detail-modal').classList.remove('modal--open');
+    $('detail-overlay').classList.remove('open');
     document.body.style.overflow = '';
     detailProduct = null;
 }
