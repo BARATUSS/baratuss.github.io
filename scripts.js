@@ -304,7 +304,7 @@ function renderProducts(filter = 'all') {
     productsGrid.innerHTML = filtered.map(p => {
         const isFav = wishlist.has(p.id);
         return `
-        <div class="product-card" data-id="${p.id}" style="cursor:pointer;" onclick="openDetailModal(${p.id})">
+        <div class="product-card" data-id="${p.id}" style="cursor:pointer;">
             <button class="wish-btn ${isFav ? 'wish-btn--active' : ''}" data-id="${p.id}" aria-label="Favoritos">
                 <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
             </button>
@@ -425,6 +425,10 @@ function openDetailModal(id) {
     }
     $('detail-overlay').style.display = 'block';
     $('detail-modal').style.display = 'grid';
+    // Forzar visibilidad directa (sin depender de clases CSS)
+    $('detail-modal').style.opacity = '1';
+    $('detail-modal').style.pointerEvents = 'auto';
+    $('detail-modal').style.transform = 'translate(-50%, -50%) scale(1)';
     $('detail-modal').classList.add('modal--open');
     $('detail-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -433,6 +437,7 @@ function openDetailModal(id) {
 function closeDetailModal() {
     $('detail-overlay').style.display = 'none';
     $('detail-modal').style.display = 'none';
+    $('detail-modal').style.opacity = '0';
     $('detail-modal').classList.remove('modal--open');
     $('detail-overlay').classList.remove('open');
     document.body.style.overflow = '';
@@ -456,6 +461,15 @@ function selectDetailSize(btn, size) {
 
 $('detail-close').addEventListener('click', closeDetailModal);
 $('detail-overlay').addEventListener('click', closeDetailModal);
+// Delegación: clic en cualquier tarjeta de producto abre el modal
+document.addEventListener('click', (e) => {
+    const card = e.target.closest('.product-card');
+    if (!card) return;
+    // No abrir si el clic fue en botones internos (añadir, favorito, miniaturas)
+    if (e.target.closest('.add-to-cart') || e.target.closest('.wish-btn') || e.target.closest('.product-card__thumb')) return;
+    const id = parseInt(card.dataset.id);
+    if (id && typeof openDetailModal === 'function') openDetailModal(id);
+});
 $('detail-add-cart').addEventListener('click', () => {
     if (!detailProduct) return;
     if (detailProduct.sizes && detailProduct.sizes.length && !detailSize) {
