@@ -236,7 +236,42 @@ async function saveProfile(data) {
 }
 
 // ===== ORDERS — Create =====
-async function createOrder(items, total) {
+// ===== STOCK: descontar inventario automáticamente al vender =====
+async function decreaseStock(items) {
+    try {
+        for (const item of items) {
+            const qty = item.qty || 1;
+            // Leer stock actual
+            const r = await fetch(SUPABASE_URL + '/rest/v1/inventory?select=stock&id=eq.' + item.id, {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            });
+            const rows = await r.json().catch(() => []);
+            const current = Array.isArray(rows) && rows.length ? (Number(rows[0].stock) || 0) : 0;
+            const nuevo = Math.max(0, current - qty);
+            await fetch(SUPABASE_URL + '/rest/v1/inventory?id=eq.' + item.id, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ stock: nuevo, updated_at: new Date().toISOString() })
+            });
+            // Actualizar en memoria (para que desaparezca al instante)
+            const prod = products.find(p => p.id === item.id);
+            if (prod) prod.stock = nuevo;
+        }
+        // Re-render para ocultar agotados inmediatamente
+        if (typeof renderProducts === 'function') renderProducts(currentFilter);
+    } catch (e) {
+        console.log('Error descontando stock:', e.message);
+    }
+}
+
+function createOrder(items, total) {
     if (!currentUser) return { error: 'Inicia sesión para comprar' };
     const client = sb();
     const { data, error } = await client.from('orders').insert({
@@ -984,6 +1019,9 @@ async function cashCheckout() {
         } catch (insertErr) {
             console.log('No se pudo guardar el pedido online:', insertErr.message);
         }
+        
+        // Descontar stock automáticamente
+        decreaseStock(items);
         
         // Si no está logueado y no hay supabase, igual confirmamos
         cart = [];
