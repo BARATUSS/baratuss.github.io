@@ -378,6 +378,10 @@ let detailSize = null;
 function openDetailModal(id) {
     const p = products.find(x => x.id === id);
     if (!p) return;
+    // Cerrar cualquier otro overlay abierto (carrito, login, checkout)
+    try { closeCart?.(); } catch (e) {}
+    try { closeAllModals?.(); } catch (e) {}
+    try { closeCheckoutModal?.(); } catch (e) {}
     detailProduct = p;
     detailPhotoIdx = 0;
     detailSize = null;

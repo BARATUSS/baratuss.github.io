@@ -328,11 +328,11 @@ ul { list-style: none; }
 /* ===== MODAL DETALLE PRODUCTO ===== */
 #detail-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-    z-index: 1200; display: none;
+    z-index: 3000; display: none;
 }
 #detail-modal {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: white; border-radius: 20px; z-index: 1201;
+    background: white; border-radius: 20px; z-index: 3001;
     width: min(880px, 94vw); max-height: 90vh; overflow-y: auto;
     display: none; grid-template-columns: 1fr 1fr; gap: 0;
     box-shadow: 0 24px 64px rgba(0,0,0,0.2);
