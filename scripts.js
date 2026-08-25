@@ -62,6 +62,7 @@ async function loadProductsFromSupabase() {
             .from('inventory')
             .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors, description, sizes')
             .eq('active', true)
+            .gt('stock', 0)   // ocultar productos agotados
             .order('id', { ascending: true });
         
         if (error) throw error;
@@ -301,7 +302,8 @@ function getWishlistProducts() {
 
 // ===== RENDER PRODUCTS =====
 function renderProducts(filter = 'all') {
-    const filtered = filter === 'all' ? products : products.filter(p => p.category === filter);
+    const filtered = (filter === 'all' ? products : products.filter(p => p.category === filter))
+        .filter(p => p.stock > 0);  // nunca mostrar agotados
     
     productsGrid.innerHTML = filtered.map(p => {
         const isFav = wishlist.has(p.id);
@@ -325,7 +327,7 @@ function renderProducts(filter = 'all') {
                     <span class="current">$${p.price.toFixed(2)}</span>
                     ${p.originalPrice ? `<span class="original">$${p.originalPrice.toFixed(2)}</span>` : ''}
                 </div>
-                <div class="product-card__tax"></div>
+                <div class="product-card__tax">IVA incluido</div>
                 <button class="add-to-cart" data-id="${p.id}">
                     <i class="fas fa-shopping-bag"></i> Añadir
                 </button>
