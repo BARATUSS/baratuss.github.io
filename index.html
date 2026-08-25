@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260825b">
+    <link rel="stylesheet" href="styles.css?v=20260826">
 </head>
 <body>
 
@@ -346,6 +346,33 @@
     </div>
 </div>
 
+<!-- ========== MODAL DETALLE PRODUCTO ========== -->
+<div class="modal-overlay" id="detail-overlay"></div>
+<div class="modal modal--detail" id="detail-modal">
+    <button class="modal__close" id="detail-close"><i class="fas fa-times"></i></button>
+    <div class="detail__gallery">
+        <img id="detail-photo" src="" alt="" class="detail__photo">
+        <div class="detail__thumbs" id="detail-thumbs"></div>
+    </div>
+    <div class="detail__info">
+        <div class="detail__category" id="detail-category"></div>
+        <h2 class="detail__name" id="detail-name"></h2>
+        <div class="detail__price">
+            <span class="current" id="detail-price"></span>
+            <span class="original" id="detail-original"></span>
+        </div>
+        <div class="detail__tax">IVA y comisión incluidos</div>
+        <p class="detail__desc" id="detail-desc"></p>
+        <div class="detail__sizes" id="detail-sizes"></div>
+        <div class="detail__colors" id="detail-colors"></div>
+        <div class="detail__stock" id="detail-stock"></div>
+        <div class="detail__actions">
+            <button class="btn btn--primary btn--full" id="detail-add-cart"><i class="fas fa-shopping-bag"></i> Añadir al carrito</button>
+            <button class="btn btn--outline btn--full" id="detail-buy-now" style="margin-top:8px;">⚡ Comprar ahora</button>
+        </div>
+    </div>
+</div>
+
 <!-- ========== AUTH MODAL ========== -->
 <div class="modal-overlay" id="modal-overlay"></div>
 <div class="modal" id="auth-modal">
@@ -466,6 +493,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="scripts.js?v=20260825b"></script>
+<script src="scripts.js?v=20260826"></script>
 </body>
 </html>

@@ -304,7 +304,7 @@ function renderProducts(filter = 'all') {
     productsGrid.innerHTML = filtered.map(p => {
         const isFav = wishlist.has(p.id);
         return `
-        <div class="product-card" data-id="${p.id}">
+        <div class="product-card" data-id="${p.id}" style="cursor:pointer;" onclick="openDetailModal(${p.id})">
             <button class="wish-btn ${isFav ? 'wish-btn--active' : ''}" data-id="${p.id}" aria-label="Favoritos">
                 <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
             </button>
@@ -312,7 +312,7 @@ function renderProducts(filter = 'all') {
                 ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-card__photo" loading="lazy" onerror="this.remove()">` : `<span style="font-size:3.5rem;">${p.emoji}</span>`}
                 ${p.badge ? `<span class="badge">${p.badge}</span>` : ''}
             </div>
-            ${(p.images && p.images.length > 1) ? `<div class="product-card__thumbs">${p.images.map((url, ti) => `
+            ${(p.images && p.images.length > 1) ? `<div class="product-card__thumbs" onclick="event.stopPropagation()">${p.images.map((url, ti) => `
                 <img src="${url}" class="product-card__thumb ${ti === 0 ? 'product-card__thumb--active' : ''}" data-idx="${ti}" onclick="switchProductPhoto(${p.id}, ${ti}, this)" alt="" loading="lazy">`).join('')}
             </div>` : ''}
             <div class="product-card__body">
@@ -370,23 +370,124 @@ function switchProductPhoto(id, idx, el) {
     el.classList.add('product-card__thumb--active');
 }
 
+// ===== MODAL DETALLE PRODUCTO =====
+let detailProduct = null;
+let detailPhotoIdx = 0;
+let detailSize = null;
+
+function openDetailModal(id) {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    detailProduct = p;
+    detailPhotoIdx = 0;
+    detailSize = null;
+    $('detail-category').textContent = capitalize(p.category);
+    $('detail-name').textContent = p.name;
+    $('detail-price').textContent = '$' + p.price.toFixed(2);
+    $('detail-original').textContent = p.originalPrice ? '$' + p.originalPrice.toFixed(2) : '';
+    $('detail-desc').textContent = p.description || 'Sin descripción por ahora.';
+    // Tallas
+    const sizesBox = $('detail-sizes');
+    if (p.sizes && p.sizes.length) {
+        sizesBox.innerHTML = '<div class="detail__sizes-label">Tallas:</div>' + p.sizes.map(s =>
+            `<button class="detail__size-btn" data-size="${s}" onclick="selectDetailSize(this, '${s}')">${s}</button>`).join('');
+        sizesBox.style.display = '';
+    } else {
+        sizesBox.innerHTML = '';
+        sizesBox.style.display = 'none';
+    }
+    // Colores
+    const colorsBox = $('detail-colors');
+    if (p.colors) {
+        colorsBox.innerHTML = '<div class="detail__colors-label">Colores:</div>' + p.colors.split(',').map(c => c.trim()).map(c =>
+            `<span class="product-color-dot" style="background:${colorHex(c)}" title="${c}"></span>`).join('') +
+            `<small style="margin-left:6px;">${p.colors}</small>`;
+        colorsBox.style.display = '';
+    } else {
+        colorsBox.style.display = 'none';
+    }
+    // Stock
+    $('detail-stock').textContent = p.stock <= 0 ? '❌ Agotado' : (p.stock <= 3 ? `⚠️ Solo quedan ${p.stock}` : `✅ Disponible (${p.stock})`);
+    // Galería
+    const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
+    if (imgs.length) {
+        $('detail-photo').src = imgs[0];
+        $('detail-photo').style.display = '';
+        $('detail-thumbs').innerHTML = imgs.length > 1 ? imgs.map((url, i) =>
+            `<img src="${url}" class="detail__thumb ${i === 0 ? 'detail__thumb--active' : ''}" onclick="switchDetailPhoto(${i}, this)" alt="">`).join('') : '';
+    } else {
+        $('detail-photo').style.display = 'none';
+        $('detail-thumbs').innerHTML = `<span style="font-size:4rem;padding:40px;">${p.emoji || '🛍️'}</span>`;
+    }
+    $('detail-overlay').style.display = 'block';
+    $('detail-modal').style.display = 'grid';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDetailModal() {
+    $('detail-overlay').style.display = 'none';
+    $('detail-modal').style.display = 'none';
+    document.body.style.overflow = '';
+    detailProduct = null;
+}
+
+function switchDetailPhoto(idx, el) {
+    detailPhotoIdx = idx;
+    if (!detailProduct) return;
+    const imgs = detailProduct.images && detailProduct.images.length ? detailProduct.images : [detailProduct.image];
+    $('detail-photo').src = imgs[idx];
+    document.querySelectorAll('.detail__thumb').forEach(t => t.classList.remove('detail__thumb--active'));
+    el.classList.add('detail__thumb--active');
+}
+
+function selectDetailSize(btn, size) {
+    detailSize = size;
+    document.querySelectorAll('.detail__size-btn').forEach(b => b.classList.remove('detail__size-btn--active'));
+    btn.classList.add('detail__size-btn--active');
+}
+
+$('detail-close').addEventListener('click', closeDetailModal);
+$('detail-overlay').addEventListener('click', closeDetailModal);
+$('detail-add-cart').addEventListener('click', () => {
+    if (!detailProduct) return;
+    if (detailProduct.sizes && detailProduct.sizes.length && !detailSize) {
+        showToast('⚠️ Elegí una talla primero');
+        return;
+    }
+    addToCart(detailProduct.id, detailSize);
+    closeDetailModal();
+});
+$('detail-buy-now').addEventListener('click', () => {
+    if (!detailProduct) return;
+    if (detailProduct.sizes && detailProduct.sizes.length && !detailSize) {
+        showToast('⚠️ Elegí una talla primero');
+        return;
+    }
+    addToCart(detailProduct.id, detailSize);
+    closeDetailModal();
+    openCheckoutModal();
+});
+
 // ===== CART OPERATIONS =====
-function addToCart(id) {
+function addToCart(id, size) {
     const product = products.find(p => p.id === id);
     if (!product) return;
-    const existing = cart.find(item => item.id === id);
+    const key = size ? id + '-' + size : String(id);
+    const existing = cart.find(item => item.key === key);
     if (existing) { existing.qty += 1; }
-    else { cart.push({ ...product, qty: 1 }); }
+    else {
+        cart.push({ key, id, size: size || null, name: product.name, price: product.price, image: product.image || null, qty: 1 });
+    }
     saveCart();
     updateCartUI();
-    showToast(`${product.name} añadido ✨`);
+    showToast('🛒 Añadido al carrito' + (size ? ' (talla ' + size + ')' : ''));
 }
-function removeFromCart(id) { cart = cart.filter(item => item.id !== id); saveCart(); updateCartUI(); }
-function updateQty(id, delta) {
-    const item = cart.find(i => i.id === id);
+function removeFromCart(key) { cart = cart.filter(item => item.key !== key); saveCart(); updateCartUI(); }
+function updateQty(key, delta) {
+    const item = cart.find(i => i.key === key);
     if (!item) return;
     item.qty += delta;
-    if (item.qty <= 0) { removeFromCart(id); return; }
+    if (item.qty <= 0) { removeFromCart(key); return; }
     saveCart(); updateCartUI();
 }
 function getCartTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
@@ -405,15 +506,15 @@ function updateCartUI() {
         <div class="cart-item">
             <div class="cart-item__img ${item.imgClass}">${item.emoji}</div>
             <div class="cart-item__info">
-                <div class="cart-item__name">${item.name}</div>
+                <div class="cart-item__name">${item.name}${item.size ? ` <small style="color:#888;">(${item.size})</small>` : ''}</div>
                 <div class="cart-item__price">$${(item.price * item.qty).toFixed(2)}</div>
                 <div class="cart-item__qty">
-                    <button onclick="updateQty(${item.id}, -1)">−</button>
+                    <button onclick="updateQty('${item.key}', -1)">−</button>
                     <span>${item.qty}</span>
-                    <button onclick="updateQty(${item.id}, 1)">+</button>
+                    <button onclick="updateQty('${item.key}', 1)">+</button>
                 </div>
             </div>
-            <button class="cart-item__remove" onclick="removeFromCart(${item.id})"><i class="fas fa-trash-alt"></i></button>
+            <button class="cart-item__remove" onclick="removeFromCart('${item.key}')"><i class="fas fa-trash-alt"></i></button>
         </div>
     `).join('');
     cartTotal.textContent = `$${getCartTotal().toFixed(2)}`;
@@ -965,6 +1066,7 @@ function initApp() {
     }));
     // Actualizar carritos viejos guardados con precios base
     cart = cart.map(item => {
+        if (!item.key) item.key = String(item.id);  // migrar carritos viejos
         const p = products.find(x => x.id === item.id);
         return p ? { ...item, price: p.price } : item;
     });

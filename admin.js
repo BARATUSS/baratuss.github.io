@@ -266,6 +266,8 @@ function openProductModal(product) {
     $('product-badge').value = product?.badge || '';
     $('product-img-class').value = product?.img_class || 'p-1';
     $('product-active').value = product?.active === false ? 'false' : 'true';
+    $('product-sizes').value = Array.isArray(product?.sizes) ? product.sizes.join(', ') : '';
+    $('product-description').value = product?.description || '';
     // Colores
     const colors = product?.colors ? product.colors.split(',').map(c => c.trim()).filter(Boolean) : [];
     if (colors.length > 0) {
@@ -442,6 +444,8 @@ $('product-form').addEventListener('submit', async (e) => {
         emoji: $('product-emoji').value || '🛍️',
         badge: $('product-badge').value || null,
         img_class: $('product-img-class').value || 'p-1',
+        sizes: $('product-sizes').value ? $('product-sizes').value.split(',').map(s => s.trim()).filter(Boolean) : null,
+        description: $('product-description').value || null,
         active: $('product-active').value === 'true',
         colors: document.querySelector('input[name="color-mode"]:checked').value === 'list'
             ? [...document.querySelectorAll('.color-check:checked')].map(cb => cb.value).join(', ')
