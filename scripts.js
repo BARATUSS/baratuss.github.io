@@ -271,7 +271,7 @@ async function decreaseStock(items) {
     }
 }
 
-function createOrder(items, total) {
+async function createOrder(items, total) {
     if (!currentUser) return { error: 'Inicia sesión para comprar' };
     const client = sb();
     const { data, error } = await client.from('orders').insert({
