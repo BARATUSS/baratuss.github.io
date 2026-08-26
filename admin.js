@@ -514,6 +514,7 @@ function renderOrders() {
         const customer = (o.customer_name ? `${o.customer_name}<br><small>📱 ${o.customer_phone || ''}</small>` : '') +
             (o.customer_address ? `<br><small>📍 ${o.customer_address}, ${o.customer_city || ''}</small>` : '');
         const canMarkPaid = isCash && payStatus !== 'pagado';
+        const canCancel = (payStatus !== 'pagado' && payStatus !== 'aprobado') || o.status === 'cancelado';
         return `
         <tr>
             <td class="admin-mono">${o.reference || o.id?.slice(0, 8) || '—'}</td>
@@ -528,9 +529,41 @@ function renderOrders() {
             <td>
                 <small style="color:#aaa;">${new Date(o.created_at).toLocaleDateString('es-SV')}</small>
                 ${canMarkPaid ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markCashPaid('${o.id}')">✅ Marcar pagado</button>` : ''}
+                ${canCancel ? `<br><button class="admin-btn admin-btn--danger" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="cancelOrder('${o.id}')">❌ Cancelar y devolver stock</button>` : ''}
             </td>
         </tr>`;
     }).join('');
+}
+
+// Cancelar pedido: devolver stock al inventario
+async function cancelOrder(id) {
+    if (!confirm('¿Cancelar este pedido y DEVOLVER el stock al inventario?')) return;
+    const order = orders.find(o => o.id === id);
+    if (!order) return;
+    try {
+        // Devolver stock por cada ítem
+        for (const item of (order.items || [])) {
+            const qty = item.qty || 1;
+            const r = await api('GET', 'inventory?select=stock&id=eq.' + item.id);
+            const rows = Array.isArray(r) ? r : [];
+            const current = rows.length ? (Number(rows[0].stock) || 0) : 0;
+            await api('PATCH', 'inventory?id=eq.' + item.id, {
+                stock: current + qty,
+                updated_at: new Date().toISOString()
+            });
+        }
+        // Marcar pedido como cancelado
+        await api('PATCH', 'orders?id=eq.' + id, {
+            status: 'cancelado',
+            updated_at: new Date().toISOString()
+        });
+        showToast('✅ Pedido cancelado, stock devuelto');
+    } catch (e) {
+        showToast('❌ Error al cancelar: ' + (e.message || e));
+    }
+    loadOrders();
+    loadInventory();
+    loadStats();
 }
 
 // Marcar pedido en efectivo como pagado/entregado
