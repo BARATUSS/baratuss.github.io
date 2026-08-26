@@ -51,7 +51,7 @@ ul { list-style: none; }
     height: var(--header-h);
 }
 .header__logo { display: flex; align-items: center; }
-.header__logo img { height: 32px; width: auto; display: block; }
+.header__logo img { height: 52px; width: auto; display: block; }
 
 .nav__list { display: flex; gap: 32px; }
 .nav__link {
