@@ -492,6 +492,138 @@ function switchDetailPhoto(idx, el) {
     el.classList.add('detail__thumb--active');
 }
 
+// ===== ZOOM / LIGHTBOX =====
+let zoomIndex = 0, zoomScale = 1, zoomTx = 0, zoomTy = 0;
+let zoomDragging = false, zoomStartX = 0, zoomStartY = 0, touchDist = 0;
+
+function zoomImagesList() {
+    if (!detailProduct) return [];
+    return detailProduct.images && detailProduct.images.length
+        ? detailProduct.images
+        : (detailProduct.image ? [detailProduct.image] : []);
+}
+
+function applyZoomTransform() {
+    $('zoom-photo').style.transform = 'translate(' + zoomTx + 'px,' + zoomTy + 'px) scale(' + zoomScale + ')';
+}
+
+function resetZoom() { zoomScale = 1; zoomTx = 0; zoomTy = 0; applyZoomTransform(); }
+
+function openZoom(idx) {
+    const imgs = zoomImagesList();
+    if (!imgs.length) return;
+    zoomIndex = Math.min(idx, imgs.length - 1);
+    resetZoom();
+    $('zoom-photo').src = imgs[zoomIndex];
+    const multi = imgs.length > 1;
+    $('zoom-counter').textContent = multi ? (zoomIndex + 1) + ' / ' + imgs.length : '';
+    $('zoom-counter').style.display = multi ? '' : 'none';
+    $('zoom-prev').style.display = multi ? '' : 'none';
+    $('zoom-next').style.display = multi ? '' : 'none';
+    $('zoom-overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeZoom() {
+    $('zoom-overlay').classList.remove('open');
+    if (!$('detail-modal').classList.contains('modal--open')) document.body.style.overflow = '';
+}
+
+function zoomStep(dir) {
+    const imgs = zoomImagesList();
+    if (imgs.length < 2) return;
+    zoomIndex = (zoomIndex + dir + imgs.length) % imgs.length;
+    $('zoom-photo').src = imgs[zoomIndex];
+    resetZoom();
+    $('zoom-counter').textContent = (zoomIndex + 1) + ' / ' + imgs.length;
+}
+
+function toggleZoom() {
+    if (zoomScale > 1) { resetZoom(); }
+    else { zoomScale = 2.5; zoomTx = 0; zoomTy = 0; applyZoomTransform(); }
+}
+
+// Abrir al hacer clic en la foto principal del modal de detalle
+$('detail-photo').addEventListener('click', () => openZoom(detailPhotoIdx));
+
+// Cerrar: botón X, clic fuera de la imagen, tecla Escape
+$('zoom-close').addEventListener('click', closeZoom);
+$('zoom-overlay').addEventListener('click', (e) => {
+    if (e.target === $('zoom-overlay') || e.target === $('zoom-stage')) closeZoom();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('zoom-overlay').classList.contains('open')) closeZoom();
+});
+
+// Botones de zoom
+$('zoom-in').addEventListener('click', () => {
+    zoomScale = Math.min(6, zoomScale * 1.4); applyZoomTransform();
+});
+$('zoom-out').addEventListener('click', () => {
+    zoomScale = Math.max(1, zoomScale / 1.4);
+    if (zoomScale === 1) { zoomTx = 0; zoomTy = 0; }
+    applyZoomTransform();
+});
+$('zoom-reset').addEventListener('click', resetZoom);
+$('zoom-prev').addEventListener('click', () => zoomStep(-1));
+$('zoom-next').addEventListener('click', () => zoomStep(1));
+
+// Rueda del mouse para zoom (sobre la imagen)
+$('zoom-stage').addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    zoomScale = Math.min(6, Math.max(1, zoomScale * factor));
+    if (zoomScale === 1) { zoomTx = 0; zoomTy = 0; }
+    applyZoomTransform();
+}, { passive: false });
+
+// Doble clic: acercar / alejar
+$('zoom-photo').addEventListener('dblclick', (e) => { e.preventDefault(); toggleZoom(); });
+
+// Arrastrar para mover la imagen cuando hay zoom (mouse)
+$('zoom-stage').addEventListener('mousedown', (e) => {
+    if (zoomScale <= 1) return;
+    zoomDragging = true;
+    zoomStartX = e.clientX - zoomTx;
+    zoomStartY = e.clientY - zoomTy;
+    e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+    if (!zoomDragging) return;
+    zoomTx = e.clientX - zoomStartX;
+    zoomTy = e.clientY - zoomStartY;
+    applyZoomTransform();
+});
+window.addEventListener('mouseup', () => { zoomDragging = false; });
+
+// Soporte táctil: pellizco para zoom + dedo para mover
+$('zoom-stage').addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1 && zoomScale > 1) {
+        zoomDragging = true;
+        const t = e.touches[0];
+        zoomStartX = t.clientX - zoomTx;
+        zoomStartY = t.clientY - zoomTy;
+    } else if (e.touches.length === 2) {
+        zoomDragging = false;
+        touchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    }
+}, { passive: true });
+$('zoom-stage').addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && touchDist > 0) {
+        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        zoomScale = Math.min(6, Math.max(1, zoomScale * (d / touchDist)));
+        touchDist = d;
+        if (zoomScale === 1) { zoomTx = 0; zoomTy = 0; }
+        applyZoomTransform();
+    } else if (e.touches.length === 1 && zoomDragging) {
+        const t = e.touches[0];
+        zoomTx = t.clientX - zoomStartX;
+        zoomTy = t.clientY - zoomStartY;
+        applyZoomTransform();
+    }
+}, { passive: true });
+$('zoom-stage').addEventListener('touchend', () => { zoomDragging = false; touchDist = 0; });
+
 function selectDetailSize(btn, size) {
     detailSize = size;
     document.querySelectorAll('.detail__size-btn').forEach(b => b.classList.remove('detail__size-btn--active'));
