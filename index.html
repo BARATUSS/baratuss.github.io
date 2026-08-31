@@ -351,6 +351,7 @@
 <div class="modal modal--detail" id="detail-modal">
     <button class="modal__close" id="detail-close"><i class="fas fa-times"></i></button>
     <div class="detail__gallery">
+        <div class="detail__zoom-badge"><i class="fas fa-search-plus"></i></div>
         <img id="detail-photo" src="" alt="" class="detail__photo">
         <div class="detail__thumbs" id="detail-thumbs"></div>
     </div>
@@ -371,6 +372,23 @@
             <button class="btn btn--outline btn--full" id="detail-buy-now" style="margin-top:8px;">⚡ Comprar ahora</button>
         </div>
     </div>
+</div>
+
+<!-- ========== ZOOM / LIGHTBOX FOTO ========== -->
+<div class="zoom-overlay" id="zoom-overlay">
+    <button class="zoom__close" id="zoom-close" aria-label="Cerrar"><i class="fas fa-times"></i></button>
+    <button class="zoom__nav zoom__nav--prev" id="zoom-prev" aria-label="Foto anterior"><i class="fas fa-chevron-left"></i></button>
+    <div class="zoom__stage" id="zoom-stage">
+        <img id="zoom-photo" src="" alt="Foto del producto">
+    </div>
+    <button class="zoom__nav zoom__nav--next" id="zoom-next" aria-label="Foto siguiente"><i class="fas fa-chevron-right"></i></button>
+    <div class="zoom__counter" id="zoom-counter"></div>
+    <div class="zoom__controls">
+        <button class="zoom__btn" id="zoom-out" aria-label="Alejar"><i class="fas fa-minus"></i></button>
+        <button class="zoom__btn" id="zoom-reset" aria-label="Restablecer"><i class="fas fa-expand"></i></button>
+        <button class="zoom__btn" id="zoom-in" aria-label="Acercar"><i class="fas fa-plus"></i></button>
+    </div>
+    <div class="zoom__hint">🖱️ Rueda o +/− para zoom · arrastra para mover · doble clic para acercar</div>
 </div>
 
 <!-- ========== AUTH MODAL ========== -->
