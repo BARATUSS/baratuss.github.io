@@ -1,0 +1,31 @@
+{
+  "resumen": {
+    "fecha_reporte": "2026-08-15T00:42:44.463578+00:00",
+    "enlaces_wompi_creados": 12,
+    "enlaces_wompi_pagados": 1,
+    "ventas_totales": 0,
+    "ventas_wompi": 0,
+    "ventas_efectivo": 0,
+    "transacciones_aprobadas": 0,
+    "transacciones_rechazadas": 0,
+    "pedidos_pagados_sin_wompi": 0,
+    "pagos_wompi_sin_pedido": 1,
+    "comisiones_wompi": 0.0,
+    "monto_neto_recibido": 0.0,
+    "total_ordenes": 0,
+    "total_enlaces_wompi": 12
+  },
+  "filas": [],
+  "pagos_sin_pedido": [
+    {
+      "ref": "BAR-1785476331877-7RERK0",
+      "monto": 2.0,
+      "estado": "SIN_PAGO",
+      "id_transaccion": null,
+      "fecha": null,
+      "cantidad_pagos_exitosos": 1,
+      "es_pagado": true,
+      "conciliacion": "REVISAR: pago Wompi sin pedido en tienda"
+    }
+  ]
+}

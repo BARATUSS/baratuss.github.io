@@ -1,0 +1,19 @@
+# ===== Seguridad: nunca subir secretos =====
+*_keys*.txt
+*_keys*.json
+*_token*.json
+*_credentials*.json
+_service_key.txt
+.env
+*.pem
+
+# ===== Consolidación BARATUSS (copias de trabajo, no son el sitio web) =====
+codigo/
+buzon/
+backups/
+descargas/
+app_android/
+
+# ===== Sistema =====
+.vscode/
+*.log
