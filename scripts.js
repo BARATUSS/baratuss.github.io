@@ -467,7 +467,12 @@ function openDetailModal(id) {
     // Forzar visibilidad directa (sin depender de clases CSS)
     $('detail-modal').style.opacity = '1';
     $('detail-modal').style.pointerEvents = 'auto';
-    $('detail-modal').style.transform = 'translate(-50%, -50%) scale(1)';
+    // Transform según pantalla: desktop centrado, móvil con media query (translateX)
+    if (window.innerWidth > 700) {
+        $('detail-modal').style.transform = 'translate(-50%, -50%) scale(1)';
+    } else {
+        $('detail-modal').style.transform = '';
+    }
     $('detail-modal').classList.add('modal--open');
     $('detail-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
