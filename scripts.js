@@ -60,7 +60,7 @@ async function loadProductsFromSupabase() {
     try {
         const { data, error } = await client
             .from('inventory')
-            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors, description, sizes')
+            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors, description, sizes, condition')
             .eq('active', true)
             .gt('stock', 0)   // ocultar productos agotados
             .order('id', { ascending: true });
@@ -82,6 +82,7 @@ async function loadProductsFromSupabase() {
                 images: Array.isArray(p.images) ? p.images.filter(Boolean) : (p.image_url ? [p.image_url] : []),
                 description: p.description || null,
                 sizes: Array.isArray(p.sizes) ? p.sizes.filter(Boolean) : null,
+                condition: p.condition || null,
                 colors: p.colors || null
             }));
             renderProducts(currentFilter);
@@ -350,6 +351,8 @@ function renderProducts(filter = 'all') {
             <div class="product-card__img ${p.imgClass}">
                 ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-card__photo" loading="lazy" onerror="this.remove()">` : `<span style="font-size:3.5rem;">${p.emoji}</span>`}
                 ${p.badge ? `<span class="badge">${p.badge}</span>` : ''}
+                ${p.condition === 'segunda-mano' ? `<span class="badge badge--condition">♻️ Segunda mano</span>` : ''}
+                ${p.condition === 'como-nuevo' ? `<span class="badge badge--condition">✨ Como nuevo</span>` : ''}
             </div>
             ${(p.images && p.images.length > 1) ? `<div class="product-card__thumbs" onclick="event.stopPropagation()">${p.images.map((url, ti) => `
                 <img src="${url}" class="product-card__thumb ${ti === 0 ? 'product-card__thumb--active' : ''}" data-idx="${ti}" onclick="switchProductPhoto(${p.id}, ${ti}, this)" alt="" loading="lazy">`).join('')}
@@ -425,6 +428,12 @@ function openDetailModal(id) {
     detailPhotoIdx = 0;
     detailSize = null;
     $('detail-category').textContent = capitalize(p.category);
+    // Condición del producto (si aplica)
+    const condLabel = p.condition === 'nuevo' ? '🆕 Nuevo' :
+        p.condition === 'segunda-mano' ? '♻️ De segunda mano' :
+        p.condition === 'como-nuevo' ? '✨ De segunda mano como nuevo' : '';
+    $('detail-condition').textContent = condLabel;
+    $('detail-condition').style.display = condLabel ? 'inline-block' : 'none';
     $('detail-name').textContent = p.name;
     $('detail-price').textContent = '$' + p.price.toFixed(2);
     $('detail-original').textContent = p.originalPrice ? '$' + p.originalPrice.toFixed(2) : '';

@@ -268,6 +268,7 @@ function openProductModal(product) {
     $('product-active').value = product?.active === false ? 'false' : 'true';
     $('product-sizes').value = Array.isArray(product?.sizes) ? product.sizes.join(', ') : '';
     $('product-description').value = product?.description || '';
+    $('product-condition').value = product?.condition || '';
     // Colores
     const colors = product?.colors ? product.colors.split(',').map(c => c.trim()).filter(Boolean) : [];
     if (colors.length > 0) {
@@ -446,6 +447,7 @@ $('product-form').addEventListener('submit', async (e) => {
         img_class: $('product-img-class').value || 'p-1',
         sizes: $('product-sizes').value ? $('product-sizes').value.split(',').map(s => s.trim()).filter(Boolean) : null,
         description: $('product-description').value || null,
+        condition: $('product-condition').value || null,
         active: $('product-active').value === 'true',
         colors: document.querySelector('input[name="color-mode"]:checked').value === 'list'
             ? [...document.querySelectorAll('.color-check:checked')].map(cb => cb.value).join(', ')

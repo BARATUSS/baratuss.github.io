@@ -311,6 +311,17 @@ ul { list-style: none; }
     padding: 4px 10px; border-radius: 100px;
     text-transform: uppercase; letter-spacing: 0.5px;
 }
+.product-card__img .badge--condition {
+    top: 12px; right: 12px; left: auto;
+    background: #6c9a5b;  /* verde para condiciones */
+}
+.detail__condition {
+    display: inline-block; width: fit-content;
+    background: #e8f3e3; color: #3d6b2e;
+    font-size: 0.75rem; font-weight: 600;
+    padding: 4px 12px; border-radius: 100px;
+    margin-bottom: 4px;
+}
 /* Galería de fotos (miniaturas) */
 .product-card__thumbs {
     display: flex; gap: 6px; padding: 8px 12px 0;
