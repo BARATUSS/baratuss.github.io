@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="admin.css?v=20260829">
+    <link rel="stylesheet" href="admin.css?v=20260904">
 </head>
 <body>
 
@@ -202,6 +202,16 @@
                     <small class="admin-form__hint" id="sale-preview">El cliente pagará: $0.00 (IVA + comisión incluidos)</small>
                 </div>
                 <div class="admin-form__field">
+                    <label>Condición del producto</label>
+                    <select id="product-condition">
+                        <option value="">— Sin especificar —</option>
+                        <option value="nuevo">🆕 Nuevo</option>
+                        <option value="segunda-mano">♻️ De segunda mano</option>
+                        <option value="como-nuevo">✨ De segunda mano como nuevo</option>
+                    </select>
+                    <small class="admin-form__hint">Elegí la condición o dejalo vacío si no aplica.</small>
+                </div>
+                <div class="admin-form__field">
                     <label>Tallas disponibles (opcional)</label>
                     <input type="text" id="product-sizes" placeholder="S, M, L, XL (separadas por coma)">
                     <small class="admin-form__hint">Ej: S, M, L, XL — si el producto no usa tallas, dejalo vacío.</small>
@@ -296,6 +306,6 @@
 <!-- ===== TOAST ===== -->
 <div class="admin-toast" id="admin-toast"></div>
 
-<script src="admin.js?v=20260829"></script>
+<script src="admin.js?v=20260904"></script>
 </body>
 </html>
