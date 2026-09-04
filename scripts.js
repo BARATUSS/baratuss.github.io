@@ -1007,7 +1007,7 @@ function updateWishlistUI() {
 const C807_FEE = 1.00; // Retiro en agencia C807 (solo tarjeta)
 const DELIVERY_FEE = C807_FEE; // compatibilidad
 
-// Muestra la dirección de la agencia C807 elegida
+// Muestra la dirección de la agencia C807 elegida + link a Google Maps
 function showC807Address() {
     const sel = $('checkout-c807-point');
     if (!sel) return;
@@ -1015,10 +1015,20 @@ function showC807Address() {
     const addrBox = $('checkout-c807-address');
     if (!addrBox || !opt) return;
     const address = opt.getAttribute('data-address');
+    const mapsUrl = opt.getAttribute('data-maps');
     if (address) {
         $('c807-address-name').textContent = opt.textContent.trim();
         $('c807-address-text').textContent = address;
         addrBox.style.display = '';
+        const mapsLink = $('c807-address-maps');
+        if (mapsLink) {
+            if (mapsUrl) {
+                mapsLink.href = mapsUrl;
+                mapsLink.style.display = 'inline-block';
+            } else {
+                mapsLink.style.display = 'none';
+            }
+        }
     } else {
         addrBox.style.display = 'none';
     }
