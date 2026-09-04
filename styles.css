@@ -1080,3 +1080,48 @@ ul { list-style: none; }
     border-top: 1px solid var(--gray-100);
 }
 .order-card__footer strong { color: var(--black); font-size: 0.9rem; }
+
+/* ========== TICKET DE COMPRA ========== */
+.ticket {
+    background: #fffdf8;
+    border: 1.5px dashed #ddd;
+    border-radius: 14px;
+    padding: 20px;
+    max-width: 420px;
+    margin: 0 auto;
+    font-size: 0.9rem;
+}
+.ticket__header { text-align: center; }
+.ticket__logo { font-size: 1.4rem; font-weight: 800; letter-spacing: 1px; color: var(--accent); }
+.ticket__sub { font-size: 0.75rem; color: #aaa; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+.ticket__ref { font-size: 0.8rem; color: #999; margin-top: 8px; font-weight: 600; }
+.ticket__divider {
+    border-top: 1.5px dashed #ddd;
+    margin: 14px 0;
+}
+.ticket__row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 16px; margin-bottom: 8px;
+}
+.ticket__label { color: #888; font-size: 0.8rem; white-space: nowrap; }
+.ticket__value { font-weight: 700; text-align: right; }
+.ticket__items { margin: 6px 0 2px; }
+.ticket__item {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.85rem; padding: 5px 0;
+    border-bottom: 1px dotted #eee;
+}
+.ticket__item-name { display: flex; align-items: center; gap: 8px; }
+.ticket__item-code { color: #bbb; font-size: 0.7rem; font-weight: 400; }
+.ticket__total {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 1.15rem; font-weight: 800;
+    padding: 10px 0 0;
+}
+.ticket__total span:first-child { color: #666; font-size: 0.85rem; }
+.ticket__total span:last-child { color: var(--accent-dark, #e27563); font-size: 1.4rem; }
+.ticket__footer {
+    text-align: center; font-size: 0.75rem; color: #aaa;
+    margin-top: 14px; padding-top: 10px;
+    border-top: 1.5px dashed #ddd;
+}

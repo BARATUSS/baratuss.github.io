@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260912">
+    <link rel="stylesheet" href="styles.css?v=20260913">
 </head>
 <body>
 
@@ -565,10 +565,51 @@
     </div>
 </div>
 
+<!-- ========== TICKET DE COMPRA ========== -->
+<div class="modal-overlay" id="ticket-overlay" style="display:none;"></div>
+<div class="modal" id="ticket-modal" style="display:none;">
+    <div class="modal__header" style="border-bottom:none;padding-bottom:0;">
+        <h3>🎉 ¡Gracias por tu compra!</h3>
+        <button class="modal__close" id="ticket-close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal__body" style="padding-top:8px;">
+        <div class="ticket" id="ticket-content">
+            <div class="ticket__header">
+                <div class="ticket__logo">🛍️ BARATUSS</div>
+                <div class="ticket__sub">Moda · Accesorios · Skincare</div>
+                <div class="ticket__ref" id="ticket-ref">#BAR-000000</div>
+            </div>
+            <div class="ticket__divider"></div>
+            <div class="ticket__row">
+                <span class="ticket__label">👤 Comprador</span>
+                <span class="ticket__value" id="ticket-name">—</span>
+            </div>
+            <div class="ticket__items" id="ticket-items"></div>
+            <div class="ticket__divider"></div>
+            <div class="ticket__row">
+                <span class="ticket__label">📍 Retiro en</span>
+                <span class="ticket__value" id="ticket-point">—</span>
+            </div>
+            <div id="ticket-maps-row" style="display:none;margin-top:6px;">
+                <a id="ticket-maps-link" href="#" target="_blank" rel="noopener" style="display:inline-block;background:#ff9686;color:#fff;padding:7px 16px;border-radius:100px;text-decoration:none;font-weight:600;font-size:.8rem;">
+                    📍 Ver punto en Google Maps
+                </a>
+            </div>
+            <div class="ticket__divider"></div>
+            <div class="ticket__total">
+                <span>💰 TOTAL PAGADO</span>
+                <span id="ticket-total">$0.00</span>
+            </div>
+            <div class="ticket__footer">¡Te esperamos! 📲 Te contactaremos para coordinar la entrega.</div>
+        </div>
+        <button class="btn btn--primary btn--full" id="ticket-done" style="margin-top:16px;">Listo, ¡gracias!</button>
+    </div>
+</div>
+
 <!-- ========== TOAST ========== -->
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="scripts.js?v=20260912"></script>
+<script src="scripts.js?v=20260913"></script>
 </body>
 </html>
