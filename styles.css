@@ -756,6 +756,12 @@ ul { list-style: none; }
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
     font-size: 1.5rem;
+    overflow: hidden;
+    background: #fafafa;
+}
+.cart-item__img .cart-item__photo {
+    width: 100%; height: 100%;
+    object-fit: cover;
 }
 .cart-item__info { flex: 1; }
 .cart-item__name { font-weight: 500; font-size: 0.85rem; margin-bottom: 2px; }

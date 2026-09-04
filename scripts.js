@@ -710,7 +710,7 @@ function updateCartUI() {
     cartFooter.style.display = 'block';
     cartItems.innerHTML = cart.map(item => `
         <div class="cart-item">
-            <div class="cart-item__img ${item.imgClass}">${item.emoji}</div>
+            <div class="cart-item__img">${item.image ? `<img src="${item.image}" alt="${item.name}" class="cart-item__photo" onerror="this.replaceWith(document.createTextNode('🛍️'))">` : (item.emoji || '🛍️')}</div>
             <div class="cart-item__info">
                 <div class="cart-item__name">${item.name}${item.size ? ` <small style="color:#888;">(${item.size})</small>` : ''}</div>
                 <div class="cart-item__price">$${(item.price * item.qty).toFixed(2)}</div>
