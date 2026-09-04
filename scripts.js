@@ -1007,6 +1007,23 @@ function updateWishlistUI() {
 const C807_FEE = 1.00; // Retiro en agencia C807 (solo tarjeta)
 const DELIVERY_FEE = C807_FEE; // compatibilidad
 
+// Muestra la dirección de la agencia C807 elegida
+function showC807Address() {
+    const sel = $('checkout-c807-point');
+    if (!sel) return;
+    const opt = sel.options[sel.selectedIndex];
+    const addrBox = $('checkout-c807-address');
+    if (!addrBox || !opt) return;
+    const address = opt.getAttribute('data-address');
+    if (address) {
+        $('c807-address-name').textContent = opt.textContent.trim();
+        $('c807-address-text').textContent = address;
+        addrBox.style.display = '';
+    } else {
+        addrBox.style.display = 'none';
+    }
+}
+
 function openCheckoutModal() {
     if (cart.length === 0) return;
     closeCart();
@@ -1055,6 +1072,7 @@ function updateCheckoutUI() {
         if (c807Note) c807Note.style.display = 'none';
         if (pointGroup) pointGroup.style.display = 'none';
         if (c807Group) c807Group.style.display = '';
+        if (typeof showC807Address === 'function') showC807Address();
     } else {
         // Punto BARATUSS: mostrar selector de puntos, ocultar agencias C807
         if (c807Note) c807Note.style.display = 'none';

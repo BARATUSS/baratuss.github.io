@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260906">
+    <link rel="stylesheet" href="styles.css?v=20260907">
 </head>
 <body>
 
@@ -352,32 +352,36 @@
             <!-- Selector de agencia C807 -->
             <div class="form-group" id="checkout-c807-group" style="display:none;margin-top:12px;">
                 <label for="checkout-c807-point">Elegí la agencia C807 más cercana:</label>
-                <select id="checkout-c807-point">
+                <select id="checkout-c807-point" onchange="showC807Address()">
                     <optgroup label="🏙️ San Salvador / La Libertad">
-                        <option value="Agencia C807 — Metrogalerías (San Salvador)">Metrogalerías (San Salvador)</option>
-                        <option value="Agencia C807 — Las Terrazas, Centro SS">Las Terrazas, Centro de San Salvador</option>
-                        <option value="Agencia C807 — Las Pulgas (Blvd Los Héroes)">Las Pulgas (Blvd. Los Héroes)</option>
-                        <option value="Agencia C807 — Santa Tecla">Santa Tecla</option>
-                        <option value="Agencia C807 — HUB Plan de La Laguna (Ant. Cuscatlán)">HUB Plan de La Laguna (Antiguo Cuscatlán)</option>
-                        <option value="Agencia C807 — HUB San Blas">HUB San Blas</option>
-                        <option value="Agencia C807 — C.C. Paseo Venecia">C.C. Paseo Venecia</option>
-                        <option value="Agencia C807 — HUB Plaza Amanecer (Soyapango)">HUB Plaza Amanecer (Soyapango)</option>
+                        <option value="Agencia C807 — Metrogalerías (San Salvador)" data-address="Centro Comercial Metrogalerías, Local No 3-2A, Calle Los Sisimiles, San Salvador">Metrogalerías (San Salvador)</option>
+                        <option value="Agencia C807 — Las Terrazas, Centro SS" data-address="4ta Calle Poniente, 2do nivel Local 21, Centro de San Salvador">Las Terrazas, Centro de San Salvador</option>
+                        <option value="Agencia C807 — Las Pulgas (Blvd Los Héroes)" data-address="Centro Comercial Las Pulgas, Locales 205-206, Blvd. Los Héroes (frente a Repuestos Omar), San Salvador">Las Pulgas (Blvd. Los Héroes)</option>
+                        <option value="Agencia C807 — Santa Tecla" data-address="Entre 4ta Calle Oriente y Av. Eduardo Zablah Touche, Santa Tecla">Santa Tecla</option>
+                        <option value="Agencia C807 — HUB Plan de La Laguna (Ant. Cuscatlán)" data-address="Calle Circunvalación, Polígono D, Lote 7, Zona Industrial Plan de la Laguna, Antiguo Cuscatlán">HUB Plan de La Laguna (Antiguo Cuscatlán)</option>
+                        <option value="Agencia C807 — HUB San Blas" data-address="Plaza Los Alpes Local 6, carretera El Litoral, San Blas, La Libertad">HUB San Blas</option>
+                        <option value="Agencia C807 — C.C. Paseo Venecia" data-address="Local PAD5 dentro del estacionamiento de Paseo Venecia (a la par de Maxi Despensa), San Salvador">C.C. Paseo Venecia</option>
+                        <option value="Agencia C807 — HUB Plaza Amanecer (Soyapango)" data-address="Gasolinera Puma Morazán, Km 6½ Blvd. Ejército Nacional, contiguo a Soyapango, Terminal Plaza Amanecer">HUB Plaza Amanecer (Soyapango)</option>
                     </optgroup>
                     <optgroup label="🇸🇻 Otros departamentos">
-                        <option value="Agencia C807 — HUB Santa Ana">HUB Santa Ana</option>
-                        <option value="Agencia C807 — HUB Sonsonate">HUB Sonsonate</option>
-                        <option value="Agencia C807 — HUB Ahuachapán">HUB Ahuachapán</option>
-                        <option value="Agencia C807 — HUB Chalatenango">HUB Chalatenango</option>
-                        <option value="Agencia C807 — HUB Cojutepeque">HUB Cojutepeque</option>
-                        <option value="Agencia C807 — HUB San Vicente">HUB San Vicente</option>
-                        <option value="Agencia C807 — HUB La Paz">HUB La Paz</option>
-                        <option value="Agencia C807 — HUB San Miguel">HUB San Miguel</option>
-                        <option value="Agencia C807 — HUB Usulután">HUB Usulután</option>
-                        <option value="Agencia C807 — HUB La Unión">HUB La Unión</option>
+                        <option value="Agencia C807 — HUB Santa Ana" data-address="Barrio Nuevo, 10a Av. Sur, entre 27 y 29 Calle Poniente N. 105, Santa Ana">HUB Santa Ana</option>
+                        <option value="Agencia C807 — HUB Sonsonate" data-address="Av. Las Palmeras, salida a San Salvador (frente al nuevo Banco Agrícola), Sonsonate">HUB Sonsonate</option>
+                        <option value="Agencia C807 — HUB Ahuachapán" data-address="Paraje Joya de Pacaya, Cantón El Barro de Los Ausoles, Lotes 2, 3 y 13, Ahuachapán">HUB Ahuachapán</option>
+                        <option value="Agencia C807 — HUB Chalatenango" data-address="Parcelación Hacienda El Coyolito, Cantón Quitasol, Chalatenango">HUB Chalatenango</option>
+                        <option value="Agencia C807 — HUB Cojutepeque" data-address="8va Av. Norte y Carretera Panamericana No. 16, Barrio Santa Lucía, Cojutepeque, Cuscatlán">HUB Cojutepeque</option>
+                        <option value="Agencia C807 — HUB San Vicente" data-address="Barrio San José y Calvario, 3a Calle Poniente 24, San Vicente">HUB San Vicente</option>
+                        <option value="Agencia C807 — HUB La Paz" data-address="Lotificación Valle Dorado, Lote 1 Polígono 14, El Rosario, La Paz">HUB La Paz</option>
+                        <option value="Agencia C807 — HUB San Miguel" data-address="Colonia Granillo, Calle Candelaria #4, entre 8 y 10 Av. Norte, San Miguel">HUB San Miguel</option>
+                        <option value="Agencia C807 — HUB Usulután" data-address="5ta Calle Oriente y 8 Av. Sur #46, Barrio El Calvario, Usulután">HUB Usulután</option>
+                        <option value="Agencia C807 — HUB La Unión" data-address="Calle Circunvalación, Ex Hotel Centro Americano Local 30, La Unión">HUB La Unión</option>
                     </optgroup>
                 </select>
+                <div class="c807-address" id="checkout-c807-address" style="display:none;margin-top:8px;padding:10px 14px;background:#f5f5f5;border-left:3px solid #ff9686;border-radius:8px;font-size:.85rem;">
+                    📍 <strong id="c807-address-name"></strong><br>
+                    <span id="c807-address-text"></span>
+                </div>
                 <small style="opacity:.7;display:block;margin-top:6px;">
-                    📦 Te llamarán al teléfono cuando tu pedido esté en la agencia. 
+                    📦 Te llamarán al teléfono cuando tu pedido esté en la agencia.
                     <a href="https://c807xpress.com/sv/agencias/" target="_blank" rel="noopener">Ver horarios de agencias</a>
                 </small>
             </div>
@@ -569,6 +573,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="scripts.js?v=20260906"></script>
+<script src="scripts.js?v=20260907"></script>
 </body>
 </html>
