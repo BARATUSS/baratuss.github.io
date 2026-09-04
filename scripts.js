@@ -1032,8 +1032,6 @@ function openCheckoutModal() {
         const p = currentUser.profile || {};
         $('checkout-name').value = p.name || '';
         $('checkout-phone').value = p.phone || '';
-        $('checkout-address').value = p.address || '';
-        $('checkout-city').value = p.city || '';
     }
     updateCheckoutUI();
     $('checkout-overlay').style.display = '';
@@ -1054,33 +1052,37 @@ function updateCheckoutUI() {
     const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
     const wantsC807 = deliveryMethod === 'c807';
     
-    // C807: solo tarjeta. Si paga efectivo y eligió C807, forzar a punto + aviso
-    const c807Note = $('checkout-c807-note');
+    // C807 SOLO con tarjeta: si paga efectivo, la opción desaparece por completo
+    const c807Radio = $('delivery-c807');
+    const c807Label = c807Radio ? c807Radio.closest('label') : null;
+    if (c807Label) c807Label.style.display = isCash ? 'none' : '';
+    
+    const c807Note = $('checkout-c807-note'); // puede no existir (opción oculta)
     const pointGroup = $('checkout-point-group');
     const c807Group = $('checkout-c807-group');
-    const c807Radio = $('delivery-c807');
     
-    if (isCash && wantsC807) {
-        // Bloquear: mostrar aviso y volver a "punto"
+    if (isCash) {
+        // Efectivo: solo puntos BARATUSS. Forzar selección a "punto"
         if (c807Radio) c807Radio.checked = false;
-        document.querySelector('input[name="delivery-method"][value="punto"]').checked = true;
-        if (c807Note) c807Note.style.display = '';
+        const puntoRadio = document.querySelector('input[name="delivery-method"][value="punto"]');
+        if (puntoRadio) puntoRadio.checked = true;
+        if (c807Note) c807Note.style.display = 'none';
         if (pointGroup) pointGroup.style.display = '';
         if (c807Group) c807Group.style.display = 'none';
     } else if (wantsC807) {
-        // C807 con tarjeta: ocultar selector de punto BARATUSS, mostrar agencias C807
+        // Tarjeta + C807: ocultar puntos BARATUSS, mostrar agencias C807
         if (c807Note) c807Note.style.display = 'none';
         if (pointGroup) pointGroup.style.display = 'none';
         if (c807Group) c807Group.style.display = '';
         if (typeof showC807Address === 'function') showC807Address();
     } else {
-        // Punto BARATUSS: mostrar selector de puntos, ocultar agencias C807
+        // Tarjeta + punto BARATUSS: mostrar selector de puntos
         if (c807Note) c807Note.style.display = 'none';
         if (pointGroup) pointGroup.style.display = '';
         if (c807Group) c807Group.style.display = 'none';
     }
     
-    // Fee: C807 = $1.00, puntos BARATUSS = $0
+    // Fee: C807 = $1.00 (solo tarjeta), puntos BARATUSS = $0
     const fee = (!isCash && wantsC807) ? C807_FEE : 0;
     
     const baseTotal = getCartTotal();
@@ -1179,11 +1181,9 @@ async function cashCheckout() {
         return;
     }
     
-    // Efectivo SOLO puede retirar en punto BARATUSS (C807 requiere tarjeta)
-    const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked').value;
-    const isC807 = deliveryMethod === 'c807';
-    const punto = isC807 ? null : ($('checkout-point').value || 'Punto BARATUSS');
-    const fee = 0; // efectivo nunca paga fee (C807 bloqueado con efectivo)
+    // Efectivo: siempre retiro en punto BARATUSS (C807 no existe con efectivo)
+    const punto = $('checkout-point').value || 'Punto BARATUSS';
+    const fee = 0; // puntos BARATUSS son gratis
     
     const items = [...cart];
     const baseTotal = getCartTotal();
