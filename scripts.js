@@ -1091,10 +1091,7 @@ function updateCheckoutUI() {
     const breakdown = $('checkout-breakdown');
     if (breakdown) {
         breakdown.innerHTML =
-            `<small style="opacity:.7;display:block;margin-top:4px;">` +
-            (fee > 0 ? `Retiro C807: +$${fee.toFixed(2)} · ` : '') +
-            `Incluye: IVA 13% · Comisión Wompi 3.50% · Tarifa $${PRICE_FEE.toFixed(2)}` +
-            `</small>`;
+            (fee > 0 ? `<small style="opacity:.7;display:block;margin-top:4px;">Retiro C807: +$${fee.toFixed(2)}</small>` : '');
     }
 }
 
