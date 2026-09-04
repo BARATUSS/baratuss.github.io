@@ -1158,6 +1158,20 @@ async function wompiCheckout() {
             localStorage.setItem('baratuss_last_ref', data.reference);
         }
         
+        // Guardar ticket pendiente (se muestra al volver de Wompi con ?ref=)
+        const mapsSel = isC807 ? $('checkout-c807-point') : null;
+        const mapsUrl = mapsSel && mapsSel.selectedOptions.length ? mapsSel.selectedOptions[0].getAttribute('data-maps') : null;
+        localStorage.setItem('baratuss_pending_ticket', JSON.stringify({
+            name: name,
+            phone: phone,
+            ref: data.reference || ref,
+            items: [...cart],
+            punto: punto,
+            mapsUrl: mapsUrl,
+            total: total,
+            metodo: 'tarjeta'
+        }));
+        
         // Save order info for logged in users
         if (currentUser) {
             const result = await createOrder(cart, total);
@@ -1238,21 +1252,68 @@ async function cashCheckout() {
         updateCartUI();
         closeCheckoutModal();
         
-        // Confirmación
+        // Confirmación con ticket
         showToast('✅ Pedido confirmado');
-        alert(
-            '🎉 ¡Pedido confirmado, ' + name + '!\n\n' +
-            '📍 Referencia: ' + ref + '\n' +
-            '🏪 Punto de retiro: ' + punto + '\n' +
-            '💰 Total a pagar en efectivo: $' + total.toFixed(2) + '\n\n' +
-            '📲 Te vamos a contactar al ' + phone + ' para coordinar la entrega en tu punto.\n' +
-            '¡Gracias por comprar en BARATUSS! 💕'
-        );
+        showTicket({
+            name: name,
+            phone: phone,
+            ref: ref,
+            items: items,
+            punto: punto,
+            mapsUrl: null,
+            total: total,
+            metodo: 'efectivo'
+        });
         
     } catch (e) {
         showToast('❌ Error: ' + e.message);
     }
 }
+
+// ===== TICKET DE COMPRA =====
+function showTicket(data) {
+    $('ticket-ref').textContent = '#' + data.ref;
+    $('ticket-name').textContent = data.name + (data.phone ? ' · ' + data.phone : '');
+    $('ticket-point').textContent = data.punto || 'Por coordinar';
+    $('ticket-total').textContent = '$' + data.total.toFixed(2);
+    
+    // Items con código (id)
+    const itemsHtml = (data.items || []).map(it => `
+        <div class="ticket__item">
+            <span class="ticket__item-name">${it.qty || 1}× ${it.name}${it.size ? ` (${it.size})` : ''}
+                <span class="ticket__item-code">· #${it.id}</span>
+            </span>
+            <span>$${((it.price || 0) * (it.qty || 1)).toFixed(2)}</span>
+        </div>`).join('');
+    $('ticket-items').innerHTML = itemsHtml || '<div class="ticket__item">—</div>';
+    
+    // Link Google Maps si aplica (C807 o Casa Matriz)
+    const mapsRow = $('ticket-maps-row');
+    const mapsLink = $('ticket-maps-link');
+    if (data.mapsUrl) {
+        mapsLink.href = data.mapsUrl;
+        mapsRow.style.display = '';
+    } else {
+        mapsRow.style.display = 'none';
+    }
+    
+    // Cerrar checkout y mostrar ticket
+    closeCheckoutModal();
+    $('ticket-overlay').style.display = 'block';
+    $('ticket-modal').style.display = 'block';
+    $('ticket-modal').style.opacity = '1';
+    $('ticket-modal').style.pointerEvents = 'auto';
+    $('ticket-modal').classList.add('modal--open');
+}
+
+function closeTicket() {
+    $('ticket-overlay').style.display = 'none';
+    $('ticket-modal').style.display = 'none';
+    $('ticket-modal').classList.remove('modal--open');
+}
+$('ticket-close').addEventListener('click', closeTicket);
+$('ticket-overlay').addEventListener('click', closeTicket);
+$('ticket-done').addEventListener('click', closeTicket);
 
 // ===== BOTÓN PRINCIPAL DE CHECKOUT =====
 $('checkout-btn').addEventListener('click', openCheckoutModal);
@@ -1348,6 +1409,19 @@ function initApp() {
     updateCartUI();
     loadProductsFromSupabase();
     checkSession();
+    
+    // Ticket pendiente: mostrar al volver de Wompi (?ref=) o si hay uno guardado sin confirmar
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('ref')) {
+        const pending = localStorage.getItem('baratuss_pending_ticket');
+        if (pending) {
+            try {
+                const ticket = JSON.parse(pending);
+                localStorage.removeItem('baratuss_pending_ticket');
+                setTimeout(() => showTicket(ticket), 800);
+            } catch (e) {}
+        }
+    }
 }
 
 initApp();
