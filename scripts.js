@@ -1004,7 +1004,8 @@ function updateWishlistUI() {
 }
 
 // ===== CHECKOUT — Método de pago =====
-const DELIVERY_FEE = 2.50; // Envío a domicilio (editable)
+const C807_FEE = 1.00; // Retiro en agencia C807 (solo tarjeta)
+const DELIVERY_FEE = C807_FEE; // compatibilidad
 
 function openCheckoutModal() {
     if (cart.length === 0) return;
@@ -1030,19 +1031,45 @@ function closeCheckoutModal() {
 function updateCheckoutUI() {
     const method = document.querySelector('input[name="pay-method"]:checked').value;
     const isCash = method === 'efectivo';
-    $('checkout-delivery').style.display = isCash ? '' : 'none';
-    const isDelivery = document.querySelector('input[name="delivery-method"]:checked')?.value === 'domicilio';
-    $('checkout-address-group').style.display = isCash && isDelivery ? '' : 'none';
+    // El bloque de entrega siempre visible (retiro en punto o C807)
+    $('checkout-delivery').style.display = '';
+    
+    const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
+    const wantsC807 = deliveryMethod === 'c807';
+    
+    // C807: solo tarjeta. Si paga efectivo y eligió C807, forzar a punto + aviso
+    const c807Note = $('checkout-c807-note');
+    const pointGroup = $('checkout-point-group');
+    const c807Radio = $('delivery-c807');
+    
+    if (isCash && wantsC807) {
+        // Bloquear: mostrar aviso y volver a "punto"
+        if (c807Radio) c807Radio.checked = false;
+        document.querySelector('input[name="delivery-method"][value="punto"]').checked = true;
+        if (c807Note) c807Note.style.display = '';
+        if (pointGroup) pointGroup.style.display = '';
+        $('checkout-point-group').style.display = '';
+    } else if (wantsC807) {
+        // C807 con tarjeta: ocultar selector de punto, sin aviso
+        if (c807Note) c807Note.style.display = 'none';
+        if (pointGroup) pointGroup.style.display = 'none';
+    } else {
+        // Punto BARATUSS: mostrar selector, sin aviso
+        if (c807Note) c807Note.style.display = 'none';
+        if (pointGroup) pointGroup.style.display = '';
+    }
+    
+    // Fee: C807 = $1.00, puntos BARATUSS = $0
+    const fee = (!isCash && wantsC807) ? C807_FEE : 0;
     
     const baseTotal = getCartTotal();
-    const fee = isCash && isDelivery ? DELIVERY_FEE : 0;
     const totalConFee = baseTotal + fee;
-    // Desglose: IVA 13% + comisión Wompi 3.50% ya incluidos en el precio final
     $('checkout-total').textContent = '$' + totalConFee.toFixed(2);
     const breakdown = $('checkout-breakdown');
     if (breakdown) {
         breakdown.innerHTML =
             `<small style="opacity:.7;display:block;margin-top:4px;">` +
+            (fee > 0 ? `Retiro C807: +$${fee.toFixed(2)} · ` : '') +
             `Incluye: IVA 13% · Comisión Wompi 3.50% · Tarifa $${PRICE_FEE.toFixed(2)}` +
             `</small>`;
     }
@@ -1058,6 +1085,16 @@ $('checkout-overlay').addEventListener('click', closeCheckoutModal);
 async function wompiCheckout() {
     if (cart.length === 0) return;
     
+    // Datos de retiro (tarjeta puede elegir punto BARATUSS o C807)
+    const name = $('checkout-name').value.trim();
+    const phone = $('checkout-phone').value.trim();
+    const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked').value;
+    const isC807 = deliveryMethod === 'c807';
+    const punto = isC807 ? 'Agencia C807' : ($('checkout-point').value || 'Punto BARATUSS');
+    const fee = isC807 ? C807_FEE : 0;
+    const baseTotal = getCartTotal();
+    const total = baseTotal + fee;
+
     showToast('🔄 Procesando pago...');
     
     try {
@@ -1070,8 +1107,13 @@ async function wompiCheckout() {
             },
             body: JSON.stringify({
                 items: cart,
-                total: getCartTotal(),
-                userId: currentUser?.id || null
+                total: total,
+                userId: currentUser?.id || null,
+                deliveryType: isC807 ? 'retiro-c807' : 'retiro-punto',
+                deliveryFee: fee,
+                deliveryPoint: punto,
+                customerName: name || null,
+                customerPhone: phone || null
             })
         });
         
@@ -1089,7 +1131,7 @@ async function wompiCheckout() {
         
         // Save order info for logged in users
         if (currentUser) {
-            const result = await createOrder(cart, getCartTotal());
+            const result = await createOrder(cart, total);
             if (result.error) { showToast('❌ ' + result.error); return; }
         }
         
@@ -1116,19 +1158,14 @@ async function cashCheckout() {
         return;
     }
     
-    const isDelivery = document.querySelector('input[name="delivery-method"]:checked').value === 'domicilio';
-    if (isDelivery) {
-        const address = $('checkout-address').value.trim();
-        const city = $('checkout-city').value.trim();
-        if (!address || !city) {
-            showToast('📝 Completá tu dirección de entrega');
-            return;
-        }
-    }
+    // Efectivo SOLO puede retirar en punto BARATUSS (C807 requiere tarjeta)
+    const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked').value;
+    const isC807 = deliveryMethod === 'c807';
+    const punto = isC807 ? null : ($('checkout-point').value || 'Punto BARATUSS');
+    const fee = 0; // efectivo nunca paga fee (C807 bloqueado con efectivo)
     
     const items = [...cart];
     const baseTotal = getCartTotal();
-    const fee = isDelivery ? DELIVERY_FEE : 0;
     const total = baseTotal + fee;
     const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
     
@@ -1143,12 +1180,11 @@ async function cashCheckout() {
             payment_status: 'efectivo',
             payment_method: 'efectivo',
             reference: ref,
-            delivery_type: isDelivery ? 'domicilio' : 'retiro',
+            delivery_type: 'retiro-punto',
             delivery_fee: fee,
+            delivery_point: punto,
             customer_name: name,
-            customer_phone: phone,
-            customer_address: isDelivery ? $('checkout-address').value.trim() : null,
-            customer_city: isDelivery ? $('checkout-city').value.trim() : null
+            customer_phone: phone
         };
         if (currentUser) orderPayload.user_id = currentUser.id;
         
@@ -1176,13 +1212,13 @@ async function cashCheckout() {
         closeCheckoutModal();
         
         // Confirmación
-        const deliveryText = isDelivery ? 'a domicilio' : 'para retiro';
         showToast('✅ Pedido confirmado');
         alert(
             '🎉 ¡Pedido confirmado, ' + name + '!\n\n' +
             '📍 Referencia: ' + ref + '\n' +
-            '💰 Total a pagar en efectivo: $' + total.toFixed(2) + ' (' + deliveryText + ')\n\n' +
-            '📲 Te vamos a contactar al ' + phone + ' para coordinar la ' + (isDelivery ? 'entrega' : 'entrega/retiro') + '.\n' +
+            '🏪 Punto de retiro: ' + punto + '\n' +
+            '💰 Total a pagar en efectivo: $' + total.toFixed(2) + '\n\n' +
+            '📲 Te vamos a contactar al ' + phone + ' para coordinar la entrega en tu punto.\n' +
             '¡Gracias por comprar en BARATUSS! 💕'
         );
         

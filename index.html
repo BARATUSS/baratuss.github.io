@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260904">
+    <link rel="stylesheet" href="styles.css?v=20260905">
 </head>
 <body>
 
@@ -296,30 +296,59 @@
             </label>
         </div>
 
-        <div id="checkout-delivery" style="display:none;">
-            <h4 class="checkout-subtitle">¿Cómo recibís tu pedido?</h4>
+        <div id="checkout-delivery" style="display:block;">
+            <h4 class="checkout-subtitle">¿Dónde retirás tu pedido?</h4>
             <div class="checkout-options">
                 <label class="checkout-option">
-                    <input type="radio" name="delivery-method" value="domicilio" checked>
+                    <input type="radio" name="delivery-method" value="punto" checked>
                     <div class="checkout-option__box">
-                        <span class="checkout-option__icon">🛵</span>
+                        <span class="checkout-option__icon">🏪</span>
                         <div>
-                            <strong>Entrega a domicilio</strong>
-                            <small>+$2.50 de envío</small>
+                            <strong>Retiro en punto BARATUSS</strong>
+                            <small>Sin costo — elegí el punto más cercano</small>
                         </div>
                     </div>
                 </label>
                 <label class="checkout-option">
-                    <input type="radio" name="delivery-method" value="retiro">
+                    <input type="radio" name="delivery-method" value="c807" id="delivery-c807">
                     <div class="checkout-option__box">
-                        <span class="checkout-option__icon">🏪</span>
+                        <span class="checkout-option__icon">📦</span>
                         <div>
-                            <strong>Retiro en punto</strong>
-                            <small>Sin costo — coordinamos por Instagram @baratuss_sv</small>
+                            <strong>Retiro en agencia C807</strong>
+                            <small>+$1.00 — te llaman cuando llegue tu pedido</small>
                         </div>
                     </div>
                 </label>
             </div>
+
+            <!-- Selector de punto BARATUSS -->
+            <div class="form-group" id="checkout-point-group" style="margin-top:12px;">
+                <label for="checkout-point">Elegí tu punto de retiro:</label>
+                <select id="checkout-point">
+                    <optgroup label="📍 Santa Tecla">
+                        <option value="Santa Tecla — Paseo El Carmen">Paseo El Carmen</option>
+                        <option value="Santa Tecla — C.C. La Skina">C.C. La Skina</option>
+                        <option value="Santa Tecla — Casa Matriz">Casa Matriz</option>
+                    </optgroup>
+                    <optgroup label="📍 San Salvador">
+                        <option value="Plaza Merliot">Plaza Merliot</option>
+                    </optgroup>
+                    <optgroup label="📍 Metrocentro">
+                        <option value="Metrocentro (agendar — martes en la tarde)">Metrocentro (agendar)</option>
+                    </optgroup>
+                </select>
+                <small style="opacity:.7;display:block;margin-top:6px;">
+                    📍 Casa Matriz: <a href="https://maps.app.goo.gl/eQE3nscU5RXRwXqA8" target="_blank" rel="noopener">ver en Google Maps</a>
+                    · 🕒 Metrocentro: martes en la tarde (agendar)
+                </small>
+            </div>
+
+            <!-- Aviso C807 con efectivo -->
+            <div class="checkout-note" id="checkout-c807-note" style="display:none;margin-top:10px;padding:10px 14px;background:#fff3e6;border-radius:10px;font-size:.85rem;color:#8a5a00;">
+                ⚠️ <strong>Retiro en agencia C807 no aplica con pagos en efectivo.</strong>
+                Para usar esta opción, elegí <strong>Tarjeta (Wompi)</strong> como método de pago.
+            </div>
+
             <div id="checkout-customer-fields">
                 <div class="form-group">
                     <label>Tu nombre</label>
@@ -328,11 +357,6 @@
                 <div class="form-group">
                     <label>Tu teléfono (WhatsApp)</label>
                     <input type="tel" id="checkout-phone" placeholder="7000-0000" required>
-                </div>
-                <div class="form-group" id="checkout-address-group">
-                    <label>Dirección de entrega</label>
-                    <input type="text" id="checkout-address" placeholder="Colonia, calle, casa...">
-                    <input type="text" id="checkout-city" placeholder="Ciudad / Municipio" style="margin-top:8px;">
                 </div>
             </div>
         </div>
@@ -512,6 +536,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="scripts.js?v=20260904"></script>
+<script src="scripts.js?v=20260905"></script>
 </body>
 </html>
