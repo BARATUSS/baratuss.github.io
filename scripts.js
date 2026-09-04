@@ -1040,6 +1040,7 @@ function updateCheckoutUI() {
     // C807: solo tarjeta. Si paga efectivo y eligió C807, forzar a punto + aviso
     const c807Note = $('checkout-c807-note');
     const pointGroup = $('checkout-point-group');
+    const c807Group = $('checkout-c807-group');
     const c807Radio = $('delivery-c807');
     
     if (isCash && wantsC807) {
@@ -1048,15 +1049,17 @@ function updateCheckoutUI() {
         document.querySelector('input[name="delivery-method"][value="punto"]').checked = true;
         if (c807Note) c807Note.style.display = '';
         if (pointGroup) pointGroup.style.display = '';
-        $('checkout-point-group').style.display = '';
+        if (c807Group) c807Group.style.display = 'none';
     } else if (wantsC807) {
-        // C807 con tarjeta: ocultar selector de punto, sin aviso
+        // C807 con tarjeta: ocultar selector de punto BARATUSS, mostrar agencias C807
         if (c807Note) c807Note.style.display = 'none';
         if (pointGroup) pointGroup.style.display = 'none';
+        if (c807Group) c807Group.style.display = '';
     } else {
-        // Punto BARATUSS: mostrar selector, sin aviso
+        // Punto BARATUSS: mostrar selector de puntos, ocultar agencias C807
         if (c807Note) c807Note.style.display = 'none';
         if (pointGroup) pointGroup.style.display = '';
+        if (c807Group) c807Group.style.display = 'none';
     }
     
     // Fee: C807 = $1.00, puntos BARATUSS = $0
@@ -1090,7 +1093,7 @@ async function wompiCheckout() {
     const phone = $('checkout-phone').value.trim();
     const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked').value;
     const isC807 = deliveryMethod === 'c807';
-    const punto = isC807 ? 'Agencia C807' : ($('checkout-point').value || 'Punto BARATUSS');
+    const punto = isC807 ? ($('checkout-c807-point').value || 'Agencia C807') : ($('checkout-point').value || 'Punto BARATUSS');
     const fee = isC807 ? C807_FEE : 0;
     const baseTotal = getCartTotal();
     const total = baseTotal + fee;
