@@ -38,7 +38,7 @@ serve(async (req) => {
   try {
     // ===== CREATE PAYMENT =====
     if (req.method === 'POST' && path === '/create-payment') {
-      const { items, total, userId } = await req.json();
+      const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
       const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -68,7 +68,12 @@ serve(async (req) => {
       await supabase.from('orders').insert({
         user_id: userId || null, items, total, reference: ref,
         status: 'pendiente', payment_status: 'pendiente',
-        transaction_id: payData.idTransaccion || null
+        transaction_id: payData.idTransaccion || null,
+        delivery_type: deliveryType || 'retiro-punto',
+        delivery_fee: deliveryFee || 0,
+        delivery_point: deliveryPoint || null,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null
       });
 
       return new Response(JSON.stringify({ paymentUrl: payData.urlEnlace, reference: ref }), { headers: corsHeaders });
