@@ -73,8 +73,18 @@ serve(async (req) => {
         delivery_fee: deliveryFee || 0,
         delivery_point: deliveryPoint || null,
         customer_name: customerName || null,
-        customer_phone: customerPhone || null
+        customer_phone: customerPhone || null,
+        stock_reservado: true
       });
+
+      // ✅ Reservar stock INMEDIATAMENTE al confirmar el pedido
+      // (así el artículo sale agotado al instante, sin esperar la aprobación del pago)
+      for (const item of items) {
+        const qty = item.qty || 1;
+        const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
+        const nuevo = Math.max(0, (Number(inv?.stock) || 0) - qty);
+        await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+      }
 
       return new Response(JSON.stringify({ paymentUrl: payData.urlEnlace, reference: ref }), { headers: corsHeaders });
     }
@@ -85,23 +95,45 @@ serve(async (req) => {
       const ref = p.enlacePago?.identificadorEnlaceComercio;
       const aprobado = p.esAprobada === 'true';
       if (ref) {
-        await supabase.from('orders').update({
-          payment_status: aprobado ? 'aprobado' : 'rechazado',
-          transaction_id: p.idTransaccion,
-          payment_method: p.formaPagoUtilizada || null,
-          payment_date: new Date().toISOString(),
-          status: aprobado ? 'pagado' : 'rechazado'
-        }).eq('reference', ref);
+        const { data: order } = await supabase.from('orders').select('items, stock_reservado').eq('reference', ref).single();
+        const items = order?.items || [];
 
-        // ✅ Descontar stock SOLO si el pago fue aprobado
         if (aprobado) {
-          const { data: order } = await supabase.from('orders').select('items').eq('reference', ref).single();
-          const items = order?.items || [];
-          for (const item of items) {
-            const qty = item.qty || 1;
-            const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
-            const nuevo = Math.max(0, (Number(inv?.stock) || 0) - qty);
-            await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+          await supabase.from('orders').update({
+            payment_status: 'aprobado',
+            transaction_id: p.idTransaccion,
+            payment_method: p.formaPagoUtilizada || null,
+            payment_date: new Date().toISOString(),
+            status: 'pagado'
+          }).eq('reference', ref);
+          // Si el pedido NO reservó stock al crearse (pedido anterior al fix),
+          // descontar aquí al aprobarse
+          if (!order?.stock_reservado) {
+            for (const item of items) {
+              const qty = item.qty || 1;
+              const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
+              const nuevo = Math.max(0, (Number(inv?.stock) || 0) - qty);
+              await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+            }
+            await supabase.from('orders').update({ stock_reservado: true }).eq('reference', ref);
+          }
+        } else {
+          await supabase.from('orders').update({
+            payment_status: 'rechazado',
+            transaction_id: p.idTransaccion,
+            payment_method: p.formaPagoUtilizada || null,
+            payment_date: new Date().toISOString(),
+            status: 'rechazado',
+            stock_reservado: false
+          }).eq('reference', ref);
+          // ❌ Pago rechazado → DEVOLVER el stock reservado
+          if (order?.stock_reservado) {
+            for (const item of items) {
+              const qty = item.qty || 1;
+              const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
+              const nuevo = (Number(inv?.stock) || 0) + qty;
+              await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+            }
           }
         }
       }
