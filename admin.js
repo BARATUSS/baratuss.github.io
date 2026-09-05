@@ -872,61 +872,82 @@ function escJs(s) {
 }
 
 // ===== ABRIR DETALLE DE UNA SALIDA (tipo: c807/merliot/metrocentro/santatecla) =====
-function abrirSalida(key) {
-    const g = (despachos || []).filter(d => (d.estado_logistico || '') !== 'entregado' && salidaKey(d.destino) === key);
-    if (!g.length) return;
-    const info = SALIDA_INFO[key] || SALIDA_INFO.otro;
-    $('punto-modal-title').textContent = info.icon + ' ' + info.titulo;
-    // Agrupar por pedido
-    const porPedido = {};
-    g.forEach(d => {
-        if (!porPedido[d.order_reference]) porPedido[d.order_reference] = { cliente: d.customer_name, telefono: d.customer_phone, items: [] };
-        porPedido[d.order_reference].items.push(d);
-    });
-    const pedidosHtml = Object.entries(porPedido).map(([ref, p]) => {
-        // Buscar pedido en orders para precio total y método de pago
-        const order = (window._ordersAll || []).find(o => o.reference === ref);
-        const pagoTxt = order ? fmtPago(order) : 'Pago: ver pedido';
-        const totalTxt = order ? '$' + Number(order.total).toFixed(2) : '';
-        const itemsHtml = p.items.map(i => {
-            const estado = i.estado_logistico || 'pendiente-preparacion';
-            const foto = i.imagen_url
-                ? '<img src="' + i.imagen_url + '" style="width:48px;height:48px;object-fit:cover;border-radius:8px;" onerror="this.remove()">'
-                : '<span style="font-size:1.5rem;">🛍️</span>';
-            return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dotted #eee;">' +
-                foto +
-                '<div style="flex:1;">' +
-                    '<div><strong>' + (i.nombre_capturado || '') + '</strong> ×' + (i.qty || 1) + (i.talla ? ' (' + i.talla + ')' : '') + '</div>' +
-                    '<div style="font-size:.72rem;color:#999;">Código #' + (i.inventory_id || '') + '</div>' +
+async function abrirSalida(key) {
+    try {
+        // Consultar datos frescos directamente (no depender de memoria que puede estar incompleta)
+        let data = despachos;
+        try {
+            const frescos = await api('GET', 'despachos?select=*&limit=300');
+            if (Array.isArray(frescos)) data = frescos;
+        } catch (e) {}
+        const g = (data || []).filter(d => (d.estado_logistico || '') !== 'entregado' && salidaKey(d.destino) === key);
+        if (!g.length) { showToast('📭 No hay artículos en esta salida'); return; }
+        // Asegurar orders cargados
+        if (!window._ordersAll || !window._ordersAll.length) {
+            try {
+                const ordersData = await api('GET', 'orders?select=reference,total,payment_status,payment_method,status,customer_name&limit=100');
+                window._ordersAll = Array.isArray(ordersData) ? ordersData : [];
+            } catch (e) { window._ordersAll = []; }
+        }
+        const info = SALIDA_INFO[key] || SALIDA_INFO.otro;
+        const titleEl = $('punto-modal-title');
+        if (titleEl) titleEl.textContent = info.icon + ' ' + info.titulo;
+        // Agrupar por pedido
+        const porPedido = {};
+        g.forEach(d => {
+            if (!porPedido[d.order_reference]) porPedido[d.order_reference] = { cliente: d.customer_name, telefono: d.customer_phone, items: [] };
+            porPedido[d.order_reference].items.push(d);
+        });
+        const pedidosHtml = Object.entries(porPedido).map(([ref, p]) => {
+            // Buscar pedido en orders para precio total y método de pago
+            const order = (window._ordersAll || []).find(o => o.reference === ref);
+            const pagoTxt = order ? fmtPago(order) : 'Pago: ver pedido';
+            const totalTxt = order ? '$' + Number(order.total).toFixed(2) : '';
+            const itemsHtml = p.items.map(i => {
+                const estado = i.estado_logistico || 'pendiente-preparacion';
+                const foto = i.imagen_url
+                    ? '<img src="' + i.imagen_url + '" style="width:48px;height:48px;object-fit:cover;border-radius:8px;" onerror="this.remove()">'
+                    : '<span style="font-size:1.5rem;">🛍️</span>';
+                return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dotted #eee;">' +
+                    foto +
+                    '<div style="flex:1;">' +
+                        '<div><strong>' + (i.nombre_capturado || '') + '</strong> ×' + (i.qty || 1) + (i.talla ? ' (' + i.talla + ')' : '') + '</div>' +
+                        '<div style="font-size:.72rem;color:#999;">Código #' + (i.inventory_id || '') + '</div>' +
+                    '</div>' +
+                    '<span class="log-estado log-estado--' + estado + '">' + (ESTADOS_LABEL[estado] || estado) + '</span>' +
+                '</div>';
+            }).join('');
+            // Sede destino (para C807: la agencia exacta que eligió el cliente)
+            const sede = p.items[0]?.destino || '';
+            return '<div style="border:1px solid #e5e5e5;border-radius:12px;padding:14px;margin-bottom:14px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">' +
+                    '<strong style="font-size:.95rem;">#' + ref + '</strong>' +
+                    '<span style="font-size:.8rem;color:#555;">' + pagoTxt + '</span>' +
                 '</div>' +
-                '<span class="log-estado log-estado--' + estado + '">' + (ESTADOS_LABEL[estado] || estado) + '</span>' +
+                (sede ? '<div style="font-size:.85rem;color:#333;margin-bottom:6px;">📍 Recibe en: <strong>' + String(sede).replace(/^Agencia C807 — /, '') + '</strong></div>' : '') +
+                '<div style="font-size:.85rem;margin-bottom:8px;">👤 <strong>' + (p.cliente || '—') + '</strong>' + (p.telefono ? ' · ' + p.telefono : '') + '</div>' +
+                itemsHtml +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">' +
+                    '<span style="font-weight:800;font-size:1.05rem;">💰 ' + (totalTxt || '') + '</span>' +
+                    '<a href="https://wa.me/503' + (p.telefono || '').replace(/\D/g, '') + '" target="_blank" style="background:#25D366;color:#fff;padding:7px 14px;border-radius:100px;text-decoration:none;font-size:.75rem;font-weight:600;">💬 WhatsApp</a>' +
+                '</div>' +
             '</div>';
         }).join('');
-        // Sede destino (para C807: la agencia exacta que eligió el cliente)
-        const sede = p.items[0]?.destino || '';
-        return '<div style="border:1px solid #e5e5e5;border-radius:12px;padding:14px;margin-bottom:14px;">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">' +
-                '<strong style="font-size:.95rem;">#' + ref + '</strong>' +
-                '<span style="font-size:.8rem;color:#555;">' + pagoTxt + '</span>' +
-            '</div>' +
-            (sede ? '<div style="font-size:.85rem;color:#333;margin-bottom:6px;">📍 Recibe en: <strong>' + sede.replace(/^Agencia C807 — /, '') + '</strong></div>' : '') +
-            '<div style="font-size:.85rem;margin-bottom:8px;">👤 <strong>' + (p.cliente || '—') + '</strong>' + (p.telefono ? ' · ' + p.telefono : '') + '</div>' +
-            itemsHtml +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">' +
-                '<span style="font-weight:800;font-size:1.05rem;">💰 ' + (totalTxt || '') + '</span>' +
-                '<a href="https://wa.me/503' + (p.telefono || '').replace(/\D/g, '') + '" target="_blank" style="background:#25D366;color:#fff;padding:7px 14px;border-radius:100px;text-decoration:none;font-size:.75rem;font-weight:600;">💬 WhatsApp</a>' +
-            '</div>' +
-        '</div>';
-    }).join('');
-    $('punto-modal-body').innerHTML =
-        '<div style="font-size:.85rem;color:#666;margin-bottom:14px;padding:10px 14px;background:#f8f8f8;border-radius:10px;">' + info.detalle + '</div>' +
-        pedidosHtml;
-    // Marcar como vistos los despachos de esta salida
-    g.forEach(d => { if (!d.visto) { d.visto = true; api('PATCH', 'despachos?id=eq.' + d.id, { visto: true }); } });
-    // Mostrar modal (patrón admin: overlay flex)
-    $('punto-modal-overlay').style.display = 'flex';
-    $('punto-modal').style.display = 'block';
-    renderSalidas();
+        const bodyEl = $('punto-modal-body');
+        if (bodyEl) bodyEl.innerHTML =
+            '<div style="font-size:.85rem;color:#666;margin-bottom:14px;padding:10px 14px;background:#f8f8f8;border-radius:10px;">' + info.detalle + '</div>' +
+            pedidosHtml;
+        // Marcar como vistos (sin bloquear el modal)
+        g.forEach(d => { if (!d.visto) { d.visto = true; api('PATCH', 'despachos?id=eq.' + d.id, { visto: true }).catch(() => {}); } });
+        // Mostrar modal (patrón admin: overlay flex)
+        $('punto-modal-overlay').style.display = 'flex';
+        $('punto-modal').style.display = 'block';
+        if (typeof actualizarBadgeSalidas === 'function') actualizarBadgeSalidas();
+        if (typeof renderSalidas === 'function') renderSalidas();
+    } catch (e) {
+        console.error('Error abrirSalida:', e);
+        showToast('❌ Error al abrir detalle: ' + e.message);
+    }
 }
 function fmtPago(order) {
     const pm = order.payment_status || order.payment_method || '';
