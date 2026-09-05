@@ -923,11 +923,9 @@ function abrirSalida(key) {
         pedidosHtml;
     // Marcar como vistos los despachos de esta salida
     g.forEach(d => { if (!d.visto) { d.visto = true; api('PATCH', 'despachos?id=eq.' + d.id, { visto: true }); } });
-    // Mostrar modal
-    $('punto-modal-overlay').style.display = 'block';
+    // Mostrar modal (patrón admin: overlay flex)
+    $('punto-modal-overlay').style.display = 'flex';
     $('punto-modal').style.display = 'block';
-    $('punto-modal').style.opacity = '1';
-    $('punto-modal').style.pointerEvents = 'auto';
     renderSalidas();
 }
 function fmtPago(order) {
@@ -940,8 +938,14 @@ function fmtPago(order) {
     return '<span style="color:#888;">💳 Tarjeta — pendiente de pago</span>';
 }
 // Cerrar modal de punto
-$('punto-modal-close').addEventListener('click', () => { $('punto-modal-overlay').style.display = 'none'; $('punto-modal').style.display = 'none'; });
-$('punto-modal-overlay').addEventListener('click', () => { $('punto-modal-overlay').style.display = 'none'; $('punto-modal').style.display = 'none'; });
+function cerrarModalPunto() {
+    $('punto-modal-overlay').style.display = 'none';
+    $('punto-modal').style.display = 'none';
+}
+$('punto-modal-close').addEventListener('click', cerrarModalPunto);
+$('punto-modal-overlay').addEventListener('click', (e) => {
+    if (e.target === $('punto-modal-overlay')) cerrarModalPunto();
+});
 
 // ===== PRÓXIMA SALIDA =====
 function renderProximaSalida() {
