@@ -315,6 +315,23 @@ ul { list-style: none; }
     top: 12px; right: 12px; left: auto;
     background: #6c9a5b;  /* verde para condiciones */
 }
+.product-card__img .badge--agotado {
+    top: 12px; right: 12px; left: auto;
+    background: #d32f2f;
+    animation: pulse-agotado 1.5s infinite;
+}
+@keyframes pulse-agotado {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .75; }
+}
+.product-card--agotado { opacity: .85; }
+.product-card--agotado .product-card__img { filter: grayscale(25%); }
+.agotado-msg {
+    color: #d32f2f; font-weight: 800; font-size: .85rem;
+    text-align: center; padding: 10px; margin-top: 8px;
+    border: 1.5px solid #d32f2f; border-radius: 10px;
+    background: #fdecea; letter-spacing: .3px;
+}
 .detail__condition {
     display: inline-block; width: fit-content;
     background: #e8f3e3; color: #3d6b2e;
