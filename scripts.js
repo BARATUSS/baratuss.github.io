@@ -1049,6 +1049,17 @@ function updateWishlistUI() {
 const C807_FEE = 1.00; // Retiro en agencia C807 (solo tarjeta)
 const DELIVERY_FEE = C807_FEE; // compatibilidad
 
+// Muestra aviso de WhatsApp cuando el punto elegido es entrega personal (Santa Tecla)
+function showPointWhatsApp() {
+    const sel = $('checkout-point');
+    const box = $('checkout-whatsapp-box');
+    if (!sel || !box) return;
+    const val = sel.value || '';
+    // Santa Tecla = entrega personal coordinada por WhatsApp
+    const esPersonal = val.includes('Santa Tecla') || val.includes('Casa Matriz');
+    box.style.display = esPersonal ? '' : 'none';
+}
+
 // Muestra la dirección de la agencia C807 elegida + link a Google Maps
 function showC807Address() {
     const sel = $('checkout-c807-point');
@@ -1086,6 +1097,7 @@ function openCheckoutModal() {
         $('checkout-phone').value = p.phone || '';
     }
     updateCheckoutUI();
+    if (typeof showPointWhatsApp === 'function') showPointWhatsApp();
     $('checkout-overlay').style.display = '';
     $('checkout-modal').style.display = '';
 }

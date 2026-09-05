@@ -324,7 +324,7 @@
             <!-- Selector de punto BARATUSS -->
             <div class="form-group" id="checkout-point-group" style="margin-top:12px;">
                 <label for="checkout-point">Elegí tu punto de retiro:</label>
-                <select id="checkout-point">
+                <select id="checkout-point" onchange="showPointWhatsApp()">
                     <optgroup label="📍 Santa Tecla">
                         <option value="Santa Tecla — Paseo El Carmen">Paseo El Carmen</option>
                         <option value="Santa Tecla — C.C. La Skina">C.C. La Skina</option>
@@ -341,6 +341,18 @@
                     📍 Casa Matriz: <a href="https://maps.app.goo.gl/eQE3nscU5RXRwXqA8" target="_blank" rel="noopener">ver en Google Maps</a>
                     · 🕒 Metrocentro: martes en la tarde (agendar)
                 </small>
+                <!-- Aviso WhatsApp para entrega personal Santa Tecla -->
+                <div id="checkout-whatsapp-box" style="display:none;margin-top:12px;padding:12px 14px;background:#e8f7ee;border:1.5px solid #25D366;border-radius:12px;">
+                    <div style="font-size:.85rem;color:#1a7a3f;font-weight:600;margin-bottom:8px;">
+                        📲 Este punto es entrega personal coordinada
+                    </div>
+                    <div style="font-size:.8rem;color:#333;margin-bottom:10px;">
+                        Escribinos por WhatsApp para coordinar la hora y el día de tu entrega.
+                    </div>
+                    <a href="https://wa.me/50376626575" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25D366;color:#fff;padding:10px 18px;border-radius:100px;text-decoration:none;font-weight:700;font-size:.85rem;">
+                        💬 Escribinos por WhatsApp
+                    </a>
+                </div>
             </div>
 
             <!-- Selector de agencia C807 -->
