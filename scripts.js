@@ -91,6 +91,39 @@ async function loadProductsFromSupabase() {
     } catch (e) {
         console.log('Usando productos de respaldo:', e.message);
     }
+    // 👁️ Tiempo real: si un producto se agota (otro cliente lo compró), ocultarlo al instante
+    try {
+        const ch = client.channel('stock-live');
+        ch.on('postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'inventory' },
+            (payload) => {
+                const nuevo = payload.new;
+                const prod = products.find(p => p.id === nuevo.id);
+                if (!prod) return;
+                const stockAntes = prod.stock || 0;
+                const stockNuevo = Number(nuevo.stock) || 0;
+                if (stockNuevo !== stockAntes) {
+                    prod.stock = stockNuevo;
+                    renderProducts(currentFilter);
+                    // Si el producto se ve en el modal abierto, actualizar el aviso de stock
+                    const detailStock = $('detail-stock');
+                    if (detailProduct && detailProduct.id === nuevo.id && detailStock) {
+                        detailStock.textContent = stockNuevo <= 0 ? '❌ Agotado' : (stockNuevo <= 3 ? `⚠️ Solo quedan ${stockNuevo}` : `✅ Disponible (${stockNuevo})`);
+                    }
+                    // Quitar del carrito si se agotó
+                    const enCarrito = cart.filter(i => i.id === nuevo.id);
+                    if (enCarrito.length && stockNuevo <= 0) {
+                        cart = cart.filter(i => i.id !== nuevo.id);
+                        saveCart();
+                        updateCartUI();
+                        showToast('😔 Un artículo de tu carrito se agotó y fue removido');
+                    }
+                }
+            }
+        ).subscribe();
+    } catch (e) {
+        console.log('Sin tiempo real:', e.message);
+    }
 }
 
 // ===== STATE =====
@@ -1177,6 +1210,15 @@ async function wompiCheckout() {
             const result = await createOrder(cart, total);
             if (result.error) { showToast('❌ ' + result.error); return; }
         }
+        
+        // ✅ Actualizar stock local (la Edge Function ya lo reservó en la base)
+        // Así el artículo desaparece al instante y nadie más puede pedirlo
+        for (const item of cart) {
+            const qty = item.qty || 1;
+            const prod = products.find(p => p.id === item.id);
+            if (prod) prod.stock = Math.max(0, (prod.stock || 0) - qty);
+        }
+        if (typeof renderProducts === 'function') renderProducts(currentFilter);
         
         // Clear cart and redirect to Wompi
         cart = [];
