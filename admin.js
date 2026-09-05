@@ -819,24 +819,23 @@ function renderSalidas() {
         list.innerHTML = '<div style="text-align:center;padding:50px;color:#999;"><i class="fas fa-truck" style="font-size:3rem;display:block;margin-bottom:12px;opacity:.3;"></i>No hay salidas pendientes 🎉</div>';
         return;
     }
-    // Agrupar por PUNTO EXACTO (destino completo, ej: "Agencia C807 — Metrogalerías (San Salvador)")
+    // Agrupar por TIPO de salida (c807, merliot, metrocentro, santatecla)
     const grupos = {};
     activos.forEach(d => {
-        const destino = (d.destino || 'Por coordinar').trim();
-        if (!grupos[destino]) grupos[destino] = [];
-        grupos[destino].push(d);
+        const key = salidaKey(d.destino);
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(d);
     });
-    // Ordenar: puntos con más pedidos nuevos primero, luego alfabético
-    const destinos = Object.keys(grupos).sort((a, b) => {
+    const ordenSalida = { 'c807': 1, 'merliot': 2, 'metrocentro': 3, 'santatecla': 4, 'otro': 5 };
+    const keys = Object.keys(grupos).sort((a, b) => {
         const nuevosA = grupos[a].filter(d => !d.visto).length;
         const nuevosB = grupos[b].filter(d => !d.visto).length;
         if (nuevosA !== nuevosB) return nuevosB - nuevosA;
-        return a.localeCompare(b);
+        return (ordenSalida[a] || 9) - (ordenSalida[b] || 9);
     });
 
-    list.innerHTML = destinos.map(destino => {
-        const g = grupos[destino];
-        const key = salidaKey(destino);
+    list.innerHTML = keys.map(key => {
+        const g = grupos[key];
         const info = SALIDA_INFO[key] || SALIDA_INFO.otro;
         const nuevos = g.filter(d => !d.visto).length;
         const porPedido = {};
@@ -846,21 +845,23 @@ function renderSalidas() {
         });
         const totalArticulos = g.reduce((s, d) => s + (d.qty || 1), 0);
         const totalPedidos = Object.keys(porPedido).length;
-        const clientesHtml = Object.values(porPedido).map(p => p.cliente).filter((v,i,a) => v && a.indexOf(v) === i).join(', ');
-        return '<div class="salida-card salida-card--punto" onclick="abrirPunto(\'' + escJs(destino) + '\')" style="cursor:pointer;" title="Tocá para ver detalle">' +
+        const clientesHtml = Object.values(porPedido).map(p => p.cliente).filter((v,i,a) => v && a.indexOf(v) === i).slice(0, 3).join(', ') + (Object.values(porPedido).length > 3 ? '…' : '');
+        return '<div class="salida-card salida-card--punto" onclick="abrirSalida(\'' + key + '\')" style="cursor:pointer;" title="Tocá para ver detalle">' +
             '<div class="salida-card__header">' +
                 '<div style="display:flex;align-items:center;gap:12px;">' +
-                    '<span style="font-size:1.6rem;">' + info.icon + '</span>' +
+                    '<span style="font-size:2rem;">' + info.icon + '</span>' +
                     '<div>' +
-                        '<strong style="font-size:1rem;">' + destino + '</strong>' +
-                        (nuevos > 0 ? '<span class="punto-nuevo-badge">🔔 ' + nuevos + ' nuevo' + (nuevos > 1 ? 's' : '') + '</span>' : '') +
-                        '<div style="font-size:.78rem;color:#888;">' + info.titulo + '</div>' +
+                        '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
+                            '<strong style="font-size:1.15rem;">' + info.titulo + '</strong>' +
+                            (nuevos > 0 ? '<span class="punto-nuevo-badge">🔔 ' + nuevos + ' nuevo' + (nuevos > 1 ? 's' : '') + '</span>' : '') +
+                        '</div>' +
+                        '<div style="font-size:.78rem;color:#888;margin-top:2px;">' + info.detalle + '</div>' +
+                        '<div style="font-size:.78rem;color:#555;margin-top:4px;">👤 ' + (clientesHtml || '—') + '</div>' +
                     '</div>' +
                 '</div>' +
                 '<div style="text-align:right;">' +
-                    '<div class="salida-card__count">📦 ' + totalPedidos + ' pedidos · ' + totalArticulos + ' art</div>' +
-                    '<div style="font-size:.75rem;color:#888;margin-top:4px;">' + (clientesHtml || '') + '</div>' +
-                    '<button class="admin-btn admin-btn--primary" style="margin-top:8px;padding:6px 14px;font-size:.75rem;width:auto;" onclick="event.stopPropagation();abrirPunto(\'' + escJs(destino) + '\')">👁️ Ver detalle</button>' +
+                    '<div class="salida-card__count">📦 ' + totalPedidos + ' pedido' + (totalPedidos !== 1 ? 's' : '') + ' · ' + totalArticulos + ' art</div>' +
+                    '<button class="admin-btn admin-btn--primary" style="margin-top:10px;padding:8px 18px;font-size:.8rem;width:auto;" onclick="event.stopPropagation();abrirSalida(\'' + key + '\')">👁️ Ver salida</button>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -870,13 +871,12 @@ function escJs(s) {
     return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
-// ===== ABRIR DETALLE DE UN PUNTO =====
-function abrirPunto(destino) {
-    const g = (despachos || []).filter(d => (d.estado_logistico || '') !== 'entregado' && (d.destino || '').trim() === destino);
+// ===== ABRIR DETALLE DE UNA SALIDA (tipo: c807/merliot/metrocentro/santatecla) =====
+function abrirSalida(key) {
+    const g = (despachos || []).filter(d => (d.estado_logistico || '') !== 'entregado' && salidaKey(d.destino) === key);
     if (!g.length) return;
-    $('punto-modal-title').textContent = '📍 ' + destino;
-    const key = salidaKey(destino);
     const info = SALIDA_INFO[key] || SALIDA_INFO.otro;
+    $('punto-modal-title').textContent = info.icon + ' ' + info.titulo;
     // Agrupar por pedido
     const porPedido = {};
     g.forEach(d => {
@@ -884,12 +884,16 @@ function abrirPunto(destino) {
         porPedido[d.order_reference].items.push(d);
     });
     const pedidosHtml = Object.entries(porPedido).map(([ref, p]) => {
+        // Buscar pedido en orders para precio total y método de pago
+        const order = (window._ordersAll || []).find(o => o.reference === ref);
+        const pagoTxt = order ? fmtPago(order) : 'Pago: ver pedido';
+        const totalTxt = order ? '$' + Number(order.total).toFixed(2) : '';
         const itemsHtml = p.items.map(i => {
             const estado = i.estado_logistico || 'pendiente-preparacion';
             const foto = i.imagen_url
-                ? '<img src="' + i.imagen_url + '" style="width:44px;height:44px;object-fit:cover;border-radius:8px;" onerror="this.remove()">'
+                ? '<img src="' + i.imagen_url + '" style="width:48px;height:48px;object-fit:cover;border-radius:8px;" onerror="this.remove()">'
                 : '<span style="font-size:1.5rem;">🛍️</span>';
-            return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dotted #eee;">' +
+            return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dotted #eee;">' +
                 foto +
                 '<div style="flex:1;">' +
                     '<div><strong>' + (i.nombre_capturado || '') + '</strong> ×' + (i.qty || 1) + (i.talla ? ' (' + i.talla + ')' : '') + '</div>' +
@@ -898,27 +902,26 @@ function abrirPunto(destino) {
                 '<span class="log-estado log-estado--' + estado + '">' + (ESTADOS_LABEL[estado] || estado) + '</span>' +
             '</div>';
         }).join('');
-        // Pago: buscar en orders cargados
-        const order = (window._ordersAll || []).find(o => o.reference === ref);
-        const pagoTxt = order ? fmtPago(order) : 'Pago: ver pedido';
-        const totalTxt = order ? '$' + Number(order.total).toFixed(2) : '';
-        return '<div style="border:1px solid #e5e5e5;border-radius:12px;padding:12px;margin-bottom:12px;">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
-                '<strong>#' + ref + '</strong>' +
-                '<span style="font-size:.85rem;color:#555;">' + (p.cliente || '') + (p.telefono ? ' · ' + p.telefono : '') + '</span>' +
+        // Sede destino (para C807: la agencia exacta que eligió el cliente)
+        const sede = p.items[0]?.destino || '';
+        return '<div style="border:1px solid #e5e5e5;border-radius:12px;padding:14px;margin-bottom:14px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">' +
+                '<strong style="font-size:.95rem;">#' + ref + '</strong>' +
+                '<span style="font-size:.8rem;color:#555;">' + pagoTxt + '</span>' +
             '</div>' +
-            '<div style="font-size:.8rem;margin:6px 0;">' + pagoTxt + '</div>' +
+            (sede ? '<div style="font-size:.85rem;color:#333;margin-bottom:6px;">📍 Recibe en: <strong>' + sede.replace(/^Agencia C807 — /, '') + '</strong></div>' : '') +
+            '<div style="font-size:.85rem;margin-bottom:8px;">👤 <strong>' + (p.cliente || '—') + '</strong>' + (p.telefono ? ' · ' + p.telefono : '') + '</div>' +
             itemsHtml +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">' +
-                '<span style="font-weight:800;font-size:1rem;">' + (totalTxt || '') + '</span>' +
-                '<a href="https://wa.me/503' + (p.telefono || '').replace(/\D/g, '') + '" target="_blank" style="background:#25D366;color:#fff;padding:6px 12px;border-radius:100px;text-decoration:none;font-size:.72rem;font-weight:600;">💬 WhatsApp</a>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">' +
+                '<span style="font-weight:800;font-size:1.05rem;">💰 ' + (totalTxt || '') + '</span>' +
+                '<a href="https://wa.me/503' + (p.telefono || '').replace(/\D/g, '') + '" target="_blank" style="background:#25D366;color:#fff;padding:7px 14px;border-radius:100px;text-decoration:none;font-size:.75rem;font-weight:600;">💬 WhatsApp</a>' +
             '</div>' +
         '</div>';
     }).join('');
     $('punto-modal-body').innerHTML =
-        '<div style="font-size:.85rem;color:#666;margin-bottom:14px;padding:10px 14px;background:#f8f8f8;border-radius:10px;">' + info.icon + ' ' + info.detalle + '</div>' +
+        '<div style="font-size:.85rem;color:#666;margin-bottom:14px;padding:10px 14px;background:#f8f8f8;border-radius:10px;">' + info.detalle + '</div>' +
         pedidosHtml;
-    // Marcar como vistos los despachos de este punto
+    // Marcar como vistos los despachos de esta salida
     g.forEach(d => { if (!d.visto) { d.visto = true; api('PATCH', 'despachos?id=eq.' + d.id, { visto: true }); } });
     // Mostrar modal
     $('punto-modal-overlay').style.display = 'block';
