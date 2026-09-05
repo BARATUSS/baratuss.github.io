@@ -958,15 +958,6 @@ function fmtPago(order) {
     if (pm === 'rechazado' || order.status === 'rechazado') return '<span style="color:#d32f2f;font-weight:700;">❌ RECHAZADO</span>';
     return '<span style="color:#888;">💳 Tarjeta — pendiente de pago</span>';
 }
-// Cerrar modal de punto
-function cerrarModalPunto() {
-    $('punto-modal-overlay').style.display = 'none';
-    $('punto-modal').style.display = 'none';
-}
-$('punto-modal-close').addEventListener('click', cerrarModalPunto);
-$('punto-modal-overlay').addEventListener('click', (e) => {
-    if (e.target === $('punto-modal-overlay')) cerrarModalPunto();
-});
 
 // ===== PRÓXIMA SALIDA =====
 function renderProximaSalida() {
