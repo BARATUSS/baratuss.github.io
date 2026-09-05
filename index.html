@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260915">
+    <link rel="stylesheet" href="styles.css?v=20260916">
 </head>
 <body>
 
@@ -424,10 +424,11 @@
         <p class="detail__desc" id="detail-desc"></p>
         <div class="detail__sizes" id="detail-sizes"></div>
         <div class="detail__colors" id="detail-colors"></div>
-        <div class="detail__stock" id="detail-stock"></div>
+        <div class="detail__stock" id="detail-stock" style="font-size:.95rem;font-weight:700;"></div>
         <div class="detail__actions">
-            <button class="btn btn--primary btn--full" id="detail-add-cart"><i class="fas fa-shopping-bag"></i> Añadir al carrito</button>
-            <button class="btn btn--outline btn--full" id="detail-buy-now" style="margin-top:8px;">⚡ Comprar ahora</button>
+            <button class="btn btn--primary btn--full" id="detail-add-cart" style="display:none;"><i class="fas fa-shopping-bag"></i> Añadir al carrito</button>
+            <button class="btn btn--outline btn--full" id="detail-buy-now" style="margin-top:8px;display:none;">⚡ Comprar ahora</button>
+            <div class="detail__agotado-msg" id="detail-agotado-msg" style="display:none;background:#fdecea;color:#d32f2f;font-weight:800;text-align:center;padding:14px;border-radius:10px;border:2px solid #d32f2f;font-size:1.05rem;">❌ AGOTADO<br><small style="font-weight:400;color:#e57373;">Este producto no está disponible por el momento</small></div>
         </div>
     </div>
 </div>
@@ -610,6 +611,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="scripts.js?v=20260915"></script>
+<script src="scripts.js?v=20260916"></script>
 </body>
 </html>

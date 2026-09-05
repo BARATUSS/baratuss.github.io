@@ -62,7 +62,7 @@ async function loadProductsFromSupabase() {
             .from('inventory')
             .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors, description, sizes, condition')
             .eq('active', true)
-            .gt('stock', 0)   // ocultar productos agotados
+            // Incluir agotados: se muestran con etiqueta "AGOTADO" y compra bloqueada
             .order('id', { ascending: true });
         
         if (error) throw error;
@@ -371,13 +371,14 @@ function getWishlistProducts() {
 
 // ===== RENDER PRODUCTS =====
 function renderProducts(filter = 'all') {
-    const filtered = (filter === 'all' ? products : products.filter(p => p.category === filter))
-        .filter(p => p.stock > 0);  // nunca mostrar agotados
+    const filtered = (filter === 'all' ? products : products.filter(p => p.category === filter));
+    // Mostrar TODOS: los agotados aparecen con etiqueta roja y compra bloqueada
     
     productsGrid.innerHTML = filtered.map(p => {
         const isFav = wishlist.has(p.id);
+        const agotado = (p.stock || 0) <= 0;
         return `
-        <div class="product-card" data-id="${p.id}" style="cursor:pointer;">
+        <div class="product-card ${agotado ? 'product-card--agotado' : ''}" data-id="${p.id}" style="cursor:pointer;">
             <button class="wish-btn ${isFav ? 'wish-btn--active' : ''}" data-id="${p.id}" aria-label="Favoritos">
                 <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
             </button>
@@ -386,6 +387,7 @@ function renderProducts(filter = 'all') {
                 ${p.badge ? `<span class="badge">${p.badge}</span>` : ''}
                 ${p.condition === 'segunda-mano' ? `<span class="badge badge--condition">♻️ Segunda mano</span>` : ''}
                 ${p.condition === 'como-nuevo' ? `<span class="badge badge--condition">✨ Como nuevo</span>` : ''}
+                ${agotado ? `<span class="badge badge--agotado">❌ AGOTADO</span>` : ''}
             </div>
             ${(p.images && p.images.length > 1) ? `<div class="product-card__thumbs" onclick="event.stopPropagation()">${p.images.map((url, ti) => `
                 <img src="${url}" class="product-card__thumb ${ti === 0 ? 'product-card__thumb--active' : ''}" data-idx="${ti}" onclick="switchProductPhoto(${p.id}, ${ti}, this)" alt="" loading="lazy">`).join('')}
@@ -398,10 +400,12 @@ function renderProducts(filter = 'all') {
                     <span class="current">$${p.price.toFixed(2)}</span>
                     ${p.originalPrice ? `<span class="original">$${p.originalPrice.toFixed(2)}</span>` : ''}
                 </div>
-                <button class="add-to-cart" data-id="${p.id}">
+                ${agotado
+                    ? `<div class="agotado-msg">❌ Agotado — pronto reponemos</div>`
+                    : `<button class="add-to-cart" data-id="${p.id}">
                     <i class="fas fa-shopping-bag"></i> Añadir
-                </button>
-                ${p.id === 6 ? `<button class="add-to-cart buy-now-wompi" data-id="${p.id}" style="display:block;text-align:center;margin-top:8px;padding:10px;background:#ff9686;color:white;border-radius:10px;font-size:0.8rem;font-weight:500;border:none;cursor:pointer;width:100%;">⚡ Comprar ahora</button>` : ''}
+                </button>`}
+                ${p.id === 6 && !agotado ? `<button class="add-to-cart buy-now-wompi" data-id="${p.id}" style="display:block;text-align:center;margin-top:8px;padding:10px;background:#ff9686;color:white;border-radius:10px;font-size:0.8rem;font-weight:500;border:none;cursor:pointer;width:100%;">⚡ Comprar ahora</button>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -491,7 +495,13 @@ function openDetailModal(id) {
         colorsBox.style.display = 'none';
     }
     // Stock
-    $('detail-stock').textContent = p.stock <= 0 ? '❌ Agotado' : (p.stock <= 3 ? `⚠️ Solo quedan ${p.stock}` : `✅ Disponible (${p.stock})`);
+    const agotadoModal = (p.stock || 0) <= 0;
+    $('detail-stock').textContent = agotadoModal ? '❌ Agotado' : (p.stock <= 3 ? `⚠️ Solo quedan ${p.stock}` : `✅ Disponible (${p.stock})`);
+    $('detail-stock').style.color = agotadoModal ? '#d32f2f' : (p.stock <= 3 ? '#e67e22' : '#27ae60');
+    // Botones: si está agotado, mostrar mensaje rojo y ocultar compra
+    $('detail-add-cart').style.display = agotadoModal ? 'none' : '';
+    $('detail-buy-now').style.display = agotadoModal ? 'none' : '';
+    $('detail-agotado-msg').style.display = agotadoModal ? 'block' : 'none';
     // Galería
     const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
     if (imgs.length) {

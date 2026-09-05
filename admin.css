@@ -430,3 +430,29 @@ body {
 .prep-item__info { flex: 1; }
 .prep-item__code { font-size: .72rem; color: var(--accent-dark, #c2574a); font-weight: 600; margin-top: 2px; }
 .prep-item__desc { font-size: .75rem; color: #888; margin-top: 2px; }
+
+/* ========== SALIDAS POR PUNTO ========== */
+.salida-card--punto { transition: box-shadow .2s, transform .2s; }
+.salida-card--punto:hover { box-shadow: 0 4px 18px rgba(0,0,0,.1); transform: translateY(-2px); }
+.punto-nuevo-badge {
+    display: inline-block; margin-left: 8px;
+    background: #d32f2f; color: white;
+    font-size: .68rem; font-weight: 700;
+    padding: 3px 10px; border-radius: 100px;
+    animation: pulse-nuevo 1.5s infinite;
+    vertical-align: middle;
+}
+@keyframes pulse-nuevo {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .7; }
+}
+
+/* Badge notificación en menú */
+.nav-badge {
+    display: inline-block; margin-left: 6px;
+    background: #d32f2f; color: white;
+    font-size: .68rem; font-weight: 700;
+    min-width: 18px; height: 18px; line-height: 18px;
+    text-align: center; border-radius: 100px;
+    padding: 0 5px; vertical-align: middle;
+}
