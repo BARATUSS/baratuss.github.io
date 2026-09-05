@@ -108,6 +108,9 @@ document.querySelectorAll('.admin-nav__item').forEach(item => {
         document.querySelectorAll('.admin-section').forEach(s => s.style.display = 'none');
         $('section-' + item.dataset.section).style.display = '';
         if (item.dataset.section === 'pedidos') loadOrders();
+        if (item.dataset.section === 'despachos') loadDespachos();
+        if (item.dataset.section === 'salidas') loadSalidas();
+        if (item.dataset.section === 'preparar') loadPreparar();
         if (item.dataset.section === 'resumen') loadStats();
     });
 });
@@ -656,3 +659,274 @@ function showToast(msg) {
     $('admin-login').style.display = '';
     $('admin-dashboard').style.display = 'none';
 })();
+
+// ============================================================
+// BARATUSS — SISTEMA DE LOGÍSTICA (Despachos, Salidas, Preparar)
+// ============================================================
+
+const ESTADOS_LABEL = {
+    'pendiente-preparacion': '⏳ Pendiente de preparación',
+    'en-preparacion': '🔨 En preparación',
+    'listo': '✅ Listo',
+    'salio': '🚚 Salió',
+    'entregado': '📦 Entregado/Enviado'
+};
+const ESTADOS_NEXT = {
+    'pendiente-preparacion': 'en-preparacion',
+    'en-preparacion': 'listo',
+    'listo': 'salio',
+    'salio': 'entregado'
+};
+
+// Mapeo destino -> salida logística
+function salidaKey(destino) {
+    const d = (destino || '').toLowerCase();
+    if (d.includes('c807')) return 'c807';
+    if (d.includes('merliot')) return 'merliot';
+    if (d.includes('metrocentro')) return 'metrocentro';
+    if (d.includes('santa tecla') || d.includes('paseo el carmen') || d.includes('la skina') || d.includes('casa matriz')) return 'santatecla';
+    return 'otro';
+}
+const SALIDA_INFO = {
+    'c807': { icon: '📦', titulo: 'C807 — Jueves por la mañana', detalle: 'Llevás los paquetes a la agencia C807; ellos contactan al cliente cuando llega a destino.' },
+    'merliot': { icon: '🛍️', titulo: 'Plaza Merliot — Jueves 5:00–7:00 PM', detalle: 'Entrega en Plaza Merliot.' },
+    'metrocentro': { icon: '🏬', titulo: 'Metrocentro — Sábado 10:00 AM–12:00 PM', detalle: 'Entrega en Food Court de Metrocentro.' },
+    'santatecla': { icon: '🏡', titulo: 'Santa Tecla — Entrega personal coordinada', detalle: 'Coordinar con el cliente por WhatsApp al 7662-6575.' },
+    'otro': { icon: '📍', titulo: 'Entrega coordinada', detalle: 'Coordinar directamente con el cliente.' }
+};
+
+let despachos = [];
+let logFilter = 'todos';
+let prepFilter = 'pendiente-preparacion';
+let prepSelected = new Set();
+
+// ===== CARGAR DESPACHOS =====
+async function loadDespachos() {
+    const data = await api('GET', 'despachos?select=*&order=created_at.desc&limit=200');
+    despachos = Array.isArray(data) ? data : [];
+    renderDespachos();
+}
+function renderDespachos() {
+    renderProximaSalida();
+    const body = $('despachos-body');
+    const filtrados = logFilter === 'todos' ? despachos : despachos.filter(d => d.estado_logistico === logFilter);
+    if (!filtrados.length) {
+        body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#999;">No hay despachos aquí</td></tr>';
+        return;
+    }
+    body.innerHTML = filtrados.map(d => {
+        const estado = d.estado_logistico || 'pendiente-preparacion';
+        const next = ESTADOS_NEXT[estado];
+        const isTerminal = estado === 'entregado';
+        const foto = d.imagen_url
+            ? '<img src="' + d.imagen_url + '" style="width:38px;height:38px;object-fit:cover;border-radius:8px;" onerror="this.remove()">'
+            : '🛍️';
+        const accion = !isTerminal && next
+            ? '<button class="admin-btn admin-btn--primary" style="padding:5px 10px;font-size:.72rem;width:auto;" onclick="avanzarDespacho(' + d.id + ')">' + ESTADOS_LABEL[next] + '</button>'
+            : '<span style="color:#27ae60;">✔</span>';
+        return '<tr>' +
+            '<td><strong>' + (d.order_reference || '') + '</strong></td>' +
+            '<td style="min-width:200px;"><div style="display:flex;align-items:center;gap:10px;">' + foto +
+                '<div><div><strong>' + (d.nombre_capturado || 'Artículo') + '</strong> ×' + (d.qty || 1) + '</div>' +
+                '<div style="font-size:.72rem;color:#999;">#' + (d.inventory_id || '') + '</div></div></div></td>' +
+            '<td>' + (d.talla || '—') + '</td>' +
+            '<td>' + (d.customer_name || '—') + '</td>' +
+            '<td>' + fmtEntrega(d.metodo_entrega) + '</td>' +
+            '<td style="max-width:180px;">' + (d.destino || '—') + '</td>' +
+            '<td><span class="log-estado log-estado--' + estado + '">' + ESTADOS_LABEL[estado] + '</span></td>' +
+            '<td>' + accion + '</td>' +
+        '</tr>';
+    }).join('');
+}
+function fmtEntrega(t) {
+    const s = (t || '').replace('retiro-', '');
+    if (s === 'c807') return 'C807';
+    if (s === 'punto') return 'Punto BARATUSS';
+    if (s === 'domicilio') return 'Domicilio';
+    return s || '—';
+}
+
+// Avanzar estado logístico (acción manual, nunca automática)
+async function avanzarDespacho(id) {
+    const d = despachos.find(x => x.id === id);
+    if (!d) return;
+    const actual = d.estado_logistico || 'pendiente-preparacion';
+    const next = ESTADOS_NEXT[actual];
+    if (!next) return;
+    if (!confirm('¿Marcar como "' + ESTADOS_LABEL[next] + '"?\n\n' + d.nombre_capturado + ' — ' + d.order_reference)) return;
+    await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: next, updated_at: new Date().toISOString() });
+    showToast('✅ Despacho actualizado: ' + ESTADOS_LABEL[next]);
+    loadDespachos();
+}
+
+// Filtros de la tabla Despachos
+document.querySelectorAll('.log-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.log-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        logFilter = btn.dataset.logFilter;
+        renderDespachos();
+    });
+});
+
+// ===== SALIDAS (agrupación automática) =====
+async function loadSalidas() {
+    const data = await api('GET', 'despachos?select=*&order=created_at.asc&limit=200');
+    despachos = Array.isArray(data) ? data : [];
+    renderSalidas();
+}
+function renderSalidas() {
+    const list = $('salidas-list');
+    const activos = despachos.filter(d => (d.estado_logistico || '') !== 'entregado');
+    if (!activos.length) {
+        list.innerHTML = '<div style="text-align:center;padding:50px;color:#999;"><i class="fas fa-truck" style="font-size:3rem;display:block;margin-bottom:12px;opacity:.3;"></i>No hay salidas pendientes 🎉</div>';
+        return;
+    }
+    const grupos = {};
+    activos.forEach(d => {
+        const key = salidaKey(d.destino);
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(d);
+    });
+    const ordenSalida = { 'c807': 1, 'merliot': 2, 'metrocentro': 3, 'santatecla': 4, 'otro': 5 };
+    const keys = Object.keys(grupos).sort((a, b) => (ordenSalida[a] || 9) - (ordenSalida[b] || 9));
+
+    list.innerHTML = keys.map(key => {
+        const g = grupos[key];
+        const info = SALIDA_INFO[key] || SALIDA_INFO.otro;
+        const porPedido = {};
+        g.forEach(d => {
+            if (!porPedido[d.order_reference]) porPedido[d.order_reference] = { cliente: d.customer_name, items: [] };
+            porPedido[d.order_reference].items.push(d);
+        });
+        const totalArticulos = g.reduce((s, d) => s + (d.qty || 1), 0);
+        const pedidosHtml = Object.entries(porPedido).map(([ref, p]) => {
+            const articulosTxt = p.items.map(i => (i.qty || 1) + '× ' + (i.nombre_capturado || '') + (i.talla ? ' (' + i.talla + ')' : '')).join(', ');
+            return '<div style="padding:8px 14px;border-bottom:1px solid #f0f0f0;font-size:.85rem;">' +
+                '<strong>#' + ref + '</strong> — ' + (p.cliente || 'Cliente') + ' · <span style="color:#666;">' + articulosTxt + '</span></div>';
+        }).join('');
+        return '<div class="salida-card">' +
+            '<div class="salida-card__header">' +
+                '<div style="display:flex;align-items:center;gap:12px;">' +
+                    '<span style="font-size:1.6rem;">' + info.icon + '</span>' +
+                    '<div><strong style="font-size:1rem;">' + info.titulo + '</strong>' +
+                    '<div style="font-size:.78rem;color:#888;">' + info.detalle + '</div></div>' +
+                '</div>' +
+                '<div class="salida-card__count">📦 ' + Object.keys(porPedido).length + ' pedidos · ' + totalArticulos + ' artículos</div>' +
+            '</div>' +
+            '<div style="margin-top:10px;">' + pedidosHtml + '</div>' +
+        '</div>';
+    }).join('');
+}
+
+// ===== PRÓXIMA SALIDA =====
+function renderProximaSalida() {
+    const box = $('proxima-salida-box');
+    if (!box) return;
+    const activos = (despachos || []).filter(d => (d.estado_logistico || '') !== 'entregado' && (d.estado_logistico || '') !== 'salio');
+    if (!activos.length) { box.style.display = 'none'; return; }
+    // Días: C807 y Merliot = jueves; Metrocentro = sábado; Santa Tecla = coordinado
+    const hoy = new Date();
+    const getDia = (n) => { const d = new Date(hoy); d.setDate(hoy.getDate() + ((n - hoy.getDay() + 7) % 7)); return d; };
+    const opciones = [
+        { key: 'c807', fecha: getDia(4), label: '📦 C807 — Jueves por la mañana', info: 'Llevás los paquetes a la agencia C807' },
+        { key: 'merliot', fecha: getDia(4), label: '🛍️ Plaza Merliot — Jueves 5:00–7:00 PM', info: 'Entrega en Plaza Merliot' },
+        { key: 'metrocentro', fecha: getDia(6), label: '🏬 Metrocentro — Sábado 10:00 AM–12:00 PM', info: 'Food Court de Metrocentro' },
+        { key: 'santatecla', fecha: new Date(hoy), label: '🏡 Santa Tecla — Entrega coordinada', info: 'Coordinar por WhatsApp 7662-6575' }
+    ];
+    // Si hoy es jueves, C807/Merliot son hoy (mañana/tarde); si sábado, Metrocentro hoy
+    let lista = [];
+    opciones.forEach(o => {
+        const pend = activos.filter(d => salidaKey(d.destino) === o.key);
+        if (!pend.length) return;
+        // Si el día ya pasó hoy (jueves tarde), la salida C807 de hoy ya ocurrió
+        let fecha = o.fecha;
+        if (o.key === 'c807' && hoy.getDay() === 4 && hoy.getHours() >= 12) { fecha = getDia(11); }
+        if (o.key === 'merliot' && hoy.getDay() === 4 && hoy.getHours() >= 19) { fecha = getDia(11); }
+        if (o.key === 'metrocentro' && hoy.getDay() === 6 && hoy.getHours() >= 12) { fecha = getDia(13); }
+        lista.push({ ...o, fecha, pedidos: pend.length, articulos: pend.reduce((s, d) => s + (d.qty || 1), 0) });
+    });
+    if (!lista.length) { box.style.display = 'none'; return; }
+    lista.sort((a, b) => a.fecha - b.fecha);
+    const prox = lista[0];
+    $('proxima-salida-titulo').textContent = prox.label + (prox.fecha.toDateString() === hoy.toDateString() ? ' — ¡HOY!' : ' (' + prox.fecha.toLocaleDateString('es-SV', { weekday: 'long', day: 'numeric', month: 'long' }) + ')');
+    $('proxima-salida-detalle').textContent = prox.info + ' · Clientes: ' + activos.filter(d => salidaKey(d.destino) === prox.key).map(d => d.customer_name).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+    $('proxima-salida-conteo').textContent = '📦 ' + prox.pedidos + ' · ' + prox.articulos + ' art';
+    box.style.display = '';
+}
+
+// ===== PREPARAR PEDIDOS (foto + código + descripción) =====
+async function loadPreparar() {
+    const data = await api('GET', 'despachos?select=*&order=created_at.asc&limit=200');
+    despachos = Array.isArray(data) ? data : [];
+    renderPreparar();
+}
+function renderPreparar() {
+    const grid = $('prep-grid');
+    // Vista "Pendiente de preparación" muestra pendientes + en preparación
+    const pendientes = despachos.filter(d => {
+        const e = d.estado_logistico || 'pendiente-preparacion';
+        if (prepFilter === 'pendiente-preparacion') return e === 'pendiente-preparacion' || e === 'en-preparacion';
+        return e === prepFilter;
+    });
+    if (!pendientes.length) {
+        grid.innerHTML = '<div style="text-align:center;padding:50px;color:#999;">No hay artículos que preparar aquí 🎉</div>';
+        return;
+    }
+    const porPedido = {};
+    pendientes.forEach(d => {
+        if (!porPedido[d.order_reference]) porPedido[d.order_reference] = [];
+        porPedido[d.order_reference].push(d);
+    });
+    prepSelected.clear();
+    grid.innerHTML = Object.entries(porPedido).map(([ref, items]) => {
+        const itemsHtml = items.map(d =>
+            '<div class="prep-item">' +
+                '<label class="prep-check-wrap"><input type="checkbox" class="prep-check-item" data-despacho="' + d.id + '" onchange="togglePrepItem(' + d.id + ', this.checked)"></label>' +
+                '<div class="prep-item__foto">' + (d.imagen_url ? '<img src="' + d.imagen_url + '" onerror="this.remove()">' : '🛍️') + '</div>' +
+                '<div class="prep-item__info">' +
+                    '<div><strong>' + (d.nombre_capturado || '') + '</strong> ×' + (d.qty || 1) + (d.talla ? ' (' + d.talla + ')' : '') + '</div>' +
+                    '<div class="prep-item__code">Código: #' + (d.inventory_id || '') + '</div>' +
+                    '<div class="prep-item__desc" data-producto="' + d.inventory_id + '">Cargando descripción...</div>' +
+                '</div>' +
+            '</div>').join('');
+        return '<div class="prep-card">' +
+            '<div class="prep-card__header">' +
+                '<strong>#' + ref + '</strong>' +
+                '<span style="margin-left:auto;font-size:.8rem;color:#888;">' + (items[0].customer_name || '') + '</span>' +
+            '</div>' +
+            itemsHtml +
+        '</div>';
+    }).join('');
+    cargarDescripcionesPreparar();
+}
+async function cargarDescripcionesPreparar() {
+    const inv = await api('GET', 'inventory?select=id,name,description,sku&limit=300');
+    const mapa = {};
+    (Array.isArray(inv) ? inv : []).forEach(p => { mapa[p.id] = p.description || p.name || ''; });
+    document.querySelectorAll('.prep-item__desc').forEach(el => {
+        const id = el.dataset.producto;
+        el.textContent = mapa[id] || 'Sin descripción';
+    });
+}
+function togglePrepItem(id, checked) {
+    if (checked) prepSelected.add(id); else prepSelected.delete(id);
+}
+document.querySelectorAll('.prep-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.prep-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        prepFilter = btn.dataset.prepFilter;
+        renderPreparar();
+    });
+});
+$('prep-marcar-preparado').addEventListener('click', async () => {
+    const ids = [...prepSelected];
+    if (!ids.length) { showToast('📝 Seleccioná al menos un artículo'); return; }
+    if (!confirm('¿Marcar ' + ids.length + ' artículo(s) como EN PREPARACIÓN?')) return;
+    for (const id of ids) {
+        await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: 'en-preparacion', updated_at: new Date().toISOString() });
+    }
+    showToast('✅ Artículos en preparación');
+    loadPreparar();
+});

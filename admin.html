@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="admin.css?v=20260904">
+    <link rel="stylesheet" href="admin.css?v=20260914">
 </head>
 <body>
 
@@ -36,6 +36,9 @@
         <nav class="admin-nav">
             <a href="#" class="admin-nav__item active" data-section="inventario"><i class="fas fa-box"></i> Inventario</a>
             <a href="#" class="admin-nav__item" data-section="pedidos"><i class="fas fa-shopping-bag"></i> Pedidos</a>
+            <a href="#" class="admin-nav__item" data-section="despachos"><i class="fas fa-truck"></i> Despachos</a>
+            <a href="#" class="admin-nav__item" data-section="salidas"><i class="fas fa-route"></i> Salidas</a>
+            <a href="#" class="admin-nav__item" data-section="preparar"><i class="fas fa-clipboard-list"></i> Preparar</a>
             <a href="#" class="admin-nav__item" data-section="resumen"><i class="fas fa-chart-pie"></i> Resumen</a>
         </nav>
         <div class="admin-sidebar__footer">
@@ -117,6 +120,77 @@
                     <tbody id="orders-body"></tbody>
                 </table>
             </div>
+        </section>
+
+        <!-- ===== DESPACHOS ===== -->
+        <section class="admin-section" id="section-despachos" style="display:none;">
+            <div class="admin-section__header">
+                <h1>Despachos</h1>
+            </div>
+            <!-- PRÓXIMA SALIDA -->
+            <div id="proxima-salida-box" style="display:none;margin-bottom:18px;">
+                <div style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#ff9686,#ffb4a8);color:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 4px 16px rgba(255,150,134,.35);">
+                    <span style="font-size:2rem;">🚀</span>
+                    <div style="flex:1;">
+                        <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:1px;opacity:.85;font-weight:700;">Próxima salida</div>
+                        <div id="proxima-salida-titulo" style="font-size:1.15rem;font-weight:800;"></div>
+                        <div id="proxima-salida-detalle" style="font-size:.85rem;opacity:.95;"></div>
+                    </div>
+                    <div style="text-align:center;background:rgba(255,255,255,.22);border-radius:12px;padding:10px 16px;">
+                        <div id="proxima-salida-conteo" style="font-size:1.3rem;font-weight:800;"></div>
+                        <div style="font-size:.7rem;opacity:.9;">por llevar</div>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-log-filters">
+                <button class="admin-btn admin-btn--ghost log-filter active" data-log-filter="todos">Todos</button>
+                <button class="admin-btn admin-btn--ghost log-filter" data-log-filter="pendiente-preparacion">Pendientes</button>
+                <button class="admin-btn admin-btn--ghost log-filter" data-log-filter="en-preparacion">En preparación</button>
+                <button class="admin-btn admin-btn--ghost log-filter" data-log-filter="listo">Listos</button>
+                <button class="admin-btn admin-btn--ghost log-filter" data-log-filter="salio">Salieron</button>
+                <button class="admin-btn admin-btn--ghost log-filter" data-log-filter="entregado">Entregados</button>
+            </div>
+            <div class="admin-table-wrap" style="margin-top:14px;">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Artículo</th>
+                            <th>Talla</th>
+                            <th>Cliente</th>
+                            <th>Entrega</th>
+                            <th>Destino</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="despachos-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ===== SALIDAS ===== -->
+        <section class="admin-section" id="section-salidas" style="display:none;">
+            <div class="admin-section__header">
+                <h1>Salidas</h1>
+                <span style="font-size:.8rem;color:#999;">Agrupadas automáticamente por día, hora y lugar</span>
+            </div>
+            <div class="salidas-list" id="salidas-list"></div>
+        </section>
+
+        <!-- ===== PREPARAR PEDIDOS ===== -->
+        <section class="admin-section" id="section-preparar" style="display:none;">
+            <div class="admin-section__header">
+                <h1>Preparar pedidos</h1>
+                <span style="font-size:.8rem;color:#999;">Todo lo que debés buscar y preparar</span>
+            </div>
+            <div class="admin-log-filters" style="margin-top:10px;">
+                <button class="admin-btn admin-btn--ghost prep-filter active" data-prep-filter="pendiente-preparacion">Pendientes</button>
+                <button class="admin-btn admin-btn--ghost prep-filter" data-prep-filter="en-preparacion">En preparación</button>
+                <button class="admin-btn admin-btn--ghost prep-filter" data-prep-filter="listo">Listos</button>
+                <button class="admin-btn admin-btn--primary" id="prep-marcar-preparado" style="margin-left:auto;">✅ Marcar seleccionados como preparados</button>
+            </div>
+            <div class="prep-grid" id="prep-grid" style="margin-top:16px;"></div>
         </section>
 
         <!-- ===== RESUMEN ===== -->
@@ -306,6 +380,6 @@
 <!-- ===== TOAST ===== -->
 <div class="admin-toast" id="admin-toast"></div>
 
-<script src="admin.js?v=20260904"></script>
+<script src="admin.js?v=20260914"></script>
 </body>
 </html>

@@ -384,3 +384,49 @@ body {
     .admin-form__grid { grid-template-columns: 1fr; }
     .admin-section__header { flex-direction: column; gap: 12px; align-items: flex-start; }
 }
+
+/* ========== LOGÍSTICA (Despachos, Salidas, Preparar) ========== */
+.admin-log-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.log-estado { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: .72rem; font-weight: 600; white-space: nowrap; }
+.log-estado--pendiente-preparacion { background: #fff3e0; color: #e67e22; }
+.log-estado--en-preparacion { background: #e3f2fd; color: #1976d2; }
+.log-estado--listo { background: #e8f5e9; color: #43a047; }
+.log-estado--salio { background: #ede7f6; color: #7b1fa2; }
+.log-estado--entregado { background: #f1f1f1; color: #616161; }
+
+.salida-card {
+    background: white; border: 1px solid var(--gray-200); border-radius: 14px;
+    padding: 18px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.04);
+}
+.salida-card__header {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    border-bottom: 1.5px dashed var(--gray-200); padding-bottom: 12px;
+}
+.salida-card__count {
+    background: var(--accent); color: white; font-weight: 700; font-size: .8rem;
+    padding: 8px 16px; border-radius: 100px; white-space: nowrap;
+}
+
+.prep-card {
+    background: white; border: 1px solid var(--gray-200); border-radius: 14px;
+    padding: 16px; margin-bottom: 16px;
+}
+.prep-card__header {
+    display: flex; align-items: center; gap: 10px;
+    font-size: .95rem; padding-bottom: 10px; margin-bottom: 10px;
+    border-bottom: 1.5px dashed var(--gray-200);
+}
+.prep-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px; border-radius: 10px;
+}
+.prep-item:hover { background: var(--gray-50, #fafafa); }
+.prep-check-wrap { display: flex; align-items: center; }
+.prep-item__foto {
+    width: 52px; height: 52px; border-radius: 10px; overflow: hidden; flex-shrink: 0;
+    background: #f5f5f5; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+}
+.prep-item__foto img { width: 100%; height: 100%; object-fit: cover; }
+.prep-item__info { flex: 1; }
+.prep-item__code { font-size: .72rem; color: var(--accent-dark, #c2574a); font-weight: 600; margin-top: 2px; }
+.prep-item__desc { font-size: .75rem; color: #888; margin-top: 2px; }
