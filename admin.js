@@ -872,16 +872,20 @@ function escJs(s) {
 }
 
 // ===== ABRIR DETALLE DE UNA SALIDA (tipo: c807/merliot/metrocentro/santatecla) =====
+// Se despliega EN LA MISMA PÁGINA (sin modal, a prueba de fallos)
 async function abrirSalida(key) {
     try {
-        // Consultar datos frescos directamente (no depender de memoria que puede estar incompleta)
+        const list = $('salidas-list');
+        if (!list) return;
+        list.innerHTML = '<div style="text-align:center;padding:30px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#ff9686;"></i><p>Cargando detalle...</p></div>';
+        // Consultar datos frescos directamente
         let data = despachos;
         try {
             const frescos = await api('GET', 'despachos?select=*&limit=300');
             if (Array.isArray(frescos)) data = frescos;
         } catch (e) {}
         const g = (data || []).filter(d => (d.estado_logistico || '') !== 'entregado' && salidaKey(d.destino) === key);
-        if (!g.length) { showToast('📭 No hay artículos en esta salida'); return; }
+        if (!g.length) { list.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">No hay artículos en esta salida</div>'; return; }
         // Asegurar orders cargados
         if (!window._ordersAll || !window._ordersAll.length) {
             try {
@@ -890,8 +894,6 @@ async function abrirSalida(key) {
             } catch (e) { window._ordersAll = []; }
         }
         const info = SALIDA_INFO[key] || SALIDA_INFO.otro;
-        const titleEl = $('punto-modal-title');
-        if (titleEl) titleEl.textContent = info.icon + ' ' + info.titulo;
         // Agrupar por pedido
         const porPedido = {};
         g.forEach(d => {
@@ -899,7 +901,6 @@ async function abrirSalida(key) {
             porPedido[d.order_reference].items.push(d);
         });
         const pedidosHtml = Object.entries(porPedido).map(([ref, p]) => {
-            // Buscar pedido en orders para precio total y método de pago
             const order = (window._ordersAll || []).find(o => o.reference === ref);
             const pagoTxt = order ? fmtPago(order) : 'Pago: ver pedido';
             const totalTxt = order ? '$' + Number(order.total).toFixed(2) : '';
@@ -917,12 +918,11 @@ async function abrirSalida(key) {
                     '<span class="log-estado log-estado--' + estado + '">' + (ESTADOS_LABEL[estado] || estado) + '</span>' +
                 '</div>';
             }).join('');
-            // Sede destino (para C807: la agencia exacta que eligió el cliente)
             const sede = p.items[0]?.destino || '';
-            return '<div style="border:1px solid #e5e5e5;border-radius:12px;padding:14px;margin-bottom:14px;">' +
+            return '<div style="border:1px solid #e5e5e5;border-radius:12px;padding:14px;margin-bottom:14px;background:#fff;">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">' +
                     '<strong style="font-size:.95rem;">#' + ref + '</strong>' +
-                    '<span style="font-size:.8rem;color:#555;">' + pagoTxt + '</span>' +
+                    '<span style="font-size:.8rem;">' + pagoTxt + '</span>' +
                 '</div>' +
                 (sede ? '<div style="font-size:.85rem;color:#333;margin-bottom:6px;">📍 Recibe en: <strong>' + String(sede).replace(/^Agencia C807 — /, '') + '</strong></div>' : '') +
                 '<div style="font-size:.85rem;margin-bottom:8px;">👤 <strong>' + (p.cliente || '—') + '</strong>' + (p.telefono ? ' · ' + p.telefono : '') + '</div>' +
@@ -933,20 +933,20 @@ async function abrirSalida(key) {
                 '</div>' +
             '</div>';
         }).join('');
-        const bodyEl = $('punto-modal-body');
-        if (bodyEl) bodyEl.innerHTML =
-            '<div style="font-size:.85rem;color:#666;margin-bottom:14px;padding:10px 14px;background:#f8f8f8;border-radius:10px;">' + info.detalle + '</div>' +
+        list.innerHTML =
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">' +
+                '<button class="admin-btn admin-btn--ghost" onclick="loadSalidas()" style="width:auto;padding:8px 16px;">← Volver a salidas</button>' +
+                '<div><strong style="font-size:1.1rem;">' + info.icon + ' ' + info.titulo + '</strong>' +
+                '<div style="font-size:.8rem;color:#888;">' + info.detalle + '</div></div>' +
+            '</div>' +
             pedidosHtml;
-        // Marcar como vistos (sin bloquear el modal)
+        // Marcar como vistos (sin bloquear)
         g.forEach(d => { if (!d.visto) { d.visto = true; api('PATCH', 'despachos?id=eq.' + d.id, { visto: true }).catch(() => {}); } });
-        // Mostrar modal (patrón admin: overlay flex)
-        $('punto-modal-overlay').style.display = 'flex';
-        $('punto-modal').style.display = 'block';
         if (typeof actualizarBadgeSalidas === 'function') actualizarBadgeSalidas();
-        if (typeof renderSalidas === 'function') renderSalidas();
     } catch (e) {
         console.error('Error abrirSalida:', e);
-        showToast('❌ Error al abrir detalle: ' + e.message);
+        const list = $('salidas-list');
+        if (list) list.innerHTML = '<div style="text-align:center;padding:30px;color:#d32f2f;">❌ Error: ' + e.message + '</div>';
     }
 }
 function fmtPago(order) {
