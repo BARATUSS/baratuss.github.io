@@ -20,6 +20,34 @@ async function getWompiToken() {
   return d.access_token;
 }
 
+// ===== FASE 1 ENTREGAS: alta unificada de despachos =====
+// Único punto de creación (webhook aprobado + efectivo vía /create-despachos).
+// IDEMPOTENTE: si ya existen despachos para la orden, no duplica (Wompi reintenta ante timeout).
+async function crearDespachos(ref: string, items: any[], datos: any) {
+  const { count } = await supabase.from('despachos')
+    .select('id', { count: 'exact', head: true })
+    .eq('order_reference', ref);
+  if ((count ?? 0) > 0) return { duplicado: true, count };
+  for (const item of items) {
+    await supabase.from('despachos').insert({
+      order_reference: ref,
+      inventory_id: item.id,
+      qty: item.qty || 1,
+      talla: item.size || item.talla || null,
+      nombre_capturado: item.name || null,
+      imagen_url: item.image || item.imagen || null,
+      metodo_entrega: datos.delivery_type || 'retiro-punto',
+      destino: datos.delivery_point || null,
+      fecha_programada: null,
+      estado_logistico: 'pendiente_confirmacion',
+      customer_name: datos.customer_name || null,
+      customer_phone: datos.customer_phone || null,
+      visto: false
+    });
+  }
+  return { creados: items.length };
+}
+
 serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname.replace('/wompi-checkout', '');
@@ -117,6 +145,15 @@ serve(async (req) => {
             }
             await supabase.from('orders').update({ stock_reservado: true }).eq('reference', ref);
           }
+
+          // ===== FASE 1 ENTREGAS: alta de despachos al aprobarse el pago =====
+          // (un registro por producto — cada uno es un paquete a preparar/entregar)
+          const { data: orderFull } = await supabase.from('orders')
+            .select('delivery_type, delivery_point, delivery_fee, customer_name, customer_phone')
+            .eq('reference', ref).single();
+          if (orderFull) {
+            await crearDespachos(ref, items, orderFull);
+          }
         } else {
           await supabase.from('orders').update({
             payment_status: 'rechazado',
@@ -138,6 +175,22 @@ serve(async (req) => {
         }
       }
       return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: corsHeaders });
+    }
+
+    // ===== CREATE DESPACHOS (efectivo / uso general) =====
+    // Alta unificada vía EF (service role) — evita depender de policies RLS de insert
+    if (req.method === 'POST' && path === '/create-despachos') {
+      const { reference, items, deliveryType, deliveryPoint, customerName, customerPhone } = await req.json();
+      if (!reference || !items?.length) {
+        return new Response(JSON.stringify({ error: 'reference e items requeridos' }), { status: 400, headers: corsHeaders });
+      }
+      const result = await crearDespachos(reference, items, {
+        delivery_type: deliveryType || 'retiro-punto',
+        delivery_point: deliveryPoint || null,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null
+      });
+      return new Response(JSON.stringify(result), { headers: corsHeaders });
     }
 
     // ===== VERIFY =====

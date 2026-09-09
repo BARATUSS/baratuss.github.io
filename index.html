@@ -321,33 +321,32 @@
                 </label>
             </div>
 
-            <!-- Selector de punto BARATUSS -->
+            <!-- Selector de punto BARATUSS (ventanas reales: Mié/Sáb, entrega gratis con Cindy) -->
             <div class="form-group" id="checkout-point-group" style="margin-top:12px;">
-                <label for="checkout-point">Elegí tu punto de retiro:</label>
+                <label for="checkout-point">Elegí día y punto de entrega (gratis):</label>
                 <select id="checkout-point" onchange="showPointWhatsApp()">
-                    <optgroup label="📍 Santa Tecla">
-                        <option value="Santa Tecla — Paseo El Carmen">Paseo El Carmen</option>
-                        <option value="Santa Tecla — C.C. La Skina">C.C. La Skina</option>
-                        <option value="Santa Tecla — Casa Matriz">Casa Matriz</option>
+                    <optgroup label="📅 Miércoles — entrega con Cindy">
+                        <option value="Mié — Metrocentro (08:00-12:00)">Metrocentro San Salvador · 08:00–12:00</option>
+                        <option value="Mié — Plaza Merliot (14:00-17:00)">Plaza Merliot · 14:00–17:00</option>
+                        <option value="Mié — C.C. La Skina (14:00-17:00)">C.C. La Skina · 14:00–17:00</option>
+                        <option value="Mié — C.C. Santa Rosa (14:00-17:00)">C.C. Santa Rosa · 14:00–17:00</option>
                     </optgroup>
-                    <optgroup label="📍 San Salvador">
-                        <option value="Plaza Merliot">Plaza Merliot</option>
-                    </optgroup>
-                    <optgroup label="📍 Metrocentro">
-                        <option value="Metrocentro (agendar — martes en la tarde)">Metrocentro (agendar)</option>
+                    <optgroup label="📅 Sábado — entrega con Cindy">
+                        <option value="Sáb — Metrocentro (08:00-10:00)">Metrocentro San Salvador · 08:00–10:00</option>
+                        <option value="Sáb — Plaza Merliot (12:00-14:00)">Plaza Merliot · 12:00–14:00</option>
                     </optgroup>
                 </select>
                 <small style="opacity:.7;display:block;margin-top:6px;">
-                    📍 Casa Matriz: <a href="https://maps.app.goo.gl/eQE3nscU5RXRwXqA8" target="_blank" rel="noopener">ver en Google Maps</a>
-                    · 🕒 Metrocentro: martes en la tarde (agendar)
+                    🚗 Entrega gratis con Cindy — solo en los días/puntos indicados.
+                    ¿Necesitás otro punto u horario? Coordinamos por WhatsApp.
                 </small>
-                <!-- Aviso WhatsApp para entrega personal Santa Tecla -->
+                <!-- Aviso WhatsApp para entrega personal con Cindy -->
                 <div id="checkout-whatsapp-box" style="display:none;margin-top:12px;padding:12px 14px;background:#e8f7ee;border:1.5px solid #25D366;border-radius:12px;">
                     <div style="font-size:.85rem;color:#1a7a3f;font-weight:600;margin-bottom:8px;">
-                        📲 Este punto es entrega personal coordinada
+                        📲 Entrega coordinada con Cindy
                     </div>
                     <div style="font-size:.8rem;color:#333;margin-bottom:10px;">
-                        Escribinos por WhatsApp para coordinar la hora y el día de tu entrega.
+                        Cindy te confirmará la entrega por WhatsApp. Si necesitás otro punto u horario, escribinos.
                     </div>
                     <a href="https://wa.me/50376626575" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25D366;color:#fff;padding:10px 18px;border-radius:100px;text-decoration:none;font-weight:700;font-size:.85rem;">
                         💬 Escribinos por WhatsApp

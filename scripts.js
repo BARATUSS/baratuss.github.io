@@ -305,14 +305,21 @@ async function decreaseStock(items) {
     }
 }
 
-async function createOrder(items, total) {
+async function createOrder(items, total, delivery = {}) {
     if (!currentUser) return { error: 'Inicia sesión para comprar' };
     const client = sb();
     const { data, error } = await client.from('orders').insert({
         user_id: currentUser.id,
         items,
         total,
-        status: 'pendiente'
+        status: 'pendiente',
+        // Fase 1 entregas: persistir datos de entrega (caso suelto #1 del reporte caos)
+        delivery_type: delivery.deliveryType || 'retiro-punto',
+        delivery_fee: delivery.fee || 0,
+        delivery_point: delivery.point || null,
+        customer_name: delivery.name || null,
+        customer_phone: delivery.phone || null,
+        reference: delivery.reference || null
     }).select().single();
     return { data, error: error?.message };
 }
@@ -1049,15 +1056,14 @@ function updateWishlistUI() {
 const C807_FEE = 1.00; // Retiro en agencia C807 (solo tarjeta)
 const DELIVERY_FEE = C807_FEE; // compatibilidad
 
-// Muestra aviso de WhatsApp cuando el punto elegido es entrega personal (Santa Tecla)
+// Muestra aviso de WhatsApp cuando el método de entrega es punto fijo con Cindy
 function showPointWhatsApp() {
     const sel = $('checkout-point');
     const box = $('checkout-whatsapp-box');
     if (!sel || !box) return;
-    const val = sel.value || '';
-    // Santa Tecla = entrega personal coordinada por WhatsApp
-    const esPersonal = val.includes('Santa Tecla') || val.includes('Casa Matriz');
-    box.style.display = esPersonal ? '' : 'none';
+    const method = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
+    // Punto fijo = entrega coordinada con Cindy (se confirma por WhatsApp)
+    box.style.display = method === 'punto' ? '' : 'none';
 }
 
 // Muestra la dirección de la agencia C807 elegida + link a Google Maps
@@ -1227,11 +1233,11 @@ async function wompiCheckout() {
             metodo: 'tarjeta'
         }));
         
-        // Save order info for logged in users
-        if (currentUser) {
-            const result = await createOrder(cart, total);
-            if (result.error) { showToast('❌ ' + result.error); return; }
-        }
+        // La orden ya fue creada por la Edge Function /create-payment con TODOS los datos
+        // (delivery_type, delivery_point, customer_name/phone, user_id) y su reference.
+        // ❌ Eliminada la llamada duplicada a createOrder(): insertaba una 2ª orden sin
+        // reference que quedaba 'pendiente' para siempre (bug del reporte caos #1).
+        // "Mis pedidos" carga por user_id y la orden de la EF ya lo tiene.
         
         // ✅ Actualizar stock local (la Edge Function ya lo reservó en la base)
         // Así el artículo desaparece al instante y nadie más puede pedirlo
@@ -1305,6 +1311,28 @@ async function cashCheckout() {
             });
         } catch (insertErr) {
             console.log('No se pudo guardar el pedido online:', insertErr.message);
+        }
+        
+        // Fase 1 entregas: alta de despachos vía Edge Function (un solo camino, sin depender de RLS)
+        try {
+            await fetch(WOMPI_API_URL + '/create-despachos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+                },
+                body: JSON.stringify({
+                    reference: ref,
+                    items: items,
+                    deliveryType: 'retiro-punto',
+                    deliveryPoint: punto,
+                    customerName: name || null,
+                    customerPhone: phone || null
+                })
+            });
+        } catch (despErr) {
+            console.log('No se pudo crear el despacho:', despErr.message);
         }
         
         // Descontar stock automáticamente

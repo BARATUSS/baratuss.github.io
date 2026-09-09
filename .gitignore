@@ -13,6 +13,8 @@ buzon/
 backups/
 descargas/
 app_android/
+documentos/
+docs/
 
 # ===== Sistema =====
 .vscode/
