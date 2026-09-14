@@ -273,6 +273,10 @@
         <button class="modal__close" id="checkout-close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal__body">
+        <!-- Reserva de 5 minutos (el primero que llega gana) -->
+        <div id="reserva-aviso" style="display:none; background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:14px;">
+            ⏳ Te reservamos estos productos por <b><span id="reserva-timer">5:00</span></b> — completá tu compra antes de que expire.
+        </div>
         <div class="checkout-options">
             <label class="checkout-option">
                 <input type="radio" name="pay-method" value="tarjeta" checked>

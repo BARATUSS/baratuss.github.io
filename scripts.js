@@ -60,7 +60,7 @@ async function loadProductsFromSupabase() {
     try {
         const { data, error } = await client
             .from('inventory')
-            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors, description, sizes, condition')
+            .select('id, name, category, sale_price, original_price, badge, img_class, emoji, tipo, stock, image_url, images, colors, description, sizes, condition, reservado_hasta, reservado_token')
             .eq('active', true)
             // Incluir agotados: se muestran con etiqueta "AGOTADO" y compra bloqueada
             .order('id', { ascending: true });
@@ -83,7 +83,9 @@ async function loadProductsFromSupabase() {
                 description: p.description || null,
                 sizes: Array.isArray(p.sizes) ? p.sizes.filter(Boolean) : null,
                 condition: p.condition || null,
-                colors: p.colors || null
+                colors: p.colors || null,
+                reservadoHasta: p.reservado_hasta || null,
+                reservadoToken: p.reservado_token || null
             }));
             renderProducts(currentFilter);
             updateCartUI();
@@ -384,8 +386,11 @@ function renderProducts(filter = 'all') {
     productsGrid.innerHTML = filtered.map(p => {
         const isFav = wishlist.has(p.id);
         const agotado = (p.stock || 0) <= 0;
+        // Reservada por otro cliente (reserva activa de 5 min que no es la mía)
+        const reservadaPorOtro = !agotado && p.reservadoHasta && new Date(p.reservadoHasta) > new Date() && p.reservadoToken !== sessionToken();
+        const bloqueado = agotado || reservadaPorOtro;
         return `
-        <div class="product-card ${agotado ? 'product-card--agotado' : ''}" data-id="${p.id}" style="cursor:pointer;">
+        <div class="product-card ${bloqueado ? 'product-card--agotado' : ''}" data-id="${p.id}" style="cursor:pointer;">
             <button class="wish-btn ${isFav ? 'wish-btn--active' : ''}" data-id="${p.id}" aria-label="Favoritos">
                 <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
             </button>
@@ -395,6 +400,7 @@ function renderProducts(filter = 'all') {
                 ${p.condition === 'segunda-mano' ? `<span class="badge badge--condition">♻️ Segunda mano</span>` : ''}
                 ${p.condition === 'como-nuevo' ? `<span class="badge badge--condition">✨ Como nuevo</span>` : ''}
                 ${agotado ? `<span class="badge badge--agotado">❌ AGOTADO</span>` : ''}
+                ${reservadaPorOtro ? `<span class="badge badge--agotado">🔒 RESERVADA</span>` : ''}
             </div>
             ${(p.images && p.images.length > 1) ? `<div class="product-card__thumbs" onclick="event.stopPropagation()">${p.images.map((url, ti) => `
                 <img src="${url}" class="product-card__thumb ${ti === 0 ? 'product-card__thumb--active' : ''}" data-idx="${ti}" onclick="switchProductPhoto(${p.id}, ${ti}, this)" alt="" loading="lazy">`).join('')}
@@ -502,8 +508,9 @@ function openDetailModal(id) {
         colorsBox.style.display = 'none';
     }
     // Stock
-    const agotadoModal = (p.stock || 0) <= 0;
-    $('detail-stock').textContent = agotadoModal ? '❌ Agotado' : (p.stock <= 3 ? `⚠️ Solo quedan ${p.stock}` : `✅ Disponible (${p.stock})`);
+    const reservadaOtro = p.reservadoHasta && new Date(p.reservadoHasta) > new Date() && p.reservadoToken !== sessionToken();
+    const agotadoModal = (p.stock || 0) <= 0 || reservadaOtro;
+    $('detail-stock').textContent = reservadaOtro ? '🔒 Reservada por otra persona' : (agotadoModal ? '❌ Agotado' : (p.stock <= 3 ? `⚠️ Solo quedan ${p.stock}` : `✅ Disponible (${p.stock})`));
     $('detail-stock').style.color = agotadoModal ? '#d32f2f' : (p.stock <= 3 ? '#e67e22' : '#27ae60');
     // Botones: si está agotado, mostrar mensaje rojo y ocultar compra
     $('detail-add-cart').style.display = agotadoModal ? 'none' : '';
@@ -1093,6 +1100,96 @@ function showC807Address() {
     }
 }
 
+// ===== RESERVA DE STOCK (5 minutos) — Fase 1+2 entregas =====
+const STOCK_API_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/stock-api';
+const RESERVA_MINUTOS = 5;
+let reservaTimerId = null;
+
+function sessionToken() {
+    let t = localStorage.getItem('baratuss_sesion');
+    if (!t) {
+        t = 'web-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem('baratuss_sesion', t);
+    }
+    return t;
+}
+
+// Reserva los productos del carrito al entrar al checkout (el primero que llega gana)
+async function reservarCarrito() {
+    if (!cart.length) return true;
+    try {
+        const r = await fetch(STOCK_API_URL + '/reservar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                items: cart.map(i => ({ id: i.id, qty: i.qty || 1 })),
+                token: sessionToken(),
+                minutos: RESERVA_MINUTOS
+            })
+        });
+        const d = await r.json();
+        if (!d.ok) {
+            let msg = 'No pudimos reservar tu pedido 😕';
+            if (d.motivo === 'reservada_por_otro') msg = '😮 Otra persona está comprando este producto ahora mismo. Probá en unos minutos.';
+            else if (d.motivo === 'sin_stock') msg = '❌ Este producto acaba de venderse.';
+            showToast(msg);
+            if (d.producto) {
+                cart = cart.filter(i => String(i.id) !== String(d.producto));
+                saveCart(); updateCartUI();
+            }
+            return false;
+        }
+        iniciarTimerReserva(RESERVA_MINUTOS * 60);
+        return true;
+    } catch (e) {
+        console.log('Error reservando stock:', e.message);
+        return true; // si falla la red, no bloqueamos la compra
+    }
+}
+
+// Venta definitiva (descuento atomico en el servidor)
+async function venderCarrito(items) {
+    try {
+        const r = await fetch(STOCK_API_URL + '/vender', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                items: items.map(i => ({ id: i.id, qty: i.qty || 1 })),
+                token: sessionToken()
+            })
+        });
+        return await r.json();
+    } catch (e) {
+        console.log('Error en venta de stock:', e.message);
+        return { ok: true }; // no bloquear si falla la red
+    }
+}
+
+// Contador visible de la reserva
+function iniciarTimerReserva(segundos) {
+    const aviso = $('reserva-aviso');
+    const t = $('reserva-timer');
+    if (!aviso || !t) return;
+    aviso.style.display = '';
+    let s = segundos;
+    clearInterval(reservaTimerId);
+    const pintar = () => {
+        const m = Math.floor(s / 60);
+        const ss = String(s % 60).padStart(2, '0');
+        t.textContent = m + ':' + ss;
+    };
+    pintar();
+    reservaTimerId = setInterval(() => {
+        s--;
+        if (s <= 0) {
+            clearInterval(reservaTimerId);
+            aviso.innerHTML = '⏰ <b>Tu reserva expiró.</b> Volvé a seleccionar el producto.';
+            return;
+        }
+        pintar();
+    }, 1000);
+}
+
 function openCheckoutModal() {
     if (cart.length === 0) return;
     closeCart();
@@ -1104,6 +1201,7 @@ function openCheckoutModal() {
     }
     updateCheckoutUI();
     if (typeof showPointWhatsApp === 'function') showPointWhatsApp();
+    reservarCarrito(); // NUEVO: reserva los productos por 5 min (el primero que llega gana)
     $('checkout-overlay').style.display = '';
     $('checkout-modal').style.display = '';
 }
@@ -1203,7 +1301,8 @@ async function wompiCheckout() {
                 deliveryFee: fee,
                 deliveryPoint: punto,
                 customerName: name || null,
-                customerPhone: phone || null
+                customerPhone: phone || null,
+                token: sessionToken()
             })
         });
         
@@ -1283,6 +1382,20 @@ async function cashCheckout() {
     showToast('🔄 Procesando pedido...');
     
     try {
+        // Venta definitiva de stock (atomica, en el servidor): si ya se vendio -> rechazar
+        const venta = await venderCarrito(items);
+        if (!venta.ok) {
+            const msg = venta.motivo === 'reservada_por_otro'
+                ? '😮 Otra persona está comprando este producto ahora mismo. Intentá de nuevo en unos minutos.'
+                : '❌ Uno de los productos acaba de venderse. Quitalo del carrito para continuar.';
+            showToast(msg);
+            if (venta.producto) {
+                cart = cart.filter(i => String(i.id) !== String(venta.producto));
+                saveCart(); updateCartUI(); updateCheckoutUI();
+            }
+            return;
+        }
+
         // Insertar pedido con fetch directo (evita problemas de la librería CDN)
         const orderPayload = {
             items: items,
@@ -1335,8 +1448,7 @@ async function cashCheckout() {
             console.log('No se pudo crear el despacho:', despErr.message);
         }
         
-        // Descontar stock automáticamente
-        decreaseStock(items);
+        // El stock ya se descontó de forma atómica antes de crear el pedido (venderCarrito)
         
         // Si no está logueado y no hay supabase, igual confirmamos
         cart = [];

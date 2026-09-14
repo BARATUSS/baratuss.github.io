@@ -66,7 +66,7 @@ serve(async (req) => {
   try {
     // ===== CREATE PAYMENT =====
     if (req.method === 'POST' && path === '/create-payment') {
-      const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone } = await req.json();
+      const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone, token: tokenCliente } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
       const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -105,13 +105,25 @@ serve(async (req) => {
         stock_reservado: true
       });
 
-      // ✅ Reservar stock INMEDIATAMENTE al confirmar el pedido
-      // (así el artículo sale agotado al instante, sin esperar la aprobación del pago)
+      // ✅ VENTA ATÓMICA de stock al confirmar el pedido (función en la base, imposible de pisar)
+      // Si el producto ya se vendió o lo tiene reservado otro cliente → se rechaza el pago.
+      const tokenSesion = String(tokenCliente || 'checkout') + '-' + ref;
       for (const item of items) {
         const qty = item.qty || 1;
-        const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
-        const nuevo = Math.max(0, (Number(inv?.stock) || 0) - qty);
-        await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+        const { data: venta } = await supabase.rpc('vender_stock', { p_id: Number(item.id), p_qty: qty, p_token: tokenSesion });
+        if (!venta?.ok) {
+          // Liberar lo que sí se alcanzó a vender de este pedido
+          for (const ya of items) {
+            if (ya.id === item.id) break;
+            await supabase.rpc('devolver_stock', { p_id: Number(ya.id), p_qty: ya.qty || 1 });
+          }
+          await supabase.from('orders').delete().eq('reference', ref);
+          return new Response(JSON.stringify({
+            error: venta?.motivo === 'reservada_por_otro'
+              ? 'Otra persona está comprando este producto ahora mismo. Probá en unos minutos.'
+              : 'Uno de los productos acaba de venderse.'
+          }), { status: 409, headers: corsHeaders });
+        }
       }
 
       return new Response(JSON.stringify({ paymentUrl: payData.urlEnlace, reference: ref }), { headers: corsHeaders });
@@ -139,9 +151,7 @@ serve(async (req) => {
           if (!order?.stock_reservado) {
             for (const item of items) {
               const qty = item.qty || 1;
-              const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
-              const nuevo = Math.max(0, (Number(inv?.stock) || 0) - qty);
-              await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+              await supabase.rpc('vender_stock', { p_id: Number(item.id), p_qty: qty, p_token: 'webhook-' + ref });
             }
             await supabase.from('orders').update({ stock_reservado: true }).eq('reference', ref);
           }
@@ -163,13 +173,11 @@ serve(async (req) => {
             status: 'rechazado',
             stock_reservado: false
           }).eq('reference', ref);
-          // ❌ Pago rechazado → DEVOLVER el stock reservado
+          // ❌ Pago rechazado → DEVOLVER el stock reservado (función atómica)
           if (order?.stock_reservado) {
             for (const item of items) {
               const qty = item.qty || 1;
-              const { data: inv } = await supabase.from('inventory').select('stock').eq('id', item.id).single();
-              const nuevo = (Number(inv?.stock) || 0) + qty;
-              await supabase.from('inventory').update({ stock: nuevo, updated_at: new Date().toISOString() }).eq('id', item.id);
+              await supabase.rpc('devolver_stock', { p_id: Number(item.id), p_qty: qty });
             }
           }
         }
