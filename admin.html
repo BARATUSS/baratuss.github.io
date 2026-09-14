@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="admin.css?v=20260921">
+    <link rel="stylesheet" href="admin.css?v=20260914wa">
 </head>
 <body>
 
@@ -39,6 +39,7 @@
             <a href="#" class="admin-nav__item" data-section="despachos"><i class="fas fa-truck"></i> Despachos</a>
             <a href="#" class="admin-nav__item" data-section="salidas"><i class="fas fa-route"></i> Salidas <span class="nav-badge" id="nav-salidas-badge" style="display:none;"></span></a>
             <a href="#" class="admin-nav__item" data-section="preparar"><i class="fas fa-clipboard-list"></i> Preparar</a>
+            <a href="#" class="admin-nav__item" data-section="whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp <span class="nav-badge" id="nav-wa-badge" style="display:none;"></span></a>
             <a href="#" class="admin-nav__item" data-section="resumen"><i class="fas fa-chart-pie"></i> Resumen</a>
         </nav>
         <div class="admin-sidebar__footer">
@@ -191,6 +192,31 @@
                 <button class="admin-btn admin-btn--primary" id="prep-marcar-preparado" style="margin-left:auto;">✅ Marcar seleccionados como preparados</button>
             </div>
             <div class="prep-grid" id="prep-grid" style="margin-top:16px;"></div>
+        </section>
+
+        <!-- ===== WHATSAPP (bandeja de entrada) ===== -->
+        <section class="admin-section" id="section-whatsapp" style="display:none;">
+            <div class="admin-section__header">
+                <h1>WhatsApp</h1>
+                <span style="font-size:.8rem;color:#999;">Mensajes de clientes al +503 6285 2631 — tocá una conversación para responder</span>
+            </div>
+            <div class="wa-inbox">
+                <div class="wa-conv">
+                    <div class="wa-conv__filters">
+                        <input type="text" id="wa-search" placeholder="Buscar por nombre o número">
+                        <button class="admin-btn admin-btn--ghost" id="wa-refresh"><i class="fas fa-rotate"></i></button>
+                    </div>
+                    <div class="wa-conv__list" id="wa-conv-list"></div>
+                </div>
+                <div class="wa-chat">
+                    <div class="wa-chat__head" id="wa-chat-head">Elegí una conversación</div>
+                    <div class="wa-chat__body" id="wa-chat-body"></div>
+                    <div class="wa-chat__reply" id="wa-reply-box" style="display:none;">
+                        <textarea id="wa-reply-text" rows="2" placeholder="Escribí tu respuesta... (Enter para enviar)"></textarea>
+                        <button class="admin-btn admin-btn--primary" id="wa-reply-send"><i class="fas fa-paper-plane"></i> Enviar</button>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- ===== RESUMEN ===== -->
@@ -380,6 +406,6 @@
 <!-- ===== TOAST ===== -->
 <div class="admin-toast" id="admin-toast"></div>
 
-<script src="admin.js?v=20260921"></script>
+<script src="admin.js?v=20260914wa"></script>
 </body>
 </html>

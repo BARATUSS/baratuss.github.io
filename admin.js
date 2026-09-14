@@ -92,8 +92,11 @@ function enterDashboard() {
     loadStats();
     // Cargar salidas en background (para badge de notificación) sin cambiar de sección
     loadSalidasSilencioso();
+    // Badge de mensajes de WhatsApp sin leer
+    cargarBadgeWaSilencioso();
     // Verificar nuevos pedidos cada 45 segundos → notificación en menú
     setInterval(loadSalidasSilencioso, 45000);
+    setInterval(cargarBadgeWaSilencioso, 45000);
 }
 async function loadSalidasSilencioso() {
     try {
@@ -131,6 +134,7 @@ document.querySelectorAll('.admin-nav__item').forEach(item => {
         if (item.dataset.section === 'despachos') loadDespachos();
         if (item.dataset.section === 'salidas') loadSalidas();
         if (item.dataset.section === 'preparar') loadPreparar();
+        if (item.dataset.section === 'whatsapp') loadWhatsApp();
         if (item.dataset.section === 'resumen') loadStats();
     });
 });
@@ -1069,4 +1073,169 @@ $('prep-marcar-preparado').addEventListener('click', async () => {
     }
     showToast('✅ Artículos en preparación');
     loadPreparar();
+});
+
+// ============================================================
+// WHATSAPP — BANDEJA DE ENTRADA (canal oficial Cloud API)
+// ============================================================
+let waConversaciones = [];
+let waTelActivo = null;
+
+function waEsc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function waHora(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const hoy = new Date();
+    const mismoDia = d.toDateString() === hoy.toDateString();
+    return mismoDia
+        ? d.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString('es-SV', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+}
+
+async function loadWhatsApp() {
+    const data = await api('GET', 'wa_mensajes?select=*&order=creado_en.desc&limit=400');
+    if (!Array.isArray(data)) { $('wa-conv-list').innerHTML = '<div class="wa-empty">No se pudieron cargar los mensajes</div>'; return; }
+
+    const mapa = new Map();
+    for (const m of data) {
+        const tel = m.telefono;
+        if (!mapa.has(tel)) mapa.set(tel, { telefono: tel, nombre: m.nombre_perfil || tel, mensajes: [], noLeidos: 0, ultimo: m });
+        const c = mapa.get(tel);
+        c.mensajes.unshift(m);                       // vienen desc → quedan asc
+        if (!c.nombre && m.nombre_perfil) c.nombre = m.nombre_perfil;
+        if (m.direccion === 'entrante' && !m.leido) c.noLeidos++;
+    }
+
+    waConversaciones = [...mapa.values()].sort(
+        (a, b) => new Date(b.ultimo.creado_en) - new Date(a.ultimo.creado_en)
+    );
+
+    renderWaConversaciones();
+    actualizarBadgeWa();
+
+    if (waTelActivo) {
+        const sigue = waConversaciones.find(c => c.telefono === waTelActivo);
+        if (sigue) renderWaHilo();
+    }
+}
+
+function renderWaConversaciones() {
+    const q = ($('wa-search').value || '').toLowerCase().trim();
+    const lista = waConversaciones.filter(c =>
+        !q || (c.nombre || '').toLowerCase().includes(q) || c.telefono.includes(q));
+
+    if (!lista.length) {
+        $('wa-conv-list').innerHTML = '<div class="wa-empty">Sin conversaciones todavía</div>';
+        return;
+    }
+
+    $('wa-conv-list').innerHTML = lista.map(c => `
+        <div class="wa-conv__item ${c.telefono === waTelActivo ? 'wa-conv__item--active' : ''} ${c.noLeidos ? 'wa-conv__item--unread' : ''}"
+             onclick="abrirWaConversacion('${c.telefono}')">
+            <div class="wa-conv__top">
+                <span class="wa-conv__name">${waEsc(c.nombre)}</span>
+                <span class="wa-conv__time">${waHora(c.ultimo.creado_en)}</span>
+            </div>
+            <div class="wa-conv__top">
+                <span class="wa-conv__preview">${c.ultimo.direccion === 'saliente' ? '↩ ' : ''}${waEsc(c.ultimo.texto)}</span>
+                ${c.noLeidos ? `<span class="wa-conv__badge">${c.noLeidos}</span>` : ''}
+            </div>
+        </div>`).join('');
+}
+
+async function abrirWaConversacion(tel) {
+    waTelActivo = tel;
+    const conv = waConversaciones.find(c => c.telefono === tel);
+    renderWaConversaciones();
+    renderWaHilo();
+    $('wa-reply-box').style.display = 'flex';
+
+    // marcar como leídos los entrantes de esa conversación
+    if (conv && conv.noLeidos > 0) {
+        await api('PATCH', `wa_mensajes?telefono=eq.${tel}&direccion=eq.entrante&leido=eq.false`, { leido: true });
+        conv.noLeidos = 0;
+        renderWaConversaciones();
+        actualizarBadgeWa();
+    }
+}
+
+function renderWaHilo() {
+    const conv = waConversaciones.find(c => c.telefono === waTelActivo);
+    if (!conv) return;
+
+    $('wa-chat-head').innerHTML =
+        `<span>${waEsc(conv.nombre)}</span>
+         <span style="font-size:.78rem;color:#999;">+${waEsc(conv.telefono)}</span>
+         <a href="https://wa.me/${conv.telefono}" target="_blank" rel="noopener">Abrir en WhatsApp ↗</a>`;
+
+    $('wa-chat-body').innerHTML = conv.mensajes.map(m => `
+        <div class="wa-msg ${m.direccion === 'saliente' ? 'wa-msg--out' : 'wa-msg--in'}">
+            ${waEsc(m.texto)}
+            <span class="wa-msg__time">${waHora(m.creado_en)}${m.direccion === 'saliente' ? ' · ' + waEsc(m.atendido_por || '') : ''}</span>
+        </div>`).join('');
+
+    const body = $('wa-chat-body');
+    body.scrollTop = body.scrollHeight;
+}
+
+function actualizarBadgeWa() {
+    const pendientes = waConversaciones.reduce((n, c) => n + (c.noLeidos || 0), 0);
+    const badge = $('nav-wa-badge');
+    if (!badge) return;
+    badge.textContent = pendientes;
+    badge.style.display = pendientes ? '' : 'none';
+}
+
+async function cargarBadgeWaSilencioso() {
+    if (!session?.token) return;
+    const data = await api('GET', 'wa_mensajes?select=telefono,direccion,leido&direccion=eq.entrante&leido=eq.false');
+    if (!Array.isArray(data)) return;
+    actualizarBadgeWaCon(data.length);
+}
+
+function actualizarBadgeWaCon(n) {
+    const badge = $('nav-wa-badge');
+    if (!badge) return;
+    badge.textContent = n;
+    badge.style.display = n ? '' : 'none';
+}
+
+async function enviarWaRespuesta() {
+    const texto = ($('wa-reply-text').value || '').trim();
+    if (!texto || !waTelActivo) return;
+
+    const btn = $('wa-reply-send');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando';
+
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/wa-enviar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.token },
+            body: JSON.stringify({ to: waTelActivo, texto })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!d.ok) throw new Error(d.error || 'No se pudo enviar');
+
+        $('wa-reply-text').value = '';
+        await loadWhatsApp();
+        showToast('Mensaje enviado ✅');
+    } catch (e) {
+        showToast('⚠️ ' + (e.message || 'Error al enviar'));
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
+    }
+}
+
+$('wa-refresh')?.addEventListener('click', loadWhatsApp);
+$('wa-search')?.addEventListener('input', renderWaConversaciones);
+$('wa-reply-send')?.addEventListener('click', enviarWaRespuesta);
+$('wa-reply-text')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarWaRespuesta(); }
 });
