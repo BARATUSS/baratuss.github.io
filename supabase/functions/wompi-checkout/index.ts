@@ -100,7 +100,8 @@ serve(async (req) => {
   try {
     // ===== CREATE PAYMENT =====
     if (req.method === 'POST' && path === '/create-payment') {
-      const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone, token: tokenCliente } = await req.json();
+      const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone, token: tokenCliente,
+              facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
       const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -136,6 +137,15 @@ serve(async (req) => {
         delivery_point: deliveryPoint || null,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
+        // Documento tributario elegido por el cliente (ejercicio de facturación)
+        factura_tipo: facturaTipo || 'ninguna',
+        factura_nombre: facturaNombre || null,
+        factura_nit: facturaNit || null,
+        factura_nrc: facturaNrc || null,
+        factura_giro: facturaGiro || null,
+        factura_direccion: facturaDireccion || null,
+        customer_email: customerEmail || null,
+        factura_por_correo: facturaPorCorreo || false,
         stock_reservado: true
       });
 

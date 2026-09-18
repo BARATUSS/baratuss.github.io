@@ -1378,6 +1378,10 @@ async function wompiCheckout() {
     const baseTotal = getCartTotal();
     const total = baseTotal + fee;
 
+    // Documento tributario (opcional, decidido por el cliente): se valida ANTES de cobrar
+    const fac = datosFactura();
+    if (!fac.ok) { showToast(fac.error); return; }
+
     showToast('🔄 Procesando pago...');
     
     try {
@@ -1397,7 +1401,16 @@ async function wompiCheckout() {
                 deliveryPoint: punto,
                 customerName: name || null,
                 customerPhone: phone || null,
-                token: sessionToken()
+                token: sessionToken(),
+                // Documento tributario (si el cliente lo pidió)
+                facturaTipo: fac.datos.factura_tipo,
+                facturaNombre: fac.datos.factura_nombre,
+                facturaNit: fac.datos.factura_nit,
+                facturaNrc: fac.datos.factura_nrc,
+                facturaGiro: fac.datos.factura_giro,
+                facturaDireccion: fac.datos.factura_direccion,
+                customerEmail: fac.datos.customer_email,
+                facturaPorCorreo: fac.datos.factura_por_correo
             })
         });
         
@@ -1423,6 +1436,7 @@ async function wompiCheckout() {
             items: [...cart],
             punto: punto,
             mapsUrl: mapsUrl,
+            ...fac.datos,
             total: total,
             metodo: 'tarjeta'
         }));
@@ -1464,7 +1478,11 @@ async function cashCheckout() {
         showToast('📝 Completá tu nombre y teléfono');
         return;
     }
-    
+
+    // Documento tributario (opcional, decidido por el cliente): se valida ANTES de vender el stock
+    const fac = datosFactura();
+    if (!fac.ok) { showToast(fac.error); return; }
+
     // Efectivo: siempre retiro en punto BARATUSS (C807 no existe con efectivo)
     const punto = $('checkout-point').value || 'Punto BARATUSS';
     const fee = 0; // puntos BARATUSS son gratis
@@ -1503,7 +1521,9 @@ async function cashCheckout() {
             delivery_fee: fee,
             delivery_point: punto,
             customer_name: name,
-            customer_phone: phone
+            customer_phone: phone,
+            // Documento tributario elegido por el cliente (opcional)
+            ...fac.datos
         };
         if (currentUser) orderPayload.user_id = currentUser.id;
         
@@ -1596,6 +1616,26 @@ function showTicket(data) {
         mapsRow.style.display = 'none';
     }
     
+    // Documento tributario: si el cliente lo pidió, se guarda y se ofrece el botón en el ticket
+    const contFac = $('ticket-factura');
+    if (contFac) {
+        if (data.factura_tipo && data.factura_tipo !== 'ninguna') {
+            _facturaPedido = {
+                factura_tipo: data.factura_tipo,
+                factura_nombre: data.factura_nombre, factura_nit: data.factura_nit,
+                factura_nrc: data.factura_nrc, factura_giro: data.factura_giro,
+                factura_direccion: data.factura_direccion, customer_email: data.customer_email,
+                ref: data.ref, items: data.items, total: data.total,
+                name: data.name, phone: data.phone, punto: data.punto,
+            };
+            const etiqueta = data.factura_tipo === 'ccf' ? 'comprobante de crédito fiscal' : 'factura de consumidor final';
+            contFac.innerHTML = `<button class="btn btn--outline btn--full" onclick="verFactura()">🧾 Ver mi ${etiqueta}</button>`
+                + (data.customer_email ? `<small style="display:block;margin-top:6px;text-align:center;color:#888;">📧 También a ${data.customer_email}</small>` : '');
+        } else {
+            contFac.innerHTML = '';
+        }
+    }
+
     // Cerrar checkout y mostrar ticket
     closeCheckoutModal();
     $('ticket-overlay').style.display = 'block';
@@ -1613,6 +1653,195 @@ function closeTicket() {
 $('ticket-close').addEventListener('click', closeTicket);
 $('ticket-overlay').addEventListener('click', closeTicket);
 $('ticket-done').addEventListener('click', closeTicket);
+
+// ============================================================
+// DOCUMENTO TRIBUTARIO — EJERCICIO DE FACTURACIÓN (2026-09-17)
+// El CLIENTE decide si quiere comprobante (factura de consumidor final o
+// comprobante de crédito fiscal) y si lo quiere por correo. Los precios de la
+// tienda YA incluyen IVA (13%), así que el documento lo desglosa hacia atrás.
+// ⚠️ Mientras el emisor no tenga NRC y autorización de DTE de Hacienda, el
+// documento se emite marcado como SIMULACIÓN (sin valor fiscal).
+// ============================================================
+const EMISOR = {
+    nombre: 'BARATUSS',
+    razonSocial: 'Cindy Rubio — persona natural',
+    nit: 'PENDIENTE',
+    nrc: 'PENDIENTE',
+    giro: 'Comercio al por menor de prendas de vestir, accesorios y cosméticos',
+    direccion: 'San Salvador, El Salvador',
+    telefono: '+503 6285 2631',
+    correo: 'cindyrubiomusic@gmail.com',
+    establecimiento: '0001',
+    simulacion: true,     // ← poner false cuando existan NRC + DTE autorizado
+};
+const IVA_TASA = 0.13;
+let _facturaPedido = null;
+
+function tipoFacturaElegido() {
+    const r = document.querySelector('input[name="factura-tipo"]:checked');
+    return r ? r.value : 'ninguna';
+}
+
+function toggleFacturaUI() {
+    const tipo = tipoFacturaElegido();
+    const datos = $('factura-datos');
+    const ccf = $('factura-ccf-campos');
+    const correoGrupo = $('factura-correo-grupo');
+    const quiereCorreo = !!($('factura-por-correo') && $('factura-por-correo').checked);
+    if (datos) datos.style.display = tipo === 'ninguna' ? 'none' : '';
+    if (ccf) ccf.style.display = tipo === 'ccf' ? '' : 'none';
+    if (correoGrupo) correoGrupo.style.display = quiereCorreo ? '' : 'none';
+}
+
+// Valida SOLO si el cliente pidió documento. Devuelve { ok, error, datos }
+function datosFactura() {
+    const tipo = tipoFacturaElegido();
+    const d = {
+        factura_tipo: tipo, factura_por_correo: false, customer_email: null,
+        factura_nombre: null, factura_nit: null, factura_nrc: null,
+        factura_giro: null, factura_direccion: null,
+    };
+    if (tipo === 'ninguna') return { ok: true, datos: d };
+
+    const porCorreo = !!($('factura-por-correo') && $('factura-por-correo').checked);
+    d.factura_por_correo = porCorreo;
+    if (porCorreo) {
+        const correo = ($('checkout-email') ? $('checkout-email').value : '').trim();
+        if (!/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(correo)) {
+            return { ok: false, error: '📧 Escribí un correo válido para enviarte el documento' };
+        }
+        d.customer_email = correo;
+    }
+    if (tipo === 'ccf') {
+        const nombre = ($('factura-nombre') ? $('factura-nombre').value : '').trim();
+        const nit = ($('factura-nit') ? $('factura-nit').value : '').trim();
+        const nrc = ($('factura-nrc') ? $('factura-nrc').value : '').trim();
+        const giro = ($('factura-giro') ? $('factura-giro').value : '').trim();
+        const dir = ($('factura-direccion') ? $('factura-direccion').value : '').trim();
+        if (!nombre) return { ok: false, error: '🏢 Falta la razón social para el comprobante de crédito fiscal' };
+        if (!/^\d{4}-?\d{6}-?\d{3}-?\d?$/.test(nit)) return { ok: false, error: '🏢 El NIT va con formato 0000-000000-000-0' };
+        if (!/^\d{5,7}-?\d?$/.test(nrc)) return { ok: false, error: '🏢 El NRC va con formato 00000-0' };
+        if (!giro) return { ok: false, error: '🏢 Falta el giro o actividad económica' };
+        if (!dir) return { ok: false, error: '🏢 Falta la dirección del receptor' };
+        d.factura_nombre = nombre; d.factura_nit = nit; d.factura_nrc = nrc;
+        d.factura_giro = giro; d.factura_direccion = dir;
+    } else {
+        d.factura_nombre = ($('checkout-name') ? $('checkout-name').value : '').trim() || 'Consumidor final';
+    }
+    return { ok: true, datos: d };
+}
+
+function documentoHTML(p) {
+    const total = Number(p.total || 0);
+    const gravada = total / (1 + IVA_TASA);
+    const iva = total - gravada;
+    const esCCF = p.factura_tipo === 'ccf';
+    const f = new Date();
+    const fechaTxt = f.toLocaleDateString('es-SV') + ' ' + f.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+    const correlativo = 'SIM-' + (esCCF ? 'CCF' : 'CF') + '-' + String(p.ref || '').slice(-6);
+    const filas = (p.items || []).map(it => {
+        const sub = (it.price || 0) * (it.qty || 1);
+        return `<tr>
+            <td class="num">${it.qty || 1}</td>
+            <td>${it.name}${it.size ? ' · Talla ' + it.size : ''}<span class="mini"> · cód. #${it.id}</span></td>
+            <td class="num">$${((sub / (1 + IVA_TASA)) / (it.qty || 1)).toFixed(2)}</td>
+            <td class="num">$${(sub / (1 + IVA_TASA)).toFixed(2)}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+    ${EMISOR.simulacion ? '<div class="factura__simulacion">SIMULACIÓN — DOCUMENTO SIN VALOR FISCAL</div>' : ''}
+    <div class="factura__cabecera">
+        <div class="factura__emisor">
+            <div class="factura__emisor-nombre">${EMISOR.nombre}</div>
+            <div class="factura__dato">${EMISOR.razonSocial}</div>
+            <div class="factura__dato">NIT: ${EMISOR.nit} · NRC: ${EMISOR.nrc}</div>
+            <div class="factura__dato">Giro: ${EMISOR.giro}</div>
+            <div class="factura__dato">Dirección: ${EMISOR.direccion}</div>
+            <div class="factura__dato">Tel. ${EMISOR.telefono} · ${EMISOR.correo}</div>
+            <div class="factura__dato">Establecimiento: ${EMISOR.establecimiento}</div>
+        </div>
+        <div class="factura__tipo-caja">
+            <div class="factura__tipo">${esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL'}</div>
+            <div class="factura__numero">N° ${correlativo}</div>
+            <div class="factura__dato">Fecha de emisión: ${fechaTxt}</div>
+            <div class="factura__dato">Condición de pago: contado</div>
+            <div class="factura__dato">Referencia interna: ${p.ref || '—'}</div>
+        </div>
+    </div>
+
+    <div class="factura__bloque">
+        <div class="factura__titulo">Datos del comprador</div>
+        <div class="factura__grid">
+            <div><span>Nombre</span>${p.factura_nombre || 'Consumidor final'}</div>
+            <div><span>NIT</span>${esCCF ? (p.factura_nit || '—') : '—'}</div>
+            <div><span>NRC</span>${esCCF ? (p.factura_nrc || '—') : '—'}</div>
+            <div><span>Giro</span>${esCCF ? (p.factura_giro || '—') : '—'}</div>
+            <div class="ancho"><span>Dirección</span>${esCCF ? (p.factura_direccion || '—') : '—'}</div>
+            <div class="ancho"><span>Correo</span>${p.customer_email || '—'}</div>
+            <div><span>Teléfono</span>${p.phone || '—'}</div>
+            <div><span>Entrega</span>${p.punto || '—'}</div>
+        </div>
+    </div>
+
+    <table class="factura__tabla">
+        <thead>
+            <tr><th>Cant.</th><th>Descripción</th><th class="num">P. unitario</th><th class="num">Ventas gravadas</th></tr>
+        </thead>
+        <tbody>${filas}</tbody>
+    </table>
+
+    <div class="factura__totales">
+        <div><span>Ventas gravadas</span><strong>$${gravada.toFixed(2)}</strong></div>
+        <div><span>IVA 13% (incluido)</span><strong>$${iva.toFixed(2)}</strong></div>
+        <div class="total"><span>Total a pagar</span><strong>$${total.toFixed(2)}</strong></div>
+    </div>
+
+    <div class="factura__pie">
+        El IVA (13%) ya está incluido en los precios. Documento generado electrónicamente el ${fechaTxt}.
+        ${EMISOR.simulacion
+            ? '⚠️ Documento de PRUEBA del sistema de facturación: no tiene valor fiscal mientras el emisor no cuente con NRC y la autorización de Documentos Tributarios Electrónicos (DTE) del Ministerio de Hacienda.'
+            : 'Entrega: por correo electrónico o en el punto de retiro.'}
+    </div>`;
+}
+
+function verFactura(pedido) {
+    if (pedido) _facturaPedido = pedido;
+    if (!_facturaPedido) return;
+    const doc = $('factura-doc');
+    if (doc) doc.innerHTML = documentoHTML(_facturaPedido);
+    const aviso = $('factura-aviso');
+    if (aviso) {
+        aviso.textContent = _facturaPedido.customer_email
+            ? 'Se enviará a ' + _facturaPedido.customer_email
+            : 'Podés imprimirlo o guardarlo en PDF.';
+    }
+    const enviar = $('factura-enviar');
+    if (enviar) enviar.style.display = _facturaPedido.customer_email ? '' : 'none';
+    const ov = $('factura-overlay'), mo = $('factura-modal');
+    if (ov) ov.style.display = 'block';
+    if (mo) { mo.style.display = 'block'; mo.classList.add('modal--open'); }
+}
+
+function cerrarFactura() {
+    const ov = $('factura-overlay'), mo = $('factura-modal');
+    if (ov) ov.style.display = 'none';
+    if (mo) { mo.style.display = 'none'; mo.classList.remove('modal--open'); }
+}
+
+(function initFacturaUI() {
+    document.querySelectorAll('input[name="factura-tipo"]').forEach(r => r.addEventListener('change', toggleFacturaUI));
+    const chk = $('factura-por-correo');
+    if (chk) chk.addEventListener('change', toggleFacturaUI);
+    const c = $('factura-close'), o = $('factura-overlay'), im = $('factura-imprimir');
+    if (c) c.addEventListener('click', cerrarFactura);
+    if (o) o.addEventListener('click', cerrarFactura);
+    if (im) im.addEventListener('click', () => window.print());
+    const en = $('factura-enviar');
+    if (en) en.addEventListener('click', () => {
+        alert('El envío automático por correo se activa en el próximo paso (falta conectar el servicio de correo).\n\nTu documento ya quedó registrado con el correo ' + ((_facturaPedido && _facturaPedido.customer_email) || '') + '.');
+    });
+})();
 
 // ===== BOTÓN PRINCIPAL DE CHECKOUT =====
 $('checkout-btn').addEventListener('click', openCheckoutModal);

@@ -1203,6 +1203,48 @@ ul { list-style: none; }
 @media (min-width: 520px) { .puntos-dia__opciones { grid-template-columns: 1fr 1fr; } }
 
 /* ============================================================
+   DOCUMENTO TRIBUTARIO (factura de consumidor final / comprobante de crédito fiscal)
+   Formato con los datos que exige el Art. 114 del Código Tributario.
+   ============================================================ */
+.modal--factura { width: 580px; }
+.factura { font-size: 0.82rem; color: #222; }
+.factura__simulacion {
+    background: #fff4e5; border: 1px dashed #e0a04a; color: #a5620b;
+    font-size: 0.68rem; font-weight: 800; letter-spacing: 1px; text-align: center;
+    padding: 6px; border-radius: 8px; margin-bottom: 10px;
+}
+.factura__cabecera { display: flex; justify-content: space-between; gap: 14px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+.factura__emisor-nombre { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; }
+.factura__dato { font-size: 0.72rem; color: #555; line-height: 1.45; }
+.factura__tipo-caja { text-align: right; flex: 0 0 auto; }
+.factura__tipo { font-size: 0.66rem; font-weight: 800; color: #c9553f; }
+.factura__numero { font-size: 0.95rem; font-weight: 800; margin: 2px 0 4px; }
+.factura__bloque { margin-top: 12px; }
+.factura__titulo { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 6px; }
+.factura__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 14px; }
+.factura__grid .ancho { grid-column: 1 / -1; }
+.factura__grid span { display: block; font-size: 0.6rem; color: #999; text-transform: uppercase; letter-spacing: .5px; }
+.factura__tabla { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.factura__tabla th { font-size: 0.6rem; text-transform: uppercase; color: #888; text-align: left; border-bottom: 1px solid #ddd; padding: 5px 4px; }
+.factura__tabla td { font-size: 0.78rem; padding: 6px 4px; border-bottom: 1px dotted #eee; vertical-align: top; }
+.factura__tabla .num { text-align: right; white-space: nowrap; }
+.factura__tabla .mini { color: #aaa; font-size: 0.66rem; }
+.factura__totales { margin-top: 10px; border-top: 2px solid #eee; padding-top: 8px; }
+.factura__totales div { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 2px 0; }
+.factura__totales .total { font-size: 1rem; font-weight: 800; border-top: 1px solid #eee; margin-top: 4px; padding-top: 6px; }
+.factura__pie { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #ddd; font-size: 0.66rem; color: #888; line-height: 1.5; }
+@media (max-width: 768px) {
+    .factura { font-size: 0.78rem; }
+    .factura__cabecera { flex-direction: column; }
+    .factura__tipo-caja { text-align: left; }
+}
+@media print {
+    body * { visibility: hidden !important; }
+    #factura-doc, #factura-doc * { visibility: visible !important; }
+    #factura-doc { position: absolute; left: 0; top: 0; width: 100%; padding: 16px; }
+}
+
+/* ============================================================
    CELULAR: cuadros a pantalla completa VISIBLE y anclados ARRIBA
    Corrige tres fallos reales detectados con navegador en tamaño celular:
    1) el cuadro de la PRENDA quedaba 405px ARRIBA de la pantalla (una regla
