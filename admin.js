@@ -695,6 +695,7 @@ async function loadFacturasPendientes() {
                 <div class="factura-item__acciones">
                     <button type="button" class="admin-btn admin-btn--ghost" onclick="verFacturaPanel(${i})">🧾 Ver documento</button>
                     <a class="admin-btn admin-btn--ghost" href="${correoLinkFactura(o)}">📧 Preparar correo</a>
+                    <button type="button" class="admin-btn admin-btn--ghost" onclick="copiarCorreoFactura(${i})">📋 Copiar correo y texto</button>
                     <button type="button" class="admin-btn admin-btn--primary" onclick="marcarFacturaEnviada('${o.reference}')">✅ Ya la envié</button>
                 </div>
             </div>`;
@@ -791,6 +792,29 @@ function documentoPanelHTML(o) {
             ? '⚠️ Documento de PRUEBA del sistema de facturación: no tiene valor fiscal mientras el emisor no cuente con NRC y la autorización de Documentos Tributarios Electrónicos (DTE) del Ministerio de Hacienda.'
             : 'Entrega: por correo electrónico o en el punto de retiro.'}
     </div>`;
+}
+
+function copiarCorreoFactura(i) {
+    const o = _facturasPendientes[i];
+    if (!o) return;
+    const que = o.factura_tipo === 'ccf' ? 'comprobante de crédito fiscal' : 'factura de consumidor final';
+    const texto = 'Para: ' + (o.customer_email || '(el cliente no dejó correo)')
+        + '\nAsunto: Tu ' + que + ' de BARATUSS · #' + o.reference
+        + '\n\nHola ' + (o.factura_nombre || o.customer_name || '') + ','
+        + '\n\n¡Gracias por tu compra en BARATUSS! 💖'
+        + '\nTe adjuntamos tu ' + que + ' (adjuntá el PDF que sale de "Ver documento" → Imprimir).'
+        + '\n\nPedido: ' + o.reference
+        + '\nTotal: $' + Number(o.total || 0).toFixed(2)
+        + '\nEntrega: ' + (o.delivery_point || 'por coordinar')
+        + '\n\nCualquier cosa escribinos al +503 6285 2631.'
+        + '\nBARATUSS';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto)
+            .then(() => showToast('📋 Copiado: pegalo en tu correo y adjuntá el PDF'))
+            .catch(() => showToast('⚠️ No se pudo copiar solo: usá "Preparar correo"'));
+    } else {
+        showToast('⚠️ Este navegador no permite copiar solo: usá "Preparar correo"');
+    }
 }
 
 function verFacturaPanel(i) {
