@@ -130,9 +130,17 @@ function fmtFecha(f: Date): string {
   return dd + '/' + mm + '/' + f.getUTCFullYear();
 }
 
-async function montoOrden(ref: string): Promise<string> {
-  const { data } = await supabase.from('orders').select('total').eq('reference', ref).limit(1).maybeSingle();
-  return data ? '$' + Number(data.total || 0).toFixed(2) : '—';
+// Datos de la orden asociada: el monto y si está PAGADA.
+// Un pedido de tarjeta abandonado (sin pagar) todavía NO es una compra: no se agradece ni se
+// recuerda hasta que Meta/Wompi confirma el pago (antes se saludaba igual: se creaba el despacho
+// al iniciar el pago, no al pagarlo).
+async function datosOrden(ref: string): Promise<{ monto: string; pagado: boolean }> {
+  const { data } = await supabase.from('orders')
+    .select('total, payment_status, payment_method, status').eq('reference', ref).limit(1).maybeSingle();
+  if (!data) return { monto: '—', pagado: true };      // sin orden asociada: no bloquear el circuito
+  const estado = String(data.payment_status || '').toLowerCase();
+  const sinPagar = ['pendiente', 'rechazado', 'cancelado', 'fallido'].includes(estado);
+  return { monto: '$' + Number(data.total || 0).toFixed(2), pagado: !sinPagar };
 }
 
 async function marcar(despId: number, notas: string, marca: string) {
@@ -217,13 +225,16 @@ serve(async (_req) => {
     const destino = d.destino || 'tu punto de entrega';
     const fecha = fechaBloque(destino, d.created_at);
     if (!tel || !fecha) continue;
+    // Un pedido sin pagar (tarjeta abandonada) aún no es una compra: se espera al pago.
+    const orden = await datosOrden(ref);
+    if (!orden.pagado) continue;
     const fechaStr = fmtFecha(fecha);
     const hi = horaInicio(destino);
     const sello = hoy.toISOString().slice(0, 16).replace('T', ' ');
 
     // (1) AGRADECIMIENTO (uno solo por PEDIDO, aunque tenga varios productos)
     if (!notas.includes('AGRAD') && !pedidosAgrad.has(ref)) {
-      const monto = await montoOrden(ref);
+      const monto = orden.monto;
       if (await reclamarPedido(ref, notas, '📤 AGRAD ' + sello, 'AGRAD')) {
         const env = await enviarConRespaldo(tel, 'agradecimiento', [nombre, ref, monto], 'AGRADECIMIENTO');
         if (env) {

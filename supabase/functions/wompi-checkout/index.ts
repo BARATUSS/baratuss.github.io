@@ -27,7 +27,14 @@ async function crearDespachos(ref: string, items: any[], datos: any) {
   const { count } = await supabase.from('despachos')
     .select('id', { count: 'exact', head: true })
     .eq('order_reference', ref);
-  if ((count ?? 0) > 0) return { duplicado: true, count };
+  if ((count ?? 0) > 0) {
+    // Los despachos YA existían: los creó el disparador de la base al registrar el pedido.
+    // ⚠️ Antes esto cortaba acá y NUNCA avisaba al seguimiento → el agradecimiento esperaba
+    // hasta 5 minutos al cron. Es seguro avisar igual: el seguimiento reclama el pedido de
+    // forma atómica antes de enviar, así que repetir la llamada NO duplica mensajes.
+    await avisarSeguimiento();
+    return { duplicado: true, count };
+  }
   for (const item of items) {
     await supabase.from('despachos').insert({
       order_reference: ref,
@@ -47,15 +54,32 @@ async function crearDespachos(ref: string, items: any[], datos: any) {
   }
   // MEJORA: dispara el seguimiento AL INSTANTE (agradecimiento inmediato, sin esperar el cron de 5 min).
   // Si esto falla, el cron cada 5 minutos lo recupera igual.
-  try {
-    await fetch('https://lizybztwnlrlvsrmgnug.functions.supabase.co/seguimiento-entregas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}'
-    });
-  } catch (_e) { /* el cron lo recupera */ }
+  await avisarSeguimiento();
 
   return { creados: items.length };
+}
+
+// Avisa a `seguimiento-entregas` para que evalúe y envíe lo que corresponda AHORA.
+// Se llama en los dos caminos de `crearDespachos` (despachos nuevos y despachos ya existentes,
+// estos últimos creados por el disparador de la base): si no, el mensaje salía recién a los 5 min.
+// ⚠️ El aviso NO se espera: la tienda muestra el ticket en cuanto responde esta función, y enviar
+// el mensaje tarda ~5 s. Con `waitUntil` la respuesta sale al instante y el envío sigue en segundo
+// plano (si `EdgeRuntime` no existiera, se espera como antes para no perder el aviso).
+async function avisarSeguimiento() {
+  const aviso = fetch('https://lizybztwnlrlvsrmgnug.functions.supabase.co/seguimiento-entregas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  }).catch(() => { /* el cron de 5 minutos lo recupera */ });
+
+  try {
+    // @ts-ignore EdgeRuntime es propio de las Edge Functions de Supabase
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(aviso);
+      return;
+    }
+  } catch (_e) { /* sigue abajo */ }
+  await aviso;
 }
 
 serve(async (req) => {
