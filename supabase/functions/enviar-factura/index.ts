@@ -55,6 +55,73 @@ async function tokenGmail() {
 const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
 const b64url = (s: string) => b64(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
+// ============================================================
+// QR → PNG sin dependencias (la librería qrcode necesita 'canvas' para hacer PNG,
+// que no existe en el servidor; acá se arma el PNG a mano)
+// ============================================================
+const CID_QR = 'qr-documento@baratuss';
+let _qrPng: Uint8Array | null = null;
+
+const TABLA_CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes: Uint8Array) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = TABLA_CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+const enteroBE = (n: number) => Uint8Array.from([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]);
+function unir(trozos: Uint8Array[]) {
+  const total = trozos.reduce((s, t) => s + t.length, 0);
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const t of trozos) { out.set(t, p); p += t.length; }
+  return out;
+}
+function bloque(tipo: string, datos: Uint8Array) {
+  const t = new TextEncoder().encode(tipo);
+  return unir([enteroBE(datos.length), t, datos, enteroBE(crc32(unir([t, datos])))]);
+}
+
+async function qrPng(texto: string, escala = 4, quiet = 4): Promise<Uint8Array> {
+  const qr = (QRCode as any).create(texto, { errorCorrectionLevel: 'M' });
+  const size: number = qr.modules.size;
+  const datos: Uint8Array = qr.modules.data;
+  const lado = (size + quiet * 2) * escala;
+  const filas: Uint8Array[] = [];
+  for (let y = 0; y < size + quiet * 2; y++) {
+    const fila = new Uint8Array(1 + lado);
+    for (let x = 0; x < size + quiet * 2; x++) {
+      let oscuro = false;
+      if (y >= quiet && y < quiet + size && x >= quiet && x < quiet + size) {
+        oscuro = !!datos[(y - quiet) * size + (x - quiet)];
+      }
+      const v = oscuro ? 0 : 255;
+      for (let k = 0; k < escala; k++) fila[1 + x * escala + k] = v;
+    }
+    for (let k = 0; k < escala; k++) filas.push(fila);   // repetir la fila hacia abajo
+  }
+  const crudo = unir(filas);
+  const cs = new CompressionStream('deflate');
+  const escritor = cs.writable.getWriter();
+  escritor.write(crudo);
+  escritor.close();
+  const comprimido = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  const ihdr = unir([enteroBE(lado), enteroBE(lado), Uint8Array.from([8, 0, 0, 0, 0])]);
+  return unir([
+    Uint8Array.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+    bloque('IHDR', ihdr),
+    bloque('IDAT', comprimido),
+    bloque('IEND', new Uint8Array(0)),
+  ]);
+}
+
 async function documentoHTML(o: Record<string, any>) {
   const total = Number(o.total || 0);
   const gravada = total / (1 + IVA);
@@ -75,7 +142,7 @@ async function documentoHTML(o: Record<string, any>) {
 
   // Código QR: en un DTE autorizado debe llevar el enlace oficial de consulta de Hacienda;
   // mientras no exista autorización, lleva los datos del documento.
-  let qrImg = '';
+  _qrPng = null;
   try {
     const textoQR = [
       (esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL') + ' — ' + EMISOR.nombre,
@@ -87,8 +154,8 @@ async function documentoHTML(o: Record<string, any>) {
       'Referencia: ' + (o.reference || '—'),
       EMISOR.simulacion ? 'DOCUMENTO DE SIMULACIÓN — SIN VALOR FISCAL' : '',
     ].filter(Boolean).join('\n');
-    qrImg = await QRCode.toDataURL(textoQR, { margin: 1, width: 240, errorCorrectionLevel: 'M' });
-  } catch (_e) { qrImg = ''; }
+    _qrPng = await qrPng(textoQR, 4, 4);
+  } catch (_e) { _qrPng = null; }
 
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:640px;font-size:13px;">
   ${EMISOR.simulacion ? `<div style="background:#fff4e5;border:1px dashed #e0a04a;color:#a5620b;font-size:10px;font-weight:bold;letter-spacing:1px;text-align:center;padding:6px;border-radius:8px;margin-bottom:10px;">SIMULACIÓN — DOCUMENTO SIN VALOR FISCAL</div>` : ''}
@@ -142,8 +209,8 @@ async function documentoHTML(o: Record<string, any>) {
     <tr><td style="padding:8px 0;font-size:15px;font-weight:bold;border-top:1px solid #eee;">Total a pagar</td><td style="padding:8px 0;font-size:15px;font-weight:bold;text-align:right;border-top:1px solid #eee;">$${total.toFixed(2)}</td></tr>
   </table>
 
-  ${qrImg ? `<div style="text-align:center;margin-top:16px;">
-    <img src="${qrImg}" alt="Código QR del documento" width="120" height="120" style="width:120px;height:120px;border:1px solid #eee;border-radius:6px;">
+  ${_qrPng ? `<div style="text-align:center;margin-top:16px;">
+    <img src="cid:${CID_QR}" alt="Código QR del documento" width="120" height="120" style="width:120px;height:120px;border:1px solid #eee;border-radius:6px;">
     <div style="color:#999;font-size:10px;margin-top:4px;">Escaneá para verificar este documento</div>
   </div>` : ''}
 
@@ -169,17 +236,59 @@ async function cuerpoCorreo(o: Record<string, any>) {
   </div>`;
 }
 
-async function enviarCorreo(accessToken: string, destinatario: string, asunto: string, html: string) {
-  const mime = [
+// Envuelve en base64 y corta las líneas (los clientes de correo lo esperan así)
+function envolverBase64(contenido: Uint8Array | string) {
+  let s: string;
+  if (typeof contenido === 'string') {
+    s = contenido;
+  } else {
+    let t = '';
+    for (let i = 0; i < contenido.length; i++) t += String.fromCharCode(contenido[i]);
+    s = btoa(t);
+  }
+  return s.replace(/.{1,76}/g, (m) => m + '\r\n');
+}
+
+async function enviarCorreo(accessToken: string, destinatario: string, asunto: string, html: string, qr: Uint8Array | null) {
+  const cabeceras = [
     `From: ${REMITENTE}`,
     `To: ${destinatario}`,
     `Subject: =?UTF-8?B?${b64(asunto)}?=`,
     'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    b64(html),
-  ].join('\r\n');
+  ];
+  let mime: string;
+  if (qr) {
+    // multipart/related: el QR va como imagen incrustada (los clientes de correo no muestran SVG
+    // ni imágenes embebidas en base64 dentro del HTML, pero sí las adjuntas por referencia)
+    const lim = '==BARATUSS-QR==';
+    mime = [
+      ...cabeceras,
+      `Content-Type: multipart/related; boundary="${lim}"`,
+      '',
+      `--${lim}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      envolverBase64(b64(html)),
+      `--${lim}`,
+      'Content-Type: image/png; name="qr-documento.png"',
+      'Content-Transfer-Encoding: base64',
+      `Content-ID: <${CID_QR}>`,
+      'Content-Disposition: inline; filename="qr-documento.png"',
+      '',
+      envolverBase64(qr),
+      `--${lim}--`,
+      '',
+    ].join('\r\n');
+  } else {
+    mime = [
+      ...cabeceras,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      b64(html),
+    ].join('\r\n');
+  }
 
   const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
@@ -231,7 +340,7 @@ Deno.serve(async (req) => {
       try {
         const esCCF = o.factura_tipo === 'ccf';
         const asunto = `Tu ${esCCF ? 'comprobante de crédito fiscal' : 'factura'} de BARATUSS · #${o.reference}`;
-        const envio = await enviarCorreo(token, o.customer_email, asunto, await cuerpoCorreo(o));
+        const envio = await enviarCorreo(token, o.customer_email, asunto, await cuerpoCorreo(o), _qrPng);
         await marcarEnviada(o.reference);
         resultados.push({ referencia: o.reference, para: o.customer_email, gmail_id: envio.id, ok: true });
       } catch (e) {
