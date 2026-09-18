@@ -1237,6 +1237,10 @@ ul { list-style: none; }
 .factura__totales div { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 2px 0; }
 .factura__totales .total { font-size: 1rem; font-weight: 800; border-top: 1px solid #eee; margin-top: 4px; padding-top: 6px; }
 .factura__pie { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #ddd; font-size: 0.66rem; color: #888; line-height: 1.5; }
+/* Código QR del documento (en un DTE autorizado llevará el enlace oficial de Hacienda) */
+.factura__qr { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 14px; }
+.factura__qr svg { width: 108px; height: 108px; border: 1px solid #eee; border-radius: 6px; padding: 4px; background: #fff; }
+.factura__qr small { font-size: 0.62rem; color: #999; }
 @media (max-width: 768px) {
     .factura { font-size: 0.78rem; }
     .factura__cabecera { flex-direction: column; }

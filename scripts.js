@@ -1760,6 +1760,29 @@ function documentoHTML(p) {
         </tr>`;
     }).join('');
 
+    // ===== CÓDIGO QR =====
+    // ⚠️ En un DTE autorizado el QR debe llevar el enlace oficial de consulta de Hacienda
+    // (ambiente + código de generación + fecha de emisión). Mientras no exista autorización de DTE,
+    // el QR lleva los datos del documento para poder verificarlo escaneando.
+    let qrHtml = '';
+    try {
+        if (typeof qrcode === 'function') {
+            const q = qrcode(0, 'M');
+            q.addData([
+                (esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL') + ' — ' + EMISOR.nombre,
+                'N°: ' + correlativo,
+                'Fecha: ' + fechaTxt,
+                'Emisor — NIT: ' + EMISOR.nit + ' / NRC: ' + EMISOR.nrc,
+                'Receptor: ' + (p.factura_nombre || p.name || 'Consumidor final'),
+                'Total: $' + total.toFixed(2),
+                'Referencia: ' + (p.ref || '—'),
+                EMISOR.simulacion ? 'DOCUMENTO DE SIMULACIÓN — SIN VALOR FISCAL' : '',
+            ].filter(Boolean).join('\n'));
+            q.make();
+            qrHtml = `<div class="factura__qr">${q.createSvgTag({ cellSize: 3, margin: 1 })}<small>Escaneá para verificar este documento</small></div>`;
+        }
+    } catch (e) { qrHtml = ''; }
+
     return `
     ${EMISOR.simulacion ? '<div class="factura__simulacion">SIMULACIÓN — DOCUMENTO SIN VALOR FISCAL</div>' : ''}
     <div class="factura__cabecera">
@@ -1807,6 +1830,8 @@ function documentoHTML(p) {
         <div><span>IVA 13% (incluido)</span><strong>$${iva.toFixed(2)}</strong></div>
         <div class="total"><span>Total a pagar</span><strong>$${total.toFixed(2)}</strong></div>
     </div>
+
+    ${qrHtml}
 
     <div class="factura__pie">
         El IVA (13%) ya está incluido en los precios. Documento generado electrónicamente el ${fechaTxt}.

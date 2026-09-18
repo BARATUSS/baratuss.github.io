@@ -10,6 +10,9 @@
 // Seguridad: la función es pública (no-verify-jwt) pero exige la clave FACTURA_KEY
 // en el encabezado x-baratuss-key, para que nadie más pueda disparar envíos.
 // ============================================================
+// Generación del código QR dentro de la función (sin servicios externos)
+import QRCode from 'https://esm.sh/qrcode@1.5.3';
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const G_ID = Deno.env.get('GOOGLE_CLIENT_ID') || '';
@@ -52,7 +55,7 @@ async function tokenGmail() {
 const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
 const b64url = (s: string) => b64(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-function documentoHTML(o: Record<string, any>) {
+async function documentoHTML(o: Record<string, any>) {
   const total = Number(o.total || 0);
   const gravada = total / (1 + IVA);
   const iva = total - gravada;
@@ -69,6 +72,23 @@ function documentoHTML(o: Record<string, any>) {
       <td style="padding:6px 4px;border-bottom:1px dotted #eee;font-size:13px;text-align:right;white-space:nowrap;">$${(sub / (1 + IVA)).toFixed(2)}</td>
     </tr>`;
   }).join('');
+
+  // Código QR: en un DTE autorizado debe llevar el enlace oficial de consulta de Hacienda;
+  // mientras no exista autorización, lleva los datos del documento.
+  let qrImg = '';
+  try {
+    const textoQR = [
+      (esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL') + ' — ' + EMISOR.nombre,
+      'N°: ' + correlativo,
+      'Fecha: ' + fechaTxt,
+      'Emisor — NIT: ' + EMISOR.nit + ' / NRC: ' + EMISOR.nrc,
+      'Receptor: ' + (o.factura_nombre || o.customer_name || 'Consumidor final'),
+      'Total: $' + total.toFixed(2),
+      'Referencia: ' + (o.reference || '—'),
+      EMISOR.simulacion ? 'DOCUMENTO DE SIMULACIÓN — SIN VALOR FISCAL' : '',
+    ].filter(Boolean).join('\n');
+    qrImg = await QRCode.toDataURL(textoQR, { margin: 1, width: 240, errorCorrectionLevel: 'M' });
+  } catch (_e) { qrImg = ''; }
 
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:640px;font-size:13px;">
   ${EMISOR.simulacion ? `<div style="background:#fff4e5;border:1px dashed #e0a04a;color:#a5620b;font-size:10px;font-weight:bold;letter-spacing:1px;text-align:center;padding:6px;border-radius:8px;margin-bottom:10px;">SIMULACIÓN — DOCUMENTO SIN VALOR FISCAL</div>` : ''}
@@ -122,6 +142,11 @@ function documentoHTML(o: Record<string, any>) {
     <tr><td style="padding:8px 0;font-size:15px;font-weight:bold;border-top:1px solid #eee;">Total a pagar</td><td style="padding:8px 0;font-size:15px;font-weight:bold;text-align:right;border-top:1px solid #eee;">$${total.toFixed(2)}</td></tr>
   </table>
 
+  ${qrImg ? `<div style="text-align:center;margin-top:16px;">
+    <img src="${qrImg}" alt="Código QR del documento" width="120" height="120" style="width:120px;height:120px;border:1px solid #eee;border-radius:6px;">
+    <div style="color:#999;font-size:10px;margin-top:4px;">Escaneá para verificar este documento</div>
+  </div>` : ''}
+
   <div style="margin-top:14px;padding-top:8px;border-top:1px dashed #ddd;color:#888;font-size:10px;line-height:1.6;">
     El IVA (13%) ya está incluido en los precios. Documento generado electrónicamente el ${fechaTxt}.<br>
     ${EMISOR.simulacion
@@ -131,14 +156,14 @@ function documentoHTML(o: Record<string, any>) {
 </div>`;
 }
 
-function cuerpoCorreo(o: Record<string, any>) {
+async function cuerpoCorreo(o: Record<string, any>) {
   const esCCF = o.factura_tipo === 'ccf';
   return `<div style="background:#f7f7f7;padding:20px;">
     <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;padding:22px;font-family:Arial,Helvetica,sans-serif;">
       <div style="font-family:Georgia,serif;font-size:22px;font-weight:bold;letter-spacing:2px;margin-bottom:6px;">BARATUSS</div>
       <p style="font-size:14px;color:#333;margin:0 0 14px;">¡Hola ${o.factura_nombre || o.customer_name || ''}! 💖<br>
       Gracias por tu compra. Te dejamos tu <strong>${esCCF ? 'comprobante de crédito fiscal' : 'factura de consumidor final'}</strong>.</p>
-      ${documentoHTML(o)}
+      ${await documentoHTML(o)}
       <p style="font-size:12px;color:#888;margin-top:18px;">Cualquier consulta, escribinos al <strong>+503 6285 2631</strong>.<br>BARATUSS · San Salvador, El Salvador</p>
     </div>
   </div>`;
@@ -206,7 +231,7 @@ Deno.serve(async (req) => {
       try {
         const esCCF = o.factura_tipo === 'ccf';
         const asunto = `Tu ${esCCF ? 'comprobante de crédito fiscal' : 'factura'} de BARATUSS · #${o.reference}`;
-        const envio = await enviarCorreo(token, o.customer_email, asunto, cuerpoCorreo(o));
+        const envio = await enviarCorreo(token, o.customer_email, asunto, await cuerpoCorreo(o));
         await marcarEnviada(o.reference);
         resultados.push({ referencia: o.reference, para: o.customer_email, gmail_id: envio.id, ok: true });
       } catch (e) {
