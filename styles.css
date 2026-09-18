@@ -1213,7 +1213,7 @@ ul { list-style: none; }
     font-size: 0.68rem; font-weight: 800; letter-spacing: 1px; text-align: center;
     padding: 6px; border-radius: 8px; margin-bottom: 10px;
 }
-.factura__cabecera { display: flex; justify-content: space-between; gap: 14px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+.factura__cabecera { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
 .factura__emisor-nombre { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; }
 .factura__dato { font-size: 0.72rem; color: #555; line-height: 1.45; }
 .factura__tipo-caja { text-align: right; flex: 0 0 auto; }
@@ -1224,7 +1224,11 @@ ul { list-style: none; }
 .factura__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 14px; }
 .factura__grid .ancho { grid-column: 1 / -1; }
 .factura__grid span { display: block; font-size: 0.6rem; color: #999; text-transform: uppercase; letter-spacing: .5px; }
-.factura__tabla { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.factura__tabla { width: 100%; border-collapse: collapse; margin-top: 12px; table-layout: fixed; }
+.factura__tabla th:nth-child(1), .factura__tabla td:nth-child(1) { width: 9%; }
+.factura__tabla th:nth-child(2), .factura__tabla td:nth-child(2) { width: 51%; word-break: break-word; }
+.factura__tabla th:nth-child(3), .factura__tabla td:nth-child(3) { width: 20%; }
+.factura__tabla th:nth-child(4), .factura__tabla td:nth-child(4) { width: 20%; }
 .factura__tabla th { font-size: 0.6rem; text-transform: uppercase; color: #888; text-align: left; border-bottom: 1px solid #ddd; padding: 5px 4px; }
 .factura__tabla td { font-size: 0.78rem; padding: 6px 4px; border-bottom: 1px dotted #eee; vertical-align: top; }
 .factura__tabla .num { text-align: right; white-space: nowrap; }
