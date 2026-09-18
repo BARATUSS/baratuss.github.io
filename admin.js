@@ -665,7 +665,7 @@ const EMISOR_PANEL = {
     giro: 'Comercio al por menor de prendas de vestir, accesorios y cosméticos',
     direccion: 'San Salvador, El Salvador',
     telefono: '+503 6285 2631',
-    correo: 'cindyrubiomusic@gmail.com',
+    correo: 'baratusses@gmail.com',
     establecimiento: '0001',
     simulacion: true,
 };
