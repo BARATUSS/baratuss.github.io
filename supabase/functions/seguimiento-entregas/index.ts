@@ -25,8 +25,10 @@ function normalizarTel(tel: string): string {
   return t;
 }
 
-async function enviarPlantilla(tel: string, plantilla: string, params: string[], etiqueta = ''): Promise<boolean> {
-  if (!WA_TOKEN || !PHONE_ID) return false;
+// Devuelve el wamid (identificador del mensaje en Meta) o null si falló.
+// El wamid es lo que permite después saber si el mensaje LLEGÓ (Meta manda el estado después).
+async function enviarPlantilla(tel: string, plantilla: string, params: string[], etiqueta = ''): Promise<string | null> {
+  if (!WA_TOKEN || !PHONE_ID) return null;
   try {
     const r = await fetch('https://graph.facebook.com/v21.0/' + PHONE_ID + '/messages', {
       method: 'POST',
@@ -40,10 +42,29 @@ async function enviarPlantilla(tel: string, plantilla: string, params: string[],
       })
     });
     const d = await r.json();
-    const ok = !!d?.messages;
-    console.log('PLANTILLA', plantilla, '->', tel, etiqueta, ok ? 'OK' : JSON.stringify(d).slice(0, 180));
-    return ok;
-  } catch (e) { console.log('error plantilla', String(e)); return false; }
+    const wamid = d?.messages?.[0]?.id ? String(d.messages[0].id) : null;
+    console.log('PLANTILLA', plantilla, '->', tel, etiqueta, wamid ? 'OK' : JSON.stringify(d).slice(0, 180));
+    return wamid;
+  } catch (e) { console.log('error plantilla', String(e)); return null; }
+}
+
+// Registra el saliente en la bitácora con su wamid: así el webhook puede actualizar
+// "entregado / leído / falló" cuando Meta manda el estado (sin esto no se sabe si llegó).
+async function registrarSaliente(wamid: string | null, tel: string, plantilla: string, ref: string) {
+  if (!wamid) return;
+  try {
+    await supabase.from('wa_mensajes').insert({
+      wa_message_id: wamid,
+      telefono: normalizarTel(tel),
+      texto: '(plantilla: ' + plantilla + ')',
+      tipo: 'template',
+      direccion: 'saliente',
+      order_reference: ref || null,
+      atendido_por: 'seguimiento-entregas',
+      estado_entrega: 'sent',
+      wa_timestamp: new Date().toISOString()
+    });
+  } catch (_e) { /* no rompe el envío si falla el registro */ }
 }
 
 async function avisarTG(texto: string) {
@@ -92,7 +113,7 @@ function fmtFecha(f: Date): string {
 
 async function montoOrden(ref: string): Promise<string> {
   const { data } = await supabase.from('orders').select('total').eq('reference', ref).limit(1).maybeSingle();
-  return data ? '$' + Number(data.total || 0).toFixed(2) : '';
+  return data ? '$' + Number(data.total || 0).toFixed(2) : '—';
 }
 
 async function marcar(despId: number, notas: string, marca: string) {
@@ -171,7 +192,7 @@ serve(async (_req) => {
   for (const d of despachos || []) {
     const tel = d.customer_phone;
     const notas0 = d.notas || '';
-    let notas = notas0;
+    const notas = notas0;
     const nombre = String(d.customer_name || 'cliente').split(' ')[0];
     const ref = d.order_reference || '';
     const destino = d.destino || 'tu punto de entrega';
@@ -185,7 +206,9 @@ serve(async (_req) => {
     if (!notas.includes('AGRAD') && !pedidosAgrad.has(ref)) {
       const monto = await montoOrden(ref);
       if (await reclamarPedido(ref, notas, '📤 AGRAD ' + sello, 'AGRAD')) {
-        if (await enviarPlantilla(tel, 'pedido_confirmado_baratuss', [nombre, ref, monto], 'AGRADECIMIENTO')) {
+        const wamid = await enviarPlantilla(tel, 'pedido_confirmado_baratuss', [nombre, ref, monto], 'AGRADECIMIENTO');
+        if (wamid) {
+          await registrarSaliente(wamid, tel, 'pedido_confirmado_baratuss', ref);
           pedidosAgrad.add(ref);
           log.push('AGRAD -> ' + tel);
         } else {
@@ -200,7 +223,9 @@ serve(async (_req) => {
     if (difDias === 1) {
       if (hora < 12 && !notas.includes('RECORD-AM') && !pedidosRecAM.has(ref)) {
         if (await reclamarPedido(ref, notas, '📤 RECORD-AM ' + sello, 'RECORD-AM')) {
-          if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-AM')) {
+          const wamid = await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-AM');
+          if (wamid) {
+            await registrarSaliente(wamid, tel, 'recordatorio_entrega_baratuss', ref);
             pedidosRecAM.add(ref);
             log.push('RECORD-AM -> ' + tel);
           } else {
@@ -210,7 +235,9 @@ serve(async (_req) => {
         }
       } else if (hora >= 14 && !notas.includes('RECORD-PM') && !pedidosRecPM.has(ref)) {
         if (await reclamarPedido(ref, notas, '📤 RECORD-PM ' + sello, 'RECORD-PM')) {
-          if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-PM')) {
+          const wamid = await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-PM');
+          if (wamid) {
+            await registrarSaliente(wamid, tel, 'recordatorio_entrega_baratuss', ref);
             pedidosRecPM.add(ref);
             log.push('RECORD-PM -> ' + tel);
           } else {
@@ -226,7 +253,9 @@ serve(async (_req) => {
       const minutos = (hi - hora) * 60;
       if (minutos >= 0 && minutos <= 60) {
         if (await reclamarPedido(ref, notas, '📤 CONF-1H ' + sello, 'CONF-1H')) {
-          if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H')) {
+          const wamid = await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H');
+          if (wamid) {
+            await registrarSaliente(wamid, tel, 'recordatorio_entrega_baratuss', ref);
             pedidosConf1h.add(ref);
             log.push('CONF-1H -> ' + tel);
           } else {
@@ -256,7 +285,8 @@ serve(async (_req) => {
     const aviso = '📋 BARATUSS — bloque de ' + (esManana ? 'hoy (mañana)' : 'hoy (tarde)') + ': ' +
       r.total + ' pedido(s), ' + r.conf + ' confirmado(s).\n' + r.destino + '\n' +
       (r.conf > 0 ? '✅ SÍ vas: hay clientes confirmados.' : '❌ Dejá el bloque: nadie confirmó (ahorrás el viaje).');
-    await enviarPlantilla(CINDY_WA, 'pedido_listo_retiro_baratuss', ['Cindy', 'resumen del día', r.destino], 'GO/NO-GO');
+    const wamid = await enviarPlantilla(CINDY_WA, 'pedido_listo_retiro_baratuss', ['Cindy', 'resumen del día', r.destino], 'GO/NO-GO');
+    await registrarSaliente(wamid, CINDY_WA, 'pedido_listo_retiro_baratuss', '');
     await avisarTG(aviso);
     log.push('go/no-go enviado: ' + clave);
   }
