@@ -19,3 +19,9 @@ docs/
 # ===== Sistema =====
 .vscode/
 *.log
+
+# SEGURIDAD: credenciales y codigos (NUNCA subir)
+github-recovery-codes.txt
+*recovery-code*
+*recovery_codes*
+*_codes.txt
