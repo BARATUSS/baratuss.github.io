@@ -1171,6 +1171,38 @@ ul { list-style: none; }
 .checkout-resumen__precio { margin-left: auto; font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
 
 /* ============================================================
+   TARJETAS DE DÍA Y PUNTO DE ENTREGA (2026-09-17)
+   Reemplazan visualmente al desplegable plano: día con su FECHA real
+   (próximo miércoles/sábado), punto y horario, con selección a la vista.
+   ============================================================ */
+.puntos-cards { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 10px; }
+.puntos-dia { border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; background: var(--white); }
+.puntos-dia__cabecera {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 10px 14px; background: linear-gradient(90deg, #fff4f1, #fffdfc);
+    border-bottom: 1px solid var(--gray-100);
+}
+.puntos-dia__titulo { font-size: 0.85rem; font-weight: 700; color: var(--gray-800); }
+.puntos-dia__fecha {
+    font-size: 0.72rem; font-weight: 600; color: #c9553f;
+    background: rgba(255,150,134,0.18); padding: 2px 10px; border-radius: 100px;
+    text-transform: capitalize;
+}
+.puntos-dia__opciones { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 10px 12px 12px; }
+.punto-card {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    background: var(--white); border: 2px solid var(--gray-200); border-radius: 12px;
+    padding: 12px 14px; cursor: pointer; transition: var(--transition); font-family: inherit;
+}
+.punto-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(255,150,134,0.15); }
+.punto-card--activo { border-color: var(--accent); background: rgba(255,150,134,0.07); box-shadow: 0 4px 14px rgba(255,150,134,0.18); }
+.punto-card__check { font-size: 1.1rem; flex: 0 0 auto; }
+.punto-card__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.punto-card__txt strong { font-size: 0.9rem; font-weight: 600; color: var(--gray-800); }
+.punto-card__txt small { font-size: 0.74rem; color: var(--gray-500); }
+@media (min-width: 520px) { .puntos-dia__opciones { grid-template-columns: 1fr 1fr; } }
+
+/* ============================================================
    CELULAR: cuadros a pantalla completa VISIBLE y anclados ARRIBA
    Corrige tres fallos reales detectados con navegador en tamaño celular:
    1) el cuadro de la PRENDA quedaba 405px ARRIBA de la pantalla (una regla

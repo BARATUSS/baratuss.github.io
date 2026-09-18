@@ -783,6 +783,77 @@ function updateCartUI() {
     cartTotal.textContent = `$${getCartTotal().toFixed(2)}`;
 }
 
+// ===== TARJETAS DE DÍA Y PUNTO DE ENTREGA (reemplazan visualmente al desplegable) =====
+// El <select id="checkout-point"> sigue siendo la fuente de datos: las tarjetas solo lo manejan.
+function proximaFechaDia(diaSemana) {          // 3 = miércoles, 6 = sábado
+    const hoy = new Date();
+    const base = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    let dif = (diaSemana - base.getDay() + 7) % 7;
+    if (dif === 0) dif = 7;                    // siempre la PRÓXIMA ocurrencia
+    base.setDate(base.getDate() + dif);
+    return base;
+}
+
+function renderPuntosCards() {
+    const sel = $('checkout-point');
+    const cont = $('puntos-cards');
+    if (!sel || !cont) return;
+    const hoy = new Date();
+    const hoy0 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    let html = '';
+
+    sel.querySelectorAll('optgroup').forEach(g => {
+        const etiqueta = g.label || '';
+        const bajo = etiqueta.toLowerCase();
+        const diaSemana = (bajo.includes('mié') || bajo.includes('mie')) ? 3
+                        : ((bajo.includes('sáb') || bajo.includes('sab')) ? 6 : null);
+        let fechaTxt = '';
+        if (diaSemana) {
+            const f = proximaFechaDia(diaSemana);
+            const dias = Math.round((f - hoy0) / 86400000);
+            fechaTxt = f.toLocaleDateString('es-SV', { weekday: 'long', day: 'numeric', month: 'long' });
+            if (dias === 1) fechaTxt += ' · ¡es mañana!';
+            else if (dias <= 3) fechaTxt += ' · en ' + dias + ' días';
+        }
+        html += `<div class="puntos-dia">
+            <div class="puntos-dia__cabecera">
+                <span class="puntos-dia__titulo">${etiqueta}</span>
+                ${fechaTxt ? `<span class="puntos-dia__fecha">${fechaTxt}</span>` : ''}
+            </div>
+            <div class="puntos-dia__opciones">`;
+
+        g.querySelectorAll('option').forEach(o => {
+            const partes = (o.textContent || '').split('·');
+            const lugar = (partes[0] || '').trim();
+            const hora = (partes[1] || '').trim();
+            const activo = o.value === sel.value;
+            html += `<button type="button" class="punto-card${activo ? ' punto-card--activo' : ''}"
+                        data-valor="${o.value.replace(/"/g, '&quot;')}" onclick="elegirPunto(this)">
+                <span class="punto-card__check">${activo ? '✅' : '📍'}</span>
+                <span class="punto-card__txt">
+                    <strong>${lugar}</strong>
+                    <small>🕒 ${hora || 'horario a coordinar'} · 🚗 Entrega gratis con Cindy</small>
+                </span>
+            </button>`;
+        });
+        html += `</div></div>`;
+    });
+    cont.innerHTML = html;
+}
+
+function elegirPunto(btn) {
+    const sel = $('checkout-point');
+    if (!sel || !btn) return;
+    sel.value = btn.dataset.valor;
+    if (typeof showPointWhatsApp === 'function') showPointWhatsApp();
+    document.querySelectorAll('.punto-card').forEach(b => {
+        const activo = b === btn;
+        b.classList.toggle('punto-card--activo', activo);
+        const chk = b.querySelector('.punto-card__check');
+        if (chk) chk.textContent = activo ? '✅' : '📍';
+    });
+}
+
 // ===== RESUMEN DE LA COMPRA (dentro del cuadro de pago) =====
 // Muestra foto, talla, cantidad, precio y total de lo que se está comprando.
 function mostrarResumenCompra() {
@@ -1223,6 +1294,7 @@ function openCheckoutModal() {
     }
     updateCheckoutUI();
     mostrarResumenCompra();
+    renderPuntosCards();   // tarjetas de día/punto con la fecha real de la próxima entrega
     if (typeof showPointWhatsApp === 'function') showPointWhatsApp();
     reservarCarrito(); // NUEVO: reserva los productos por 5 min (el primero que llega gana)
     $('checkout-overlay').style.display = '';

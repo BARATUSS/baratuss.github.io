@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260917movil">
+    <link rel="stylesheet" href="styles.css?v=20260918tarjetas">
 </head>
 <body>
 
@@ -330,7 +330,10 @@
             <!-- Selector de punto BARATUSS (ventanas reales: Mié/Sáb, entrega gratis con Cindy) -->
             <div class="form-group" id="checkout-point-group" style="margin-top:12px;">
                 <label for="checkout-point">Elegí día y punto de entrega (gratis):</label>
-                <select id="checkout-point" onchange="showPointWhatsApp()">
+                <!-- Tarjetas dinámicas de día/punto. El <select> de abajo queda OCULTO como fuente de
+                     datos (misma lógica de siempre: cashCheckout/wompiCheckout leen su .value). -->
+                <div id="puntos-cards" class="puntos-cards"></div>
+                <select id="checkout-point" onchange="showPointWhatsApp()" style="display:none;">
                     <optgroup label="📅 Miércoles — entrega con Cindy">
                         <option value="Mié — Metrocentro (08:00-12:00)">Metrocentro San Salvador · 08:00–12:00</option>
                         <option value="Mié — Plaza Merliot (14:00-17:00)">Plaza Merliot · 14:00–17:00</option>
@@ -628,6 +631,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="scripts.js?v=20260917movil"></script>
+<script src="scripts.js?v=20260918tarjetas"></script>
 </body>
 </html>
