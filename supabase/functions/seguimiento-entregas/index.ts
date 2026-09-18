@@ -101,6 +101,14 @@ async function marcar(despId: number, notas: string, marca: string) {
   return nuevas;
 }
 
+// Marca TODOS los despachos del mismo pedido (un pedido con varios productos = varios despachos,
+// pero el cliente debe recibir UN solo mensaje por pedido)
+async function marcarPedido(ref: string, notas: string, marca: string) {
+  const nuevas = ((notas || '') + '\n' + marca).trim().slice(-4000);
+  if (ref) await supabase.from('despachos').update({ notas: nuevas }).eq('order_reference', ref);
+  return nuevas;
+}
+
 // ===== proceso principal =====
 serve(async (_req) => {
   const hoy = ahoraSV();
@@ -122,6 +130,22 @@ serve(async (_req) => {
     .order('id', { ascending: false })
     .limit(50);
 
+  // ANTI-DUPLICADO: un pedido con varios productos genera varios despachos,
+  // pero el cliente debe recibir UN solo mensaje por pedido y por tipo.
+  const pedidosAgrad = new Set<string>();
+  const pedidosRecAM = new Set<string>();
+  const pedidosRecPM = new Set<string>();
+  const pedidosConf1h = new Set<string>();
+  for (const d of despachos || []) {
+    const n = d.notas || '';
+    const r = d.order_reference || '';
+    if (!r) continue;
+    if (n.includes('AGRAD')) pedidosAgrad.add(r);
+    if (n.includes('RECORD-AM')) pedidosRecAM.add(r);
+    if (n.includes('RECORD-PM')) pedidosRecPM.add(r);
+    if (n.includes('CONF-1H')) pedidosConf1h.add(r);
+  }
+
   for (const d of despachos || []) {
     const tel = d.customer_phone;
     const notas0 = d.notas || '';
@@ -135,11 +159,12 @@ serve(async (_req) => {
     const hi = horaInicio(destino);
     const sello = hoy.toISOString().slice(0, 16).replace('T', ' ');
 
-    // (1) AGRADECIMIENTO (una sola vez)
-    if (!notas.includes('AGRAD')) {
+    // (1) AGRADECIMIENTO (uno solo por PEDIDO, aunque tenga varios productos)
+    if (!notas.includes('AGRAD') && !pedidosAgrad.has(ref)) {
       const monto = await montoOrden(ref);
       if (await enviarPlantilla(tel, 'pedido_confirmado_baratuss', [nombre, ref, monto], 'AGRADECIMIENTO')) {
-        notas = await marcar(d.id, notas, '📤 AGRAD ' + sello);
+        notas = await marcarPedido(ref, notas, '📤 AGRAD ' + sello);
+        pedidosAgrad.add(ref);
         log.push('AGRAD -> ' + tel);
       }
     }
@@ -147,25 +172,28 @@ serve(async (_req) => {
     // (2) RECORDATORIO el día antes (mañana y tarde)
     const difDias = Math.round((fecha.getTime() - new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate())).getTime()) / MS_DIA);
     if (difDias === 1) {
-      if (hora < 12 && !notas.includes('RECORD-AM')) {
+      if (hora < 12 && !notas.includes('RECORD-AM') && !pedidosRecAM.has(ref)) {
         if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-AM')) {
-          notas = await marcar(d.id, notas, '📤 RECORD-AM ' + sello);
+          notas = await marcarPedido(ref, notas, '📤 RECORD-AM ' + sello);
+          pedidosRecAM.add(ref);
           log.push('RECORD-AM -> ' + tel);
         }
-      } else if (hora >= 14 && !notas.includes('RECORD-PM')) {
+      } else if (hora >= 14 && !notas.includes('RECORD-PM') && !pedidosRecPM.has(ref)) {
         if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-PM')) {
-          notas = await marcar(d.id, notas, '📤 RECORD-PM ' + sello);
+          notas = await marcarPedido(ref, notas, '📤 RECORD-PM ' + sello);
+          pedidosRecPM.add(ref);
           log.push('RECORD-PM -> ' + tel);
         }
       }
     }
 
-    // (3) CONFIRMACIÓN 1 hora antes (mismo día)
-    if (fechaStr === hoyStr && !notas.includes('CONF-1H')) {
+    // (3) CONFIRMACIÓN 1 hora antes (mismo día) — una sola por PEDIDO
+    if (fechaStr === hoyStr && !notas.includes('CONF-1H') && !pedidosConf1h.has(ref)) {
       const minutos = (hi - hora) * 60;
       if (minutos >= 0 && minutos <= 60) {
         if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H')) {
-          notas = await marcar(d.id, notas, '📤 CONF-1H ' + sello);
+          notas = await marcarPedido(ref, notas, '📤 CONF-1H ' + sello);
+          pedidosConf1h.add(ref);
           log.push('CONF-1H -> ' + tel);
         }
       }
