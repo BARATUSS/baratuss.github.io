@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="admin.css?v=20260914wa">
+    <link rel="stylesheet" href="admin.css?v=20260918facturas">
 </head>
 <body>
 
@@ -345,6 +345,17 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ===== FACTURAS / COMPROBANTES PEDIDOS POR EL CLIENTE ===== -->
+            <div class="admin-section__header" style="margin-top:2rem;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                <h2 style="margin:0;">Facturas por enviar
+                    <span style="font-weight:400;font-size:.78rem;opacity:.65;">(el cliente pidió el documento por correo)</span>
+                </h2>
+                <span class="fact-chip" id="f-pendientes">0 pendientes</span>
+            </div>
+            <div id="facturas-lista" class="facturas-lista">
+                <p class="facturas-hint">Cargando…</p>
+            </div>
             <small class="admin-form__hint" id="m-actualizado"></small>
         </section>
     </main>
@@ -494,9 +505,26 @@
     </div>
 </div>
 
+<!-- ===== DOCUMENTO (factura / comprobante de crédito fiscal) ===== -->
+<div class="admin-modal-overlay" id="factura-modal" style="display:none;">
+    <div class="admin-modal" style="max-width:640px;">
+        <div class="admin-modal__header">
+            <h3>Documento del pedido</h3>
+            <button class="admin-modal__close" id="factura-modal-close"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="padding:4px 0 0;">
+            <div id="factura-doc" class="factura"></div>
+            <button type="button" class="admin-btn admin-btn--primary" id="factura-print" style="margin-top:12px;width:100%;">
+                🖨️ Imprimir o guardar en PDF
+            </button>
+            <p class="facturas-hint" id="factura-hint" style="margin-top:10px;"></p>
+        </div>
+    </div>
+</div>
+
 <!-- ===== TOAST ===== -->
 <div class="admin-toast" id="admin-toast"></div>
 
-<script src="admin.js?v=20260918ent"></script>
+<script src="admin.js?v=20260918facturas"></script>
 </body>
 </html>

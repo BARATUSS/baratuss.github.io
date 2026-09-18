@@ -628,6 +628,7 @@ async function loadStats() {
     }
 
     await loadMetricas();
+    await loadFacturasPendientes();
 }
 
 // ===== MÉTRICAS DE ENTREGA Y WHATSAPP (vista metricas_resumen, solo sesión admin) =====
@@ -653,6 +654,182 @@ async function loadMetricas() {
         if (sello) sello.textContent = 'Actualizado ' + new Date().toLocaleTimeString();
     } catch (_e) { /* si falla, el resumen general no se debe romper */ }
 }
+
+// ===== FACTURAS Y COMPROBANTES PEDIDOS POR EL CLIENTE =====
+// Mismos datos del emisor que la tienda (scripts.js → EMISOR): si se cambian allá, cambiar acá.
+const EMISOR_PANEL = {
+    nombre: 'BARATUSS',
+    razonSocial: 'Cindy Rubio — persona natural',
+    nit: 'PENDIENTE',
+    nrc: 'PENDIENTE',
+    giro: 'Comercio al por menor de prendas de vestir, accesorios y cosméticos',
+    direccion: 'San Salvador, El Salvador',
+    telefono: '+503 6285 2631',
+    correo: 'cindyrubiomusic@gmail.com',
+    establecimiento: '0001',
+    simulacion: true,
+};
+const IVA_PANEL = 0.13;
+let _facturasPendientes = [];
+
+async function loadFacturasPendientes() {
+    const cont = $('facturas-lista');
+    try {
+        const data = await api('GET', 'orders?select=reference,customer_name,customer_phone,customer_email,factura_tipo,factura_nombre,factura_nit,factura_nrc,factura_giro,factura_direccion,factura_por_correo,factura_enviada_en,total,items,delivery_point,created_at&factura_por_correo=eq.true&factura_enviada_en=is.null&order=created_at.desc&limit=40');
+        _facturasPendientes = Array.isArray(data) ? data : [];
+        const chip = $('f-pendientes');
+        if (chip) chip.textContent = _facturasPendientes.length + (_facturasPendientes.length === 1 ? ' pendiente' : ' pendientes');
+        if (!cont) return;
+        if (!_facturasPendientes.length) {
+            cont.innerHTML = '<p class="facturas-hint">✅ No hay facturas pendientes de enviar.</p>';
+            return;
+        }
+        cont.innerHTML = _facturasPendientes.map((o, i) => {
+            const esCCF = o.factura_tipo === 'ccf';
+            return `<div class="factura-item">
+                <div class="factura-item__info">
+                    <strong>${esCCF ? '🏢 Comprobante de crédito fiscal' : '🧾 Factura de consumidor final'} · #${o.reference}</strong>
+                    <span>${o.factura_nombre || o.customer_name || '—'} · 📧 ${o.customer_email || '(sin correo)'}</span>
+                    <span>$${Number(o.total || 0).toFixed(2)} · ${new Date(o.created_at).toLocaleString('es-SV')}</span>
+                </div>
+                <div class="factura-item__acciones">
+                    <button type="button" class="admin-btn admin-btn--ghost" onclick="verFacturaPanel(${i})">🧾 Ver documento</button>
+                    <a class="admin-btn admin-btn--ghost" href="${correoLinkFactura(o)}">📧 Preparar correo</a>
+                    <button type="button" class="admin-btn admin-btn--primary" onclick="marcarFacturaEnviada('${o.reference}')">✅ Ya la envié</button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        if (cont) cont.innerHTML = '<p class="facturas-hint">No se pudieron cargar: ' + e.message + '</p>';
+    }
+}
+
+function correoLinkFactura(o) {
+    const que = o.factura_tipo === 'ccf' ? 'comprobante de crédito fiscal' : 'factura de consumidor final';
+    const asunto = 'Tu ' + que + ' de BARATUSS · ' + o.reference;
+    const cuerpo = [
+        'Hola ' + (o.factura_nombre || o.customer_name || '') + ',',
+        '',
+        '¡Gracias por tu compra en BARATUSS! 💖',
+        'Te adjuntamos tu ' + que + ' (adjuntá el PDF que sale del botón "Ver documento" → Imprimir / Guardar PDF).',
+        '',
+        'Pedido: ' + o.reference,
+        'Total: $' + Number(o.total || 0).toFixed(2),
+        'Entrega: ' + (o.delivery_point || 'por coordinar'),
+        '',
+        'Cualquier cosa escribinos al +503 6285 2631.',
+        'BARATUSS',
+    ].join('\n');
+    return 'mailto:' + encodeURIComponent(o.customer_email || '')
+        + '?subject=' + encodeURIComponent(asunto)
+        + '&body=' + encodeURIComponent(cuerpo);
+}
+
+function documentoPanelHTML(o) {
+    const total = Number(o.total || 0);
+    const gravada = total / (1 + IVA_PANEL);
+    const iva = total - gravada;
+    const esCCF = o.factura_tipo === 'ccf';
+    const f = new Date(o.created_at || Date.now());
+    const fechaTxt = f.toLocaleDateString('es-SV') + ' ' + f.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+    const correlativo = 'SIM-' + (esCCF ? 'CCF' : 'CF') + '-' + String(o.reference || '').slice(-6);
+    const filas = (o.items || []).map(it => {
+        const sub = (it.price || 0) * (it.qty || 1);
+        return `<tr>
+            <td class="num">${it.qty || 1}</td>
+            <td>${it.name}${it.size ? ' · Talla ' + it.size : ''}<span class="mini"> · cód. #${it.id}</span></td>
+            <td class="num">$${((sub / (1 + IVA_PANEL)) / (it.qty || 1)).toFixed(2)}</td>
+            <td class="num">$${(sub / (1 + IVA_PANEL)).toFixed(2)}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+    ${EMISOR_PANEL.simulacion ? '<div class="factura__simulacion">SIMULACIÓN — DOCUMENTO SIN VALOR FISCAL</div>' : ''}
+    <div class="factura__cabecera">
+        <div class="factura__emisor">
+            <div class="factura__emisor-nombre">${EMISOR_PANEL.nombre}</div>
+            <div class="factura__dato">${EMISOR_PANEL.razonSocial}</div>
+            <div class="factura__dato">NIT: ${EMISOR_PANEL.nit} · NRC: ${EMISOR_PANEL.nrc}</div>
+            <div class="factura__dato">Giro: ${EMISOR_PANEL.giro}</div>
+            <div class="factura__dato">Dirección: ${EMISOR_PANEL.direccion}</div>
+            <div class="factura__dato">Tel. ${EMISOR_PANEL.telefono} · ${EMISOR_PANEL.correo}</div>
+            <div class="factura__dato">Establecimiento: ${EMISOR_PANEL.establecimiento}</div>
+        </div>
+        <div class="factura__tipo-caja">
+            <div class="factura__tipo">${esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL'}</div>
+            <div class="factura__numero">N° ${correlativo}</div>
+            <div class="factura__dato">Fecha de emisión: ${fechaTxt}</div>
+            <div class="factura__dato">Condición de pago: contado</div>
+            <div class="factura__dato">Referencia interna: ${o.reference || '—'}</div>
+        </div>
+    </div>
+    <div class="factura__bloque">
+        <div class="factura__titulo">Datos del comprador</div>
+        <div class="factura__grid">
+            <div><span>Nombre</span>${o.factura_nombre || o.customer_name || 'Consumidor final'}</div>
+            <div><span>NIT</span>${esCCF ? (o.factura_nit || '—') : '—'}</div>
+            <div><span>NRC</span>${esCCF ? (o.factura_nrc || '—') : '—'}</div>
+            <div><span>Giro</span>${esCCF ? (o.factura_giro || '—') : '—'}</div>
+            <div class="ancho"><span>Dirección</span>${esCCF ? (o.factura_direccion || '—') : '—'}</div>
+            <div class="ancho"><span>Correo</span>${o.customer_email || '—'}</div>
+            <div><span>Teléfono</span>${o.customer_phone || '—'}</div>
+            <div><span>Entrega</span>${o.delivery_point || '—'}</div>
+        </div>
+    </div>
+    <table class="factura__tabla">
+        <thead><tr><th>Cant.</th><th>Descripción</th><th class="num">P. unitario</th><th class="num">Ventas gravadas</th></tr></thead>
+        <tbody>${filas}</tbody>
+    </table>
+    <div class="factura__totales">
+        <div><span>Ventas gravadas</span><strong>$${gravada.toFixed(2)}</strong></div>
+        <div><span>IVA 13% (incluido)</span><strong>$${iva.toFixed(2)}</strong></div>
+        <div class="total"><span>Total a pagar</span><strong>$${total.toFixed(2)}</strong></div>
+    </div>
+    <div class="factura__pie">
+        El IVA (13%) ya está incluido en los precios. Documento generado electrónicamente el ${fechaTxt}.
+        ${EMISOR_PANEL.simulacion
+            ? '⚠️ Documento de PRUEBA del sistema de facturación: no tiene valor fiscal mientras el emisor no cuente con NRC y la autorización de Documentos Tributarios Electrónicos (DTE) del Ministerio de Hacienda.'
+            : 'Entrega: por correo electrónico o en el punto de retiro.'}
+    </div>`;
+}
+
+function verFacturaPanel(i) {
+    const o = _facturasPendientes[i];
+    if (!o) return;
+    const doc = $('factura-doc');
+    if (doc) doc.innerHTML = documentoPanelHTML(o);
+    const hint = $('factura-hint');
+    if (hint) hint.textContent = o.customer_email
+        ? 'Después de guardar el PDF, usá "Preparar correo" para enviárselo a ' + o.customer_email
+        : 'Este pedido no dejó correo: coordiná el envío con el cliente por WhatsApp.';
+    const m = $('factura-modal');
+    if (m) m.style.display = 'flex';
+}
+
+function cerrarFacturaPanel() {
+    const m = $('factura-modal');
+    if (m) m.style.display = 'none';
+}
+
+async function marcarFacturaEnviada(ref) {
+    try {
+        await api('PATCH', 'orders?reference=eq.' + encodeURIComponent(ref), { factura_enviada_en: new Date().toISOString() });
+        showToast('✅ Factura marcada como enviada');
+        cerrarFacturaPanel();
+        await loadFacturasPendientes();
+    } catch (e) {
+        showToast('❌ No se pudo marcar: ' + e.message);
+    }
+}
+
+(function initFacturasPanel() {
+    const c = $('factura-modal-close');
+    if (c) c.addEventListener('click', cerrarFacturaPanel);
+    const m = $('factura-modal');
+    if (m) m.addEventListener('click', (e) => { if (e.target === m) cerrarFacturaPanel(); });
+    const p = $('factura-print');
+    if (p) p.addEventListener('click', () => window.print());
+})();
 
 // ===== HELPERS =====
 function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
