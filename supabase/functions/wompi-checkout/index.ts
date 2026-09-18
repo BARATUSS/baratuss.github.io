@@ -151,6 +151,11 @@ serve(async (req) => {
             if (ya.id === item.id) break;
             await supabase.rpc('devolver_stock', { p_id: Number(ya.id), p_qty: ya.qty || 1 });
           }
+          // ⚠️ Se borra el pedido Y sus despachos: el disparador de la base ya había creado el
+          // despacho al registrar el pedido. Si quedaba suelto (huérfano), aparecía en el panel
+          // como entrega activa, ensuciaba las métricas y podía generar mensajes de una compra
+          // que nunca existió (bug real detectado el 2026-09-17).
+          await supabase.from('despachos').delete().eq('order_reference', ref);
           await supabase.from('orders').delete().eq('reference', ref);
           return new Response(JSON.stringify({
             error: venta?.motivo === 'reservada_por_otro'

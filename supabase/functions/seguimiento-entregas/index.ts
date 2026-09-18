@@ -134,13 +134,15 @@ function fmtFecha(f: Date): string {
 // Un pedido de tarjeta abandonado (sin pagar) todavía NO es una compra: no se agradece ni se
 // recuerda hasta que Meta/Wompi confirma el pago (antes se saludaba igual: se creaba el despacho
 // al iniciar el pago, no al pagarlo).
-async function datosOrden(ref: string): Promise<{ monto: string; pagado: boolean }> {
+async function datosOrden(ref: string): Promise<{ monto: string; pagado: boolean; existe: boolean }> {
   const { data } = await supabase.from('orders')
     .select('total, payment_status, payment_method, status').eq('reference', ref).limit(1).maybeSingle();
-  if (!data) return { monto: '—', pagado: true };      // sin orden asociada: no bloquear el circuito
+  // Sin pedido asociado = despacho huérfano (el pago falló y se borró el pedido). NO se le escribe
+  // a nadie por una compra que no existe.
+  if (!data) return { monto: '—', pagado: false, existe: false };
   const estado = String(data.payment_status || '').toLowerCase();
   const sinPagar = ['pendiente', 'rechazado', 'cancelado', 'fallido'].includes(estado);
-  return { monto: '$' + Number(data.total || 0).toFixed(2), pagado: !sinPagar };
+  return { monto: '$' + Number(data.total || 0).toFixed(2), pagado: !sinPagar, existe: true };
 }
 
 async function marcar(despId: number, notas: string, marca: string) {
@@ -226,7 +228,10 @@ serve(async (_req) => {
     const fecha = fechaBloque(destino, d.created_at);
     if (!tel || !fecha) continue;
     // Un pedido sin pagar (tarjeta abandonada) aún no es una compra: se espera al pago.
+    // Y un despacho sin pedido (el pago falló y se borró el pedido) no se toca: no se le escribe
+    // a nadie por una compra que no existe.
     const orden = await datosOrden(ref);
+    if (!orden.existe) continue;
     if (!orden.pagado) continue;
     const fechaStr = fmtFecha(fecha);
     const hi = horaInicio(destino);
