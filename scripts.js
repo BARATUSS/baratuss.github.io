@@ -1722,8 +1722,16 @@ function datosFactura() {
         const giro = ($('factura-giro') ? $('factura-giro').value : '').trim();
         const dir = ($('factura-direccion') ? $('factura-direccion').value : '').trim();
         if (!nombre) return { ok: false, error: '🏢 Falta la razón social para el comprobante de crédito fiscal' };
-        if (!/^\d{4}-?\d{6}-?\d{3}-?\d?$/.test(nit)) return { ok: false, error: '🏢 El NIT va con formato 0000-000000-000-0' };
-        if (!/^\d{5,7}-?\d?$/.test(nrc)) return { ok: false, error: '🏢 El NRC va con formato 00000-0' };
+        // Se aceptan NIT/NRC con o sin guiones (se valida la cantidad de dígitos, no el formato exacto):
+        // trabar a un cliente legítimo por los guiones sería perder la venta.
+        const nitDig = nit.replace(/\D/g, '');
+        const nrcDig = nrc.replace(/\D/g, '');
+        if (nitDig.length < 9 || nitDig.length > 14) {
+            return { ok: false, error: '🏢 Revisá el NIT: se escribe 0000-000000-000-0 (ejemplo: 0614-150590-101-5)' };
+        }
+        if (nrcDig.length < 5 || nrcDig.length > 7) {
+            return { ok: false, error: '🏢 Revisá el NRC: se escribe 00000-0 (ejemplo: 123456-7)' };
+        }
         if (!giro) return { ok: false, error: '🏢 Falta el giro o actividad económica' };
         if (!dir) return { ok: false, error: '🏢 Falta la dirección del receptor' };
         d.factura_nombre = nombre; d.factura_nit = nit; d.factura_nrc = nrc;
