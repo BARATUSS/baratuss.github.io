@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260916">
+    <link rel="stylesheet" href="styles.css?v=20260917movil">
 </head>
 <body>
 
@@ -273,6 +273,8 @@
         <button class="modal__close" id="checkout-close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal__body">
+        <!-- Resumen de lo que se está comprando: foto, talla, precio y total -->
+        <div id="checkout-resumen" class="checkout-resumen" style="display:none;"></div>
         <!-- Reserva de 5 minutos (el primero que llega gana) -->
         <div id="reserva-aviso" style="display:none; background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:14px;">
             ⏳ Te reservamos estos productos por <b><span id="reserva-timer">5:00</span></b> — completá tu compra antes de que expire.
@@ -626,6 +628,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="scripts.js?v=20260916"></script>
+<script src="scripts.js?v=20260917movil"></script>
 </body>
 </html>

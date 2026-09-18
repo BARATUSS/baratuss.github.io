@@ -783,6 +783,28 @@ function updateCartUI() {
     cartTotal.textContent = `$${getCartTotal().toFixed(2)}`;
 }
 
+// ===== RESUMEN DE LA COMPRA (dentro del cuadro de pago) =====
+// Muestra foto, talla, cantidad, precio y total de lo que se está comprando.
+function mostrarResumenCompra() {
+    const cont = $('checkout-resumen');
+    if (!cont) return;
+    if (!cart.length) { cont.style.display = 'none'; return; }
+    cont.innerHTML = cart.map(item => `
+        <div class="checkout-resumen__item">
+            <div class="checkout-resumen__img">${item.image ? `<img src="${item.image}" alt="${item.name}" onerror="this.replaceWith(document.createTextNode('🛍️'))">` : '🛍️'}</div>
+            <div class="checkout-resumen__txt">
+                <strong>${item.name}${item.size ? ' · Talla ' + item.size : ''}</strong>
+                <small>${item.qty} × $${Number(item.price).toFixed(2)}</small>
+            </div>
+            <div class="checkout-resumen__precio">$${(item.price * item.qty).toFixed(2)}</div>
+        </div>`).join('') +
+        `<div class="checkout-resumen__item" style="border-top:1.5px solid #e5e5e5;">
+            <div class="checkout-resumen__txt"><strong>Total</strong></div>
+            <div class="checkout-resumen__precio">$${getCartTotal().toFixed(2)}</div>
+        </div>`;
+    cont.style.display = '';
+}
+
 // ===== CART SIDEBAR =====
 function openCart() { cartSidebar.classList.add('open'); cartOverlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
 function closeCart() { cartSidebar.classList.remove('open'); cartOverlay.classList.remove('open'); document.body.style.overflow = ''; }
@@ -1200,6 +1222,7 @@ function openCheckoutModal() {
         $('checkout-phone').value = p.phone || '';
     }
     updateCheckoutUI();
+    mostrarResumenCompra();
     if (typeof showPointWhatsApp === 'function') showPointWhatsApp();
     reservarCarrito(); // NUEVO: reserva los productos por 5 min (el primero que llega gana)
     $('checkout-overlay').style.display = '';
