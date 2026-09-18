@@ -1258,6 +1258,54 @@ async function venderCarrito(items) {
     }
 }
 
+// Devuelve el stock de los productos (se usa cuando el pedido NO se pudo guardar)
+async function devolverCarrito(items) {
+    for (const it of items) {
+        try {
+            await fetch(SUPABASE_URL + '/rest/v1/rpc/devolver_stock', {
+                method: 'POST',
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ p_id: Number(it.id), p_qty: Number(it.qty || 1) })
+            });
+        } catch (e) {
+            console.log('No se pudo devolver el stock de', it.id, e.message);
+        }
+    }
+}
+
+// Pantalla de fallo: NUNCA mostrar ticket falso. Mensaje claro + WhatsApp directo.
+function mostrarFalloPedido(waUrl, items, total, detalle) {
+    const viejo = document.getElementById('fallo-pedido');
+    if (viejo) viejo.remove();
+    const lista = (items || []).map(i => (i.qty || 1) + '× ' + i.name).join(' · ');
+    const div = document.createElement('div');
+    div.id = 'fallo-pedido';
+    div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;'
+        + 'align-items:center;justify-content:center;z-index:99999;padding:16px;';
+    div.innerHTML =
+        '<div style="background:#fff;border-radius:18px;max-width:420px;width:100%;padding:24px;'
+        + 'text-align:center;font-family:inherit;">'
+        + '<div style="font-size:2.2rem;margin-bottom:8px;">😕</div>'
+        + '<h3 style="margin:0 0 8px;font-size:1.05rem;color:#333;">No pudimos registrar tu pedido</h3>'
+        + '<p style="font-size:.85rem;color:#666;line-height:1.5;margin:0 0 14px;">'
+        + 'No se te cobró nada y <strong>tu stock quedó liberado</strong>.<br>'
+        + 'Escribinos por WhatsApp y lo cerramos al instante 🙌</p>'
+        + '<div style="background:#fff6f4;border-radius:12px;padding:10px 12px;font-size:.78rem;'
+        + 'color:#8a5b52;margin-bottom:14px;text-align:left;">' + lista
+        + '<br><strong>Total: $' + Number(total || 0).toFixed(2) + '</strong></div>'
+        + '<a href="' + waUrl + '" target="_blank" rel="noopener" style="display:block;background:#25D366;'
+        + 'color:#fff;padding:12px;border-radius:100px;text-decoration:none;font-weight:700;'
+        + 'font-size:.9rem;margin-bottom:8px;">💬 Escribir por WhatsApp</a>'
+        + '<button onclick="document.getElementById(\'fallo-pedido\').remove()" style="background:none;'
+        + 'border:none;color:#999;font-size:.8rem;cursor:pointer;">Cerrar</button></div>';
+    document.body.appendChild(div);
+    if (detalle) console.log('Detalle del fallo del pedido:', detalle);
+}
+
 // Contador visible de la reserva
 function iniciarTimerReserva(segundos) {
     const aviso = $('reserva-aviso');
@@ -1527,19 +1575,74 @@ async function cashCheckout() {
             ...fac.datos
         };
         if (currentUser) orderPayload.user_id = currentUser.id;
-        
-        try {
-            await fetch(SUPABASE_URL + '/rest/v1/orders', {
-                method: 'POST',
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(orderPayload)
-            });
-        } catch (insertErr) {
-            console.log('No se pudo guardar el pedido online:', insertErr.message);
+
+        // ✅ VERIFICACIÓN (2026-09-18): antes se mostraba "Pedido confirmado" AUNQUE el guardado
+        // fallara → quedaban ventas fantasma y el stock descontado sin pedido. Ahora se
+        // comprueba que el pedido EXISTE antes de mostrar el ticket.
+        // (?simular_fallo=1 en la URL fuerza el fallo para poder probar este camino)
+        const simularFallo = new URLSearchParams(location.search).get('simular_fallo') === '1';
+        let orderOk = false;
+        let orderErr = '';
+        if (simularFallo) {
+            orderErr = 'SIMULACIÓN de fallo (prueba pedida desde la URL)';
+        } else {
+            try {
+                const r = await fetch(SUPABASE_URL + '/rest/v1/orders', {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=representation'
+                    },
+                    body: JSON.stringify(orderPayload)
+                });
+                if (r.ok) {
+                    const creados = await r.json().catch(() => null);
+                    orderOk = Array.isArray(creados) && creados.length > 0;
+                    if (!orderOk) orderErr = 'la respuesta no devolvió el pedido guardado';
+                } else {
+                    orderErr = 'HTTP ' + r.status + ': ' + (await r.text().catch(() => '')).slice(0, 140);
+                }
+            } catch (insertErr) {
+                orderErr = (insertErr && insertErr.message) ? insertErr.message : String(insertErr);
+            }
+        }
+
+        if (!orderOk) {
+            console.log('⚠️ El pedido NO se guardó:', orderErr);
+            // 1) devolver el stock (se había descontado ANTES de crear el pedido)
+            await devolverCarrito(items);
+            // 2) respaldo local: si el cliente recarga, no se pierden sus datos
+            try {
+                localStorage.setItem('baratuss_pedido_fallido', JSON.stringify({
+                    pedido: orderPayload, fecha: new Date().toISOString(), error: orderErr
+                }));
+            } catch (_e) { /* sin espacio en el navegador */ }
+            // 3) alerta al negocio (para que Cindy se entere al instante)
+            try {
+                await fetch(SUPABASE_URL + '/functions/v1/avisar-fallo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+                    },
+                    body: JSON.stringify({
+                        reference: ref, nombre: name, telefono: phone, total: total,
+                        items: (items || []).map(i => ({ id: i.id, qty: i.qty || 1, name: i.name })),
+                        motivo: orderErr
+                    })
+                });
+            } catch (_e) { /* silencioso: no romper la experiencia del cliente */ }
+            // 4) mensaje claro al cliente (sin ticket falso) + WhatsApp
+            const detalleWa = (items || []).map(i => (i.qty || 1) + 'x ' + i.name).join(', ');
+            const waUrl = 'https://wa.me/50362852631?text=' + encodeURIComponent(
+                'Hola BARATUSS 🙋 Intenté hacer un pedido y no se registró.\nPedido: ' + detalleWa
+                + '\nTotal: $' + Number(total || 0).toFixed(2) + '\n¿Me ayudan a cerrarlo?');
+            mostrarFalloPedido(waUrl, items, total, orderErr);
+            showToast('😕 No se pudo registrar el pedido — escribinos por WhatsApp');
+            return;
         }
         
         // Fase 1 entregas: alta de despachos vía Edge Function (un solo camino, sin depender de RLS)

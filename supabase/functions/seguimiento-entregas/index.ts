@@ -19,9 +19,13 @@ const MS_DIA = 86400000;
 // la revisa, la versión anterior que ya está aprobada. Así el cambio es automático y sin
 // ventana sin mensajes: si la nueva todavía no está aprobada, Meta la rechaza y se usa la vieja.
 const PLANTILLAS: Record<string, string[]> = {
-  agradecimiento: ['pedido_confirmado_baratuss_v2', 'pedido_confirmado_baratuss'],
-  recordatorio: ['recordatorio_entrega_baratuss_v2', 'recordatorio_entrega_baratuss'],
-  retiro: ['pedido_listo_retiro_baratuss_v2', 'pedido_listo_retiro_baratuss'],
+  // Se prueba en orden: la última versión corregida (v3), después v2 y al final la vieja.
+  // ⚠️ Las versiones viejas tienen los emojis rotos (?): apenas Meta apruebe las v3,
+  // el sistema las usa solo, sin tocar nada más.
+  agradecimiento: ['pedido_confirmado_baratuss_v4', 'pedido_confirmado_baratuss_v3', 'pedido_confirmado_baratuss_v2', 'pedido_confirmado_baratuss'],
+  recordatorio: ['recordatorio_entrega_baratuss_v3', 'recordatorio_entrega_baratuss_v2', 'recordatorio_entrega_baratuss'],
+  retiro: ['pedido_listo_retiro_baratuss_v3', 'pedido_listo_retiro_baratuss_v2', 'pedido_listo_retiro_baratuss'],
+  gracias: ['gracias_entrega_baratuss'],
 };
 
 // ===== utilidades =====
@@ -58,24 +62,104 @@ async function enviarPlantilla(tel: string, plantilla: string, params: string[],
 }
 
 // Prueba las versiones en orden (corregida y, si falla, la aprobada anterior)
-async function enviarConRespaldo(tel: string, paso: string, params: string[], etiqueta = ''): Promise<{ wamid: string; plantilla: string } | null> {
+type Envio = { wamid: string; plantilla: string; texto?: string };
+
+async function enviarConRespaldo(tel: string, paso: string, params: string[], etiqueta = '',
+                                extra: string[] = []): Promise<Envio | null> {
   const candidatas = PLANTILLAS[paso] || [paso];
   for (const p of candidatas) {
-    const wamid = await enviarPlantilla(tel, p, params, etiqueta);
-    if (wamid) return { wamid, plantilla: p };
+    // Las v4 llevan un parámetro más (la entrega). Las viejas, no: si se las mandamos,
+    // Meta las rechaza. Así cada versión recibe exactamente lo que espera.
+    const usar = (p.includes('_v4') && extra.length) ? params.concat(extra) : params;
+    const wamid = await enviarPlantilla(tel, p, usar, etiqueta);
+    if (wamid) return { wamid, plantilla: p, texto: '(plantilla: ' + p + ')' };
   }
   return null;
 }
 
+// ¿El cliente nos escribió en las últimas 24 h? Si sí, se le puede mandar TEXTO LIBRE
+// (mensaje natural, con emojis, sin depender de que Meta apruebe una plantilla).
+async function ventanaAbierta(tel: string): Promise<boolean> {
+  try {
+    const desde = new Date(Date.now() - 24 * 3600000).toISOString();
+    const { data } = await supabase.from('wa_mensajes')
+      .select('id')
+      .eq('telefono', normalizarTel(tel))
+      .eq('direccion', 'entrante')
+      .gte('creado_en', desde)
+      .limit(1);
+    return !!(data && data.length);
+  } catch (_e) { return false; }
+}
+
+async function enviarTexto(tel: string, texto: string, etiqueta = ''): Promise<string | null> {
+  if (!WA_TOKEN || !PHONE_ID) return null;
+  try {
+    const r = await fetch('https://graph.facebook.com/v21.0/' + PHONE_ID + '/messages', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', to: normalizarTel(tel), type: 'text',
+        text: { preview_url: false, body: texto }
+      })
+    });
+    const d = await r.json();
+    const wamid = d?.messages?.[0]?.id ? String(d.messages[0].id) : null;
+    console.log('TEXTO', etiqueta, '->', tel, wamid ? 'OK' : JSON.stringify(d).slice(0, 160));
+    return wamid;
+  } catch (e) { console.log('error texto', String(e)); return null; }
+}
+
+// Mensajes con voz BARATUSS: cercanos, alegres, con emojis (se usan con la ventana abierta)
+function textoNatural(paso: string, nombre: string, ref: string, monto: string,
+                      fecha: string, destino: string): string {
+  if (paso === 'agradecimiento') {
+    return '🎉 ¡Gracias por tu compra, ' + nombre + '! 💖\n\n'
+      + '📦 Pedido: ' + ref + '\n💵 Total: ' + monto + '\n'
+      + '📅 Entrega: ' + destino + '\n\n'
+      + 'Ya lo estamos preparando. Te escribo también el día antes para confirmar. '
+      + '¡Gracias por apoyar a BARATUSS! 🙌';
+  }
+  if (paso === 'recordatorio') {
+    return '¡Hola ' + nombre + '! 👋 Te recuerdo tu entrega de BARATUSS:\n\n'
+      + '📅 ' + fecha + '\n📍 ' + destino + '\n\n'
+      + '¿Me confirmás? Respondé *CONFIRMAR* y te espero 🛍️ '
+      + 'o *REPROGRAMAR* si te queda mejor otro día. 😊';
+  }
+  if (paso === 'gracias') {
+    return '¡Gracias por tu compra, ' + nombre + '! 💖 Esperamos que la disfrutes 🛍️\n\n'
+      + 'Si te gustó, etiquetános en Instagram (@baratuss_sv) — nos ayuda un montón 📸\n\n'
+      + 'Cualquier cosa que necesites, escribinos por acá 😊';
+  }
+  if (paso === 'confirmacion') {
+    return '¡Hola ' + nombre + '! ⏰ Ya casi nos vemos:\n\n📍 ' + destino
+      + '\n\n¡Te espero! 🛍️ Si necesitás algo, escribime por acá.';
+  }
+  return '';
+}
+
+// Envía el paso: si el cliente ya escribió (ventana de 24 h) manda TEXTO natural;
+// si no, usa la plantilla aprobada (única forma fuera de la ventana).
+async function enviarPaso(tel: string, paso: string, params: string[], etiqueta: string,
+                          natural: string, extra: string[] = []): Promise<Envio | null> {
+  if (natural && await ventanaAbierta(tel)) {
+    const wamid = await enviarTexto(tel, natural, etiqueta);
+    if (wamid) return { wamid, plantilla: 'texto-libre', texto: natural };
+  }
+  return await enviarConRespaldo(tel, paso, params, etiqueta, extra);
+}
+
 // Registra el saliente en la bitácora con su wamid: así el webhook puede actualizar
 // "entregado / leído / falló" cuando Meta manda el estado (sin esto no se sabe si llegó).
-async function registrarSaliente(wamid: string | null, tel: string, plantilla: string, ref: string) {
+async function registrarSaliente(wamid: string | null, tel: string, plantilla: string, ref: string,
+                                 contenido = '') {
   if (!wamid) return;
   try {
     await supabase.from('wa_mensajes').insert({
       wa_message_id: wamid,
       telefono: normalizarTel(tel),
-      texto: '(plantilla: ' + plantilla + ')',
+      // Si el mensaje se mandó como TEXTO LIBRE, se guarda el texto real (historial completo)
+      texto: contenido || ('(plantilla: ' + plantilla + ')'),
       tipo: 'template',
       direccion: 'saliente',
       order_reference: ref || null,
@@ -99,8 +183,10 @@ async function avisarTG(texto: string) {
 }
 
 function proximaFecha(diaSemana: number, base: Date): Date {
-  let dias = (diaSemana - base.getUTCDay() + 7) % 7;
-  if (dias === 0) dias = 7;
+  // 0 = HOY (si el día de entrega es hoy, la fecha es hoy).
+  // ⚠️ Antes esto forzaba dias=7 cuando coincidía el día → el sistema creía que la entrega
+  // era la semana siguiente y por eso el aviso de "1 hora antes" NUNCA se enviaba.
+  const dias = (diaSemana - base.getUTCDay() + 7) % 7;
   return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + dias));
 }
 
@@ -122,6 +208,14 @@ function horaInicio(destino: string): number {
   if (d.includes('12:00')) return 12;
   if (d.includes('14:00')) return 14;
   return 8;
+}
+
+// "sábado 19 de septiembre" — se usa en los mensajes naturales (más humano que 19/09/2026)
+function fechaBonita(f: Date): string {
+  const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+                 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  return dias[f.getUTCDay()] + ' ' + f.getUTCDate() + ' de ' + meses[f.getUTCMonth()];
 }
 
 function fmtFecha(f: Date): string {
@@ -234,6 +328,7 @@ serve(async (_req) => {
     if (!orden.existe) continue;
     if (!orden.pagado) continue;
     const fechaStr = fmtFecha(fecha);
+    const fechaLarga = fechaBonita(fecha);
     const hi = horaInicio(destino);
     const sello = hoy.toISOString().slice(0, 16).replace('T', ' ');
 
@@ -241,9 +336,10 @@ serve(async (_req) => {
     if (!notas.includes('AGRAD') && !pedidosAgrad.has(ref)) {
       const monto = orden.monto;
       if (await reclamarPedido(ref, notas, '📤 AGRAD ' + sello, 'AGRAD')) {
-        const env = await enviarConRespaldo(tel, 'agradecimiento', [nombre, ref, monto], 'AGRADECIMIENTO');
+        const env = await enviarPaso(tel, 'agradecimiento', [nombre, ref, monto], 'AGRADECIMIENTO',
+          textoNatural('agradecimiento', nombre, ref, monto, '', destino), ['Sáb 19/09 · ' + destino]);
         if (env) {
-          await registrarSaliente(env.wamid, tel, env.plantilla, ref);
+          await registrarSaliente(env.wamid, tel, env.plantilla, ref, env.texto || '');
           pedidosAgrad.add(ref);
           log.push('AGRAD -> ' + tel + ' [' + env.plantilla + ']');
         } else {
@@ -258,9 +354,10 @@ serve(async (_req) => {
     if (difDias === 1) {
       if (hora < 12 && !notas.includes('RECORD-AM') && !pedidosRecAM.has(ref)) {
         if (await reclamarPedido(ref, notas, '📤 RECORD-AM ' + sello, 'RECORD-AM')) {
-          const env = await enviarConRespaldo(tel, 'recordatorio', [nombre, fechaStr, destino], 'RECORD-AM');
+          const env = await enviarPaso(tel, 'recordatorio', [nombre, fechaLarga, destino], 'RECORD-AM',
+            textoNatural('recordatorio', nombre, ref, '', fechaLarga, destino));
           if (env) {
-            await registrarSaliente(env.wamid, tel, env.plantilla, ref);
+            await registrarSaliente(env.wamid, tel, env.plantilla, ref, env.texto || '');
             pedidosRecAM.add(ref);
             log.push('RECORD-AM -> ' + tel + ' [' + env.plantilla + ']');
           } else {
@@ -270,9 +367,10 @@ serve(async (_req) => {
         }
       } else if (hora >= 14 && !notas.includes('RECORD-PM') && !pedidosRecPM.has(ref)) {
         if (await reclamarPedido(ref, notas, '📤 RECORD-PM ' + sello, 'RECORD-PM')) {
-          const env = await enviarConRespaldo(tel, 'recordatorio', [nombre, fechaStr, destino], 'RECORD-PM');
+          const env = await enviarPaso(tel, 'recordatorio', [nombre, fechaLarga, destino], 'RECORD-PM',
+            textoNatural('recordatorio', nombre, ref, '', fechaLarga, destino));
           if (env) {
-            await registrarSaliente(env.wamid, tel, env.plantilla, ref);
+            await registrarSaliente(env.wamid, tel, env.plantilla, ref, env.texto || '');
             pedidosRecPM.add(ref);
             log.push('RECORD-PM -> ' + tel + ' [' + env.plantilla + ']');
           } else {
@@ -288,9 +386,10 @@ serve(async (_req) => {
       const minutos = (hi - hora) * 60;
       if (minutos >= 0 && minutos <= 60) {
         if (await reclamarPedido(ref, notas, '📤 CONF-1H ' + sello, 'CONF-1H')) {
-          const env = await enviarConRespaldo(tel, 'recordatorio', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H');
+          const env = await enviarPaso(tel, 'recordatorio', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H',
+            textoNatural('confirmacion', nombre, ref, '', 'HOY', destino));
           if (env) {
-            await registrarSaliente(env.wamid, tel, env.plantilla, ref);
+            await registrarSaliente(env.wamid, tel, env.plantilla, ref, env.texto || '');
             pedidosConf1h.add(ref);
             log.push('CONF-1H -> ' + tel + ' [' + env.plantilla + ']');
           } else {
@@ -320,11 +419,60 @@ serve(async (_req) => {
     const aviso = '📋 BARATUSS — bloque de ' + (esManana ? 'hoy (mañana)' : 'hoy (tarde)') + ': ' +
       r.total + ' pedido(s), ' + r.conf + ' confirmado(s).\n' + r.destino + '\n' +
       (r.conf > 0 ? '✅ SÍ vas: hay clientes confirmados.' : '❌ Dejá el bloque: nadie confirmó (ahorrás el viaje).');
-    const env = await enviarConRespaldo(CINDY_WA, 'retiro', ['Cindy', 'resumen del día', r.destino], 'GO/NO-GO');
+    const env = await enviarPaso(CINDY_WA, 'retiro', ['Cindy', 'resumen del día', r.destino], 'GO/NO-GO', aviso);
     await registrarSaliente(env?.wamid || null, CINDY_WA, env?.plantilla || 'pedido_listo_retiro_baratuss', '');
     await avisarTG(aviso);
     log.push('go/no-go enviado: ' + clave);
   }
+
+  // (6) AGRADECIMIENTO POST-ENTREGA
+  //     Cuando el pedido se entrega completo, se manda UN mensaje de agradecimiento
+  //     (y una invitación suave a etiquetar en Instagram). Se manda una sola vez por
+  //     pedido, con la misma marca atómica que los otros pasos.
+  try {
+    const corte = new Date(Date.now() - 2 * MS_DIA).toISOString();
+    const { data: entregados } = await supabase
+      .from('despachos')
+      .select('id, order_reference, customer_name, customer_phone, destino, notas, updated_at')
+      .eq('estado_logistico', 'entregado')
+      .gte('updated_at', corte)
+      .order('id', { ascending: false })
+      .limit(50);
+
+    const yaAgradecidos = new Set<string>();
+    for (const d of entregados || []) {
+      if ((d.notas || '').includes('GRACIAS-ENT')) yaAgradecidos.add(d.order_reference || '');
+    }
+
+    for (const d of entregados || []) {
+      const ref = d.order_reference || '';
+      const tel = d.customer_phone;
+      if (!ref || !tel || yaAgradecidos.has(ref)) continue;
+
+      // Solo cuando TODO el pedido está entregado
+      const { count: pendientes } = await supabase
+        .from('despachos')
+        .select('id', { count: 'exact', head: true })
+        .eq('order_reference', ref)
+        .neq('estado_logistico', 'entregado');
+      if ((pendientes ?? 0) > 0) continue;
+
+      const nombre = String(d.customer_name || 'cliente').split(' ')[0];
+      const sello = ahoraSV().toISOString().slice(0, 16).replace('T', ' ');
+      if (!(await reclamarPedido(ref, d.notas || '', '💖 GRACIAS-ENT ' + sello, 'GRACIAS-ENT'))) continue;
+
+      const env = await enviarPaso(tel, 'gracias', [nombre], 'GRACIAS-ENTREGA',
+        textoNatural('gracias', nombre, ref, '', '', d.destino || ''));
+      if (env) {
+        await registrarSaliente(env.wamid, tel, env.plantilla, ref, env.texto || '');
+        yaAgradecidos.add(ref);
+        log.push('GRACIAS-ENT -> ' + tel + ' [' + env.plantilla + ']');
+      } else {
+        await devolverReclamo(ref, d.notas || '');
+        log.push('GRACIAS-ENT FALLO (se reintenta) -> ' + tel);
+      }
+    }
+  } catch (e) { log.push('error gracias post-entrega: ' + String(e).slice(0, 90)); }
 
   return new Response(JSON.stringify({ ok: true, despachos: (despachos || []).length, log }), {
     status: 200, headers: { 'Content-Type': 'application/json' }

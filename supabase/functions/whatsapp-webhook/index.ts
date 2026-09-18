@@ -295,6 +295,18 @@ serve(async (req) => {
               .maybeSingle();
 
             // 2) Guardar SIEMPRE el mensaje (historial + bandeja del panel)
+            // ⚠️ ANTI-DUPLICADO (arreglo 2026-09-18): si este mensaje YA está en la bitácora,
+            // no se procesa de nuevo. Meta reintenta entregas el mismo mensaje y, sin esto,
+            // el cliente recibía DOS veces la misma respuesta automática.
+            if (msg.id) {
+              const { data: yaEsta } = await supabase
+                .from('wa_mensajes').select('id').eq('wa_message_id', String(msg.id)).limit(1);
+              if (yaEsta && yaEsta.length > 0) {
+                console.log('mensaje repetido ignorado:', msg.id);
+                continue;
+              }
+            }
+
             const { error: errIns } = await supabase.from('wa_mensajes').upsert({
               wa_message_id: msg.id || null,
               telefono: tel,
