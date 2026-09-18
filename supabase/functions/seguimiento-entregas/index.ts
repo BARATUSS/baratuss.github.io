@@ -15,6 +15,15 @@ const TG_CHATS = (Deno.env.get('TELEGRAM_CHAT_ID') || '').split(',').map(s => s.
 const CINDY_WA = '50376626575';   // WhatsApp de Cindy (avisos go/no-go)
 const MS_DIA = 86400000;
 
+// Plantillas por paso: PRIMERO la versión corregida (emojis y acentos bien) y, mientras Meta
+// la revisa, la versión anterior que ya está aprobada. Así el cambio es automático y sin
+// ventana sin mensajes: si la nueva todavía no está aprobada, Meta la rechaza y se usa la vieja.
+const PLANTILLAS: Record<string, string[]> = {
+  agradecimiento: ['pedido_confirmado_baratuss_v2', 'pedido_confirmado_baratuss'],
+  recordatorio: ['recordatorio_entrega_baratuss_v2', 'recordatorio_entrega_baratuss'],
+  retiro: ['pedido_listo_retiro_baratuss_v2', 'pedido_listo_retiro_baratuss'],
+};
+
 // ===== utilidades =====
 function ahoraSV(): Date { return new Date(Date.now() - 6 * 3600000); }  // hora local El Salvador
 
@@ -46,6 +55,16 @@ async function enviarPlantilla(tel: string, plantilla: string, params: string[],
     console.log('PLANTILLA', plantilla, '->', tel, etiqueta, wamid ? 'OK' : JSON.stringify(d).slice(0, 180));
     return wamid;
   } catch (e) { console.log('error plantilla', String(e)); return null; }
+}
+
+// Prueba las versiones en orden (corregida y, si falla, la aprobada anterior)
+async function enviarConRespaldo(tel: string, paso: string, params: string[], etiqueta = ''): Promise<{ wamid: string; plantilla: string } | null> {
+  const candidatas = PLANTILLAS[paso] || [paso];
+  for (const p of candidatas) {
+    const wamid = await enviarPlantilla(tel, p, params, etiqueta);
+    if (wamid) return { wamid, plantilla: p };
+  }
+  return null;
 }
 
 // Registra el saliente en la bitácora con su wamid: así el webhook puede actualizar
@@ -206,11 +225,11 @@ serve(async (_req) => {
     if (!notas.includes('AGRAD') && !pedidosAgrad.has(ref)) {
       const monto = await montoOrden(ref);
       if (await reclamarPedido(ref, notas, '📤 AGRAD ' + sello, 'AGRAD')) {
-        const wamid = await enviarPlantilla(tel, 'pedido_confirmado_baratuss', [nombre, ref, monto], 'AGRADECIMIENTO');
-        if (wamid) {
-          await registrarSaliente(wamid, tel, 'pedido_confirmado_baratuss', ref);
+        const env = await enviarConRespaldo(tel, 'agradecimiento', [nombre, ref, monto], 'AGRADECIMIENTO');
+        if (env) {
+          await registrarSaliente(env.wamid, tel, env.plantilla, ref);
           pedidosAgrad.add(ref);
-          log.push('AGRAD -> ' + tel);
+          log.push('AGRAD -> ' + tel + ' [' + env.plantilla + ']');
         } else {
           await devolverReclamo(ref, notas);
           log.push('AGRAD FALLO (se reintenta) -> ' + tel);
@@ -223,11 +242,11 @@ serve(async (_req) => {
     if (difDias === 1) {
       if (hora < 12 && !notas.includes('RECORD-AM') && !pedidosRecAM.has(ref)) {
         if (await reclamarPedido(ref, notas, '📤 RECORD-AM ' + sello, 'RECORD-AM')) {
-          const wamid = await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-AM');
-          if (wamid) {
-            await registrarSaliente(wamid, tel, 'recordatorio_entrega_baratuss', ref);
+          const env = await enviarConRespaldo(tel, 'recordatorio', [nombre, fechaStr, destino], 'RECORD-AM');
+          if (env) {
+            await registrarSaliente(env.wamid, tel, env.plantilla, ref);
             pedidosRecAM.add(ref);
-            log.push('RECORD-AM -> ' + tel);
+            log.push('RECORD-AM -> ' + tel + ' [' + env.plantilla + ']');
           } else {
             await devolverReclamo(ref, notas);
             log.push('RECORD-AM FALLO (se reintenta) -> ' + tel);
@@ -235,11 +254,11 @@ serve(async (_req) => {
         }
       } else if (hora >= 14 && !notas.includes('RECORD-PM') && !pedidosRecPM.has(ref)) {
         if (await reclamarPedido(ref, notas, '📤 RECORD-PM ' + sello, 'RECORD-PM')) {
-          const wamid = await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-PM');
-          if (wamid) {
-            await registrarSaliente(wamid, tel, 'recordatorio_entrega_baratuss', ref);
+          const env = await enviarConRespaldo(tel, 'recordatorio', [nombre, fechaStr, destino], 'RECORD-PM');
+          if (env) {
+            await registrarSaliente(env.wamid, tel, env.plantilla, ref);
             pedidosRecPM.add(ref);
-            log.push('RECORD-PM -> ' + tel);
+            log.push('RECORD-PM -> ' + tel + ' [' + env.plantilla + ']');
           } else {
             await devolverReclamo(ref, notas);
             log.push('RECORD-PM FALLO (se reintenta) -> ' + tel);
@@ -253,11 +272,11 @@ serve(async (_req) => {
       const minutos = (hi - hora) * 60;
       if (minutos >= 0 && minutos <= 60) {
         if (await reclamarPedido(ref, notas, '📤 CONF-1H ' + sello, 'CONF-1H')) {
-          const wamid = await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H');
-          if (wamid) {
-            await registrarSaliente(wamid, tel, 'recordatorio_entrega_baratuss', ref);
+          const env = await enviarConRespaldo(tel, 'recordatorio', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H');
+          if (env) {
+            await registrarSaliente(env.wamid, tel, env.plantilla, ref);
             pedidosConf1h.add(ref);
-            log.push('CONF-1H -> ' + tel);
+            log.push('CONF-1H -> ' + tel + ' [' + env.plantilla + ']');
           } else {
             await devolverReclamo(ref, notas);
             log.push('CONF-1H FALLO (se reintenta) -> ' + tel);
@@ -285,8 +304,8 @@ serve(async (_req) => {
     const aviso = '📋 BARATUSS — bloque de ' + (esManana ? 'hoy (mañana)' : 'hoy (tarde)') + ': ' +
       r.total + ' pedido(s), ' + r.conf + ' confirmado(s).\n' + r.destino + '\n' +
       (r.conf > 0 ? '✅ SÍ vas: hay clientes confirmados.' : '❌ Dejá el bloque: nadie confirmó (ahorrás el viaje).');
-    const wamid = await enviarPlantilla(CINDY_WA, 'pedido_listo_retiro_baratuss', ['Cindy', 'resumen del día', r.destino], 'GO/NO-GO');
-    await registrarSaliente(wamid, CINDY_WA, 'pedido_listo_retiro_baratuss', '');
+    const env = await enviarConRespaldo(CINDY_WA, 'retiro', ['Cindy', 'resumen del día', r.destino], 'GO/NO-GO');
+    await registrarSaliente(env?.wamid || null, CINDY_WA, env?.plantilla || 'pedido_listo_retiro_baratuss', '');
     await avisarTG(aviso);
     log.push('go/no-go enviado: ' + clave);
   }
