@@ -1237,6 +1237,9 @@ ul { list-style: none; }
     .factura { font-size: 0.78rem; }
     .factura__cabecera { flex-direction: column; }
     .factura__tipo-caja { text-align: left; }
+    /* En celular la tabla se aprieta: se oculta la columna de precio unitario
+       (el total de cada línea sigue visible en "Ventas gravadas") */
+    .factura__tabla th:nth-child(3), .factura__tabla td:nth-child(3) { display: none; }
 }
 @media print {
     body * { visibility: hidden !important; }
