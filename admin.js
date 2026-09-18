@@ -14,6 +14,10 @@ let orders = [];
 let selectedIds = new Set();
 
 // ===== API HELPERS (fetch directo, sin librería CDN) =====
+// ⚠️ IMPORTANTE: antes esta función devolvía la respuesta SIN revisar si la operación
+// había fallado → el panel mostraba "✅" aunque el guardado hubiera fallado (así quedó
+// imposible marcar una entrega durante semanas). Ahora, si la base rechaza algo, LANZA
+// el error con el motivo real para que se vea en pantalla.
 async function api(method, path, body) {
     const headers = { 'apikey': ANON_KEY, 'Content-Type': 'application/json' };
     if (session?.token) headers['Authorization'] = 'Bearer ' + session.token;
@@ -21,8 +25,23 @@ async function api(method, path, body) {
     if (body !== undefined) opts.body = JSON.stringify(body);
     const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, opts);
     if (r.status === 204) return null;
-    return r.json().catch(() => null);
+    const texto = await r.text();
+    let data = null;
+    try { data = texto ? JSON.parse(texto) : null; } catch (e) { data = null; }
+    if (!r.ok) {
+        const detalle = (data && (data.message || data.error || data.hint)) || texto || ('HTTP ' + r.status);
+        const err = new Error(detalle);
+        err.status = r.status;
+        throw err;
+    }
+    return data;
 }
+
+// Cualquier error que se escape se muestra igual (nada de fallos silenciosos)
+window.addEventListener('unhandledrejection', (e) => {
+    const msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'error');
+    if (typeof showToast === 'function') showToast('❌ No se pudo completar: ' + msg);
+});
 
 // ===== PRICING (misma fórmula que la tienda) =====
 const PRICE_FACTOR = 1.16955;  // 1.13 × 1.035 (IVA 13% + comisión Wompi 3.50%)
@@ -595,18 +614,19 @@ async function cancelOrder(id) {
     loadStats();
 }
 
-// Marcar pedido en efectivo como pagado/entregado
+// Marcar pedido (efectivo) como PAGADO y ENTREGADO → registra la venta en finanzas
 async function markCashPaid(id) {
-    if (!confirm('¿Marcar este pedido como PAGADO y ENTREGADO?')) return;
-    await api('PATCH', 'orders?id=eq.' + id, {
-        payment_status: 'pagado',
-        status: 'entregado',
-        payment_date: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-    });
-    showToast('✅ Pedido marcado como pagado');
-    loadOrders();
-    loadStats();
+    const o = (orders || []).find(x => x.id === id);
+    if (!confirm('¿Marcar este pedido como PAGADO y ENTREGADO?\n\nSe registrará la venta en finanzas (IVA, costo y utilidad).')) return;
+    try {
+        await api('POST', 'rpc/entregar_pedido', { p_ref: o ? o.reference : null });
+    } catch (e) {
+        showToast('❌ No se pudo marcar: ' + e.message);
+        return;
+    }
+    showToast('✅ Pedido entregado · 💰 venta registrada en finanzas');
+    await loadOrders();
+    await loadStats();
 }
 
 // ===== STATS =====
@@ -1027,8 +1047,20 @@ async function avanzarDespacho(id) {
     const next = ESTADOS_NEXT[actual];
     if (!next) return;
     if (!confirm('¿Marcar como "' + ESTADOS_LABEL[next] + '"?\n\n' + d.nombre_capturado + ' — ' + d.order_reference)) return;
-    await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: next, updated_at: new Date().toISOString() });
-    showToast('✅ Despacho actualizado: ' + ESTADOS_LABEL[next]);
+    try {
+        await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: next, updated_at: new Date().toISOString() });
+    } catch (e) {
+        showToast('❌ No se pudo actualizar: ' + e.message);
+        return;
+    }
+    if (next === 'entregado') {
+        // El registro de la venta lo hace la base de datos (IVA, costo, comisión, utilidad)
+        showToast('✅ Entregado · 💰 venta registrada en finanzas');
+        try { await loadOrders(); } catch (e) { /* la vista de pedidos se refresca sola */ }
+        try { await loadStats(); } catch (e) { /* opcional */ }
+    } else {
+        showToast('✅ Despacho actualizado: ' + ESTADOS_LABEL[next]);
+    }
     loadDespachos();
 }
 
@@ -1317,8 +1349,13 @@ $('prep-marcar-preparado').addEventListener('click', async () => {
     const ids = [...prepSelected];
     if (!ids.length) { showToast('📝 Seleccioná al menos un artículo'); return; }
     if (!confirm('¿Marcar ' + ids.length + ' artículo(s) como EN PREPARACIÓN?')) return;
-    for (const id of ids) {
-        await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: 'en-preparacion', updated_at: new Date().toISOString() });
+    try {
+        for (const id of ids) {
+            await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: 'en-preparacion', updated_at: new Date().toISOString() });
+        }
+    } catch (e) {
+        showToast('❌ No se pudo marcar: ' + e.message);
+        return;
     }
     showToast('✅ Artículos en preparación');
     loadPreparar();
