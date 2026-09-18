@@ -45,6 +45,16 @@ async function crearDespachos(ref: string, items: any[], datos: any) {
       visto: false
     });
   }
+  // MEJORA: dispara el seguimiento AL INSTANTE (agradecimiento inmediato, sin esperar el cron de 5 min).
+  // Si esto falla, el cron cada 5 minutos lo recupera igual.
+  try {
+    await fetch('https://lizybztwnlrlvsrmgnug.functions.supabase.co/seguimiento-entregas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+  } catch (_e) { /* el cron lo recupera */ }
+
   return { creados: items.length };
 }
 

@@ -1,3 +1,7 @@
+// BARATUSS — Webhook de WhatsApp UNIFICADO
+// Combina: (a) validación de firma de Meta (seguridad), (b) guardado en wa_mensajes (historial/bandeja),
+// (c) DIRECTIVA DE MENSAJES aprobada por Leo: clasificar, responder dentro de la ventana gratis,
+//     una sola respuesta por conversación, y derivar cambios/reclamos a decisión humana.
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -6,44 +10,187 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 );
 
-// Token de verificación que se pega en la pantalla de Meta (Configuración → Webhook)
-const VERIFY_TOKEN = 'baratuss_wa_2026';
-
-// Clave secreta de la app (para validar que los mensajes vengan realmente de Meta).
-// Se configura como secreto de la función: WHATSAPP_APP_SECRET.
+const VERIFY_TOKEN = 'baratuss_wa_2026';           // pantalla de Meta (Configuración → Webhook)
 const APP_SECRET = Deno.env.get('WHATSAPP_APP_SECRET') || '';
+const WA_TOKEN = Deno.env.get('META_WA_TOKEN') || '';
+const PHONE_ID = Deno.env.get('META_PHONE_ID') || '';
 
-/** Comparación en tiempo constante (evita filtrar información por timing) */
-function igualSeguro(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-/** Valida el header X-Hub-Signature-256 que Meta firma con el App Secret */
+// ===== firma de Meta (X-Hub-Signature-256) =====
 async function firmaValida(raw: string, header: string | null): Promise<boolean> {
-  if (!APP_SECRET) return true;                 // sin secreto configurado no se valida (compatibilidad)
+  if (!APP_SECRET) return true;                 // sin secreto configurado no se valida
   if (!header || !header.startsWith('sha256=')) return false;
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(APP_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(APP_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(raw));
-  const hex = Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, '0')).join('');
-  return igualSeguro(hex, header.slice(7));
+  const hex = Array.from(new Uint8Array(mac)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return hex === header.slice(7);
 }
 
-/** Extrae el texto legible de cualquier tipo de mensaje de WhatsApp */
 function extraerTexto(msg: any): string {
   return msg.text?.body
     || msg.button?.text
     || msg.interactive?.button_reply?.title
     || msg.interactive?.list_reply?.title
-    || msg.image?.caption
-    || msg.document?.caption
-    || msg.video?.caption
-    || '[' + (msg.type || 'mensaje') + ']';
+    || '[mensaje no textual]';
+}
+
+// ===== DIRECTIVA DE MENSAJES (ver documento DIRECTIVA_MENSAJES.md) =====
+type Clase = 'confirmacion' | 'pregunta' | 'cambio' | 'otro';
+
+function clasificar(texto: string, idBoton?: string): Clase {
+  const t = ((idBoton || '') + ' ' + (texto || '')).toLowerCase().trim();
+  const cambio = ['no puedo', 'cambiar', 'reprogram', 'otro dia', 'otro día', 'moveme', 'pasemos', 'no llego', 'mejor otro', 'no voy', 'necesito cambiar'];
+  const confirmacion = ['gracias', 'ahí los espero', 'ahi los espero', 'los espero', 'ok', 'perfecto', 'sí', 'si', 'confirmo', 'confirmado', 'de acuerdo', 'dale', 'esta bien', 'está bien', 'excelente', 'muy amables', '👍', '✅', 'ahí estaré', 'ahi estare', 'estaré', 'estare'];
+  const pregunta = ['?', '¿', 'cuando', 'cuándo', 'donde', 'dónde', 'hora', 'como llego', 'cómo llego', 'direccion', 'dirección'];
+  for (const c of cambio) if (t.includes(c)) return 'cambio';
+  for (const p of pregunta) if (t.includes(p)) return 'pregunta';
+  for (const c of confirmacion) if (t.includes(c)) return 'confirmacion';
+  return 'otro';
+}
+
+// ===== avisos a Telegram (grupo + privado de Leo) =====
+async function avisarTelegram(texto: string) {
+  const tgToken = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
+  const destinos = (Deno.env.get('TELEGRAM_CHAT_ID') || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!tgToken || !destinos.length) return;
+  for (const chatId of destinos) {
+    try {
+      await fetch('https://api.telegram.org/bot' + tgToken + '/sendMessage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: texto, disable_web_page_preview: true })
+      });
+    } catch (_e) { /* silencio */ }
+  }
+}
+
+// Guarda un mensaje SALIENTE (para poder seguir su estado de entrega: sent/delivered/read/failed)
+async function guardarSaliente(telefono: string, texto: string, wamid: string | null, tipo: string) {
+  if (!wamid) return;
+  try {
+    await supabase.from('wa_mensajes').upsert({
+      wa_message_id: wamid, telefono, texto, tipo, direccion: 'saliente',
+      estado_entrega: 'sent', wa_timestamp: new Date().toISOString()
+    }, { onConflict: 'wa_message_id', ignoreDuplicates: true });
+  } catch (_e) { /* silencioso */ }
+}
+
+// ===== responder por WhatsApp (GRATIS: dentro de la ventana de 24h que abrió el cliente) =====
+async function responderWhatsApp(telefono: string, texto: string): Promise<boolean> {
+  if (!WA_TOKEN || !PHONE_ID) return false;
+  try {
+    const r = await fetch('https://graph.facebook.com/v21.0/' + PHONE_ID + '/messages', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: telefono, type: 'text', text: { body: texto } })
+    });
+    const d = await r.json();
+    if (d?.messages?.[0]?.id) {
+      await guardarSaliente(telefono, texto, d.messages[0].id, 'text');
+      return true;
+    }
+    // Si Meta rechazo el envio, se registra el motivo
+    if (d?.error) {
+      await guardarSaliente(telefono, texto, 'ERROR-' + Date.now(), 'text');
+      await avisarTelegram('⚠️ NO SE PUDO ENVIAR WHATSAPP\n\nA: +' + telefono +
+        '\nMotivo: ' + (d.error.title || '') + ' — ' + (d.error.message || ''));
+    }
+    return false;
+  } catch (_e) { return false; }
+}
+
+// ===== Menú de ventanas DINÁMICO: solo muestra ventanas con cupo disponible =====
+// Cupo: 20 entregas por ventana, contando TODOS los pedidos asignados (pendientes + confirmados).
+const CUPO_POR_VENTANA = 20;
+const VENTANAS_DEF = [
+  { id: 'VEN_MIE_AM', titulo: 'Mie - Metrocentro', desc: '08:00 a 12:00' },
+  { id: 'VEN_MIE_PM', titulo: 'Mie - Santa Rosa/Merliot', desc: '14:00 a 17:00' },
+  { id: 'VEN_SAB_AM', titulo: 'Sab - Metrocentro', desc: '08:00 a 10:00' },
+  { id: 'VEN_SAB_MD', titulo: 'Sab - Plaza Merliot', desc: '12:00 a 14:00' }
+];
+
+// Destino tal como se guarda en los despachos (para aplicar el cambio de ventana)
+const DESTINOS_VENTANA: Record<string, string> = {
+  'VEN_MIE_AM': 'Mié — Metrocentro (08:00-12:00)',
+  'VEN_MIE_PM': 'Mié — Plaza Merliot (14:00-17:00)',
+  'VEN_SAB_AM': 'Sáb — Metrocentro (08:00-10:00)',
+  'VEN_SAB_MD': 'Sáb — Plaza Merliot (12:00-14:00)'
+};
+
+function proximaFecha(diaSemana: number, base: Date): Date {
+  let dias = (diaSemana - base.getUTCDay() + 7) % 7;
+  if (dias === 0) dias = 7;
+  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + dias));
+}
+
+// Fecha del bloque de entrega segun el texto del destino (Mié / Sáb) y la fecha del pedido
+function fechaBloque(destino: string, createdAt: string): Date | null {
+  const d = (destino || '').toLowerCase();
+  let base = new Date(Date.now() - 6 * 3600000);   // hora local El Salvador
+  if (createdAt) {
+    const c = new Date(createdAt);
+    if (!isNaN(c.getTime())) base = new Date(c.getTime() - 6 * 3600000);
+  }
+  if (d.includes('mié') || d.includes('mie')) return proximaFecha(3, base);  // 3 = miércoles
+  if (d.includes('sáb') || d.includes('sab')) return proximaFecha(6, base);  // 6 = sábado
+  return null;
+}
+
+function ventanaDe(destino: string): string | null {
+  const d = (destino || '').toLowerCase();
+  const esMie = d.includes('mié') || d.includes('mie');
+  const esSab = d.includes('sáb') || d.includes('sab');
+  if (esMie && d.includes('08:00-12:00')) return 'VEN_MIE_AM';
+  if (esMie && d.includes('14:00-17:00')) return 'VEN_MIE_PM';
+  if (esSab && d.includes('08:00-10:00')) return 'VEN_SAB_AM';
+  if (esSab && d.includes('12:00-14:00')) return 'VEN_SAB_MD';
+  return null;
+}
+
+// Ocupación real de cada ventana (todos los pedidos activos asignados)
+async function ocupacionVentanas(): Promise<Record<string, number>> {
+  const { data } = await supabase
+    .from('despachos')
+    .select('destino, estado_logistico')
+    .neq('estado_logistico', 'entregado')
+    .limit(500);
+  const cuenta: Record<string, number> = {};
+  for (const d of data || []) {
+    const v = ventanaDe((d as any).destino);
+    if (v) cuenta[v] = (cuenta[v] || 0) + 1;
+  }
+  return cuenta;
+}
+
+async function enviarWALista(telefono: string, nombre: string): Promise<boolean> {
+  const cuenta = await ocupacionVentanas();
+  const libres = VENTANAS_DEF.filter(v => (cuenta[v.id] || 0) < CUPO_POR_VENTANA);
+
+  // Todas llenas: no se ofrece nada, se avisa al equipo
+  if (!libres.length) {
+    await responderWhatsApp(telefono, 'Hola ' + nombre + ', por ahora estamos al tope de lugares en todas las ventanas 🙏 Te avisamos apenas se libere uno.');
+    await avisarTelegram('⚠️ TODAS LAS VENTANAS LLENAS\n\nUn cliente pidió reprogramar (+' + telefono + ') y no hay cupo.\nRevisar si se abre un bloque extra o se lo llama.');
+    return false;
+  }
+
+  const rows = libres.map(v => ({ id: v.id, title: v.titulo.slice(0, 24), description: v.desc }));
+  try {
+    const r = await fetch('https://graph.facebook.com/v21.0/' + PHONE_ID + '/messages', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', to: telefono, type: 'interactive',
+        interactive: {
+          type: 'list',
+          header: { type: 'text', text: 'Reprogramar entrega' },
+          body: { text: 'Hola ' + nombre + ', elegí la ventana que te sirva y avisamos para confirmarla:' },
+          footer: { text: 'BARATUSS' },
+          action: { button: 'Ver ventanas', sections: [{ title: 'Ventanas con lugar', rows }] }
+        }
+      })
+    });
+    const d = await r.json();
+    return !!d?.messages;
+  } catch (_e) { return false; }
 }
 
 serve(async (req) => {
@@ -62,90 +209,228 @@ serve(async (req) => {
 
   // ===== MENSAJES ENTRANTES (POST) =====
   if (req.method === 'POST') {
+    const raw = await req.text();
+    const firma = req.headers.get('x-hub-signature-256');
+    // Modo de prueba interno: permite simular mensajes sin firma de Meta (header x-test-key)
+    const TEST_KEY = Deno.env.get('WA_TEST_KEY') || '';
+    const testKeyRecibida = req.headers.get('x-test-key') || '';
+    const esPrueba = !!TEST_KEY && testKeyRecibida === TEST_KEY;
+    if (!esPrueba && !(await firmaValida(raw, firma))) {
+      return new Response(JSON.stringify({ ok: false, error: 'firma invalida' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     try {
-      // 0) Validar que el mensaje venga firmado por Meta (App Secret)
-      const raw = await req.text();
-      const firma = req.headers.get('x-hub-signature-256');
-      if (!(await firmaValida(raw, firma))) {
-        return new Response(JSON.stringify({ ok: false, error: 'firma invalida' }), {
-          status: 401, headers: { 'Content-Type': 'application/json' }
-        });
-      }
+      const body = JSON.parse(raw || '{}');
+      let guardados = 0, cruzados = 0, respondidos = 0, errores = 0;
 
-      const body = JSON.parse(raw);
-      const entries = body.entry || [];
-      let guardados = 0;
-      let cruzados = 0;
-      let errores = 0;
-
-      for (const entry of entries) {
+      for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
           const value = change.value || {};
           const phoneNumberId = value.metadata?.phone_number_id || null;
           const displayPhone = value.metadata?.display_phone_number || null;
 
-          // Nombre de perfil de cada contacto del payload
           const contactos: Record<string, string | null> = {};
           for (const c of value.contacts || []) {
             contactos[String(c.wa_id || '')] = c.profile?.name || null;
+          }
+
+          // ===== MEJORA: registrar los ESTADOS DE ENTREGA de los mensajes salientes =====
+          for (const st of (value.statuses || [])) {
+            const estado = String(st.status || '');
+            const err = (st.errors && st.errors[0]) || null;
+            const motivo = err ? ((err.title || '') + ': ' + (err.error_data?.details || err.message || '')) : null;
+            try {
+              await supabase.from('wa_mensajes').update({
+                estado_entrega: estado,
+                error_entrega: motivo,
+                entregado_en: (estado === 'delivered' || estado === 'read') ? new Date().toISOString() : null
+              }).eq('wa_message_id', String(st.id || ''));
+            } catch (_e) { /* silencioso */ }
+            if (estado === 'failed') {
+              await avisarTelegram('⚠️ MENSAJE NO ENTREGADO POR WHATSAPP\n\nA: +' + (st.recipient_id || '?') +
+                '\nMotivo: ' + (motivo || 'desconocido') +
+                '\n\n(Verificar si ese número tiene WhatsApp activo)');
+            }
           }
 
           for (const msg of value.messages || []) {
             const tel = String(msg.from || '');
             const texto = extraerTexto(msg);
             const ts = msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : null;
-
-            // 1) Buscar el despacho activo de ese cliente (por telefono)
             const ult8 = tel.slice(-8);
+
+            // 1) Despacho activo de ese cliente
             const { data: desp } = await supabase
               .from('despachos')
-              .select('id, notas, estado_logistico, customer_phone, order_reference')
+              .select('id, notas, estado_logistico, customer_phone, customer_name, destino, order_reference')
               .ilike('customer_phone', '%' + ult8 + '%')
               .neq('estado_logistico', 'entregado')
               .order('id', { ascending: false })
               .limit(1)
               .maybeSingle();
 
-            // 2) Guardar SIEMPRE el mensaje (idempotente por id de Meta)
-            const { error: errIns } = await supabase
-              .from('wa_mensajes')
-              .upsert({
-                wa_message_id: msg.id || null,
-                telefono: tel,
-                nombre_perfil: contactos[tel] ?? null,
-                texto,
-                tipo: msg.type || 'text',
-                direccion: 'entrante',
-                phone_number_id: phoneNumberId,
-                display_phone_number: displayPhone,
-                order_reference: (desp as any)?.order_reference || null,
-                despacho_id: (desp as any)?.id || null,
-                wa_timestamp: ts
-              }, { onConflict: 'wa_message_id', ignoreDuplicates: true });
+            // 2) Guardar SIEMPRE el mensaje (historial + bandeja del panel)
+            const { error: errIns } = await supabase.from('wa_mensajes').upsert({
+              wa_message_id: msg.id || null,
+              telefono: tel,
+              nombre_perfil: contactos[tel] ?? null,
+              texto,
+              tipo: msg.type || 'text',
+              direccion: 'entrante',
+              phone_number_id: phoneNumberId,
+              display_phone_number: displayPhone,
+              order_reference: (desp as any)?.order_reference || null,
+              despacho_id: (desp as any)?.id || null,
+              wa_timestamp: ts
+            }, { onConflict: 'wa_message_id', ignoreDuplicates: true });
+            if (errIns) errores++; else guardados++;
 
-            if (errIns) errores++;
-            else guardados++;
+            if (!desp) {
+              await avisarTelegram('📩 MENSAJE DE WHATSAPP (sin pedido asociado)\n\nDe: +' + tel + '\nMensaje: "' + texto + '"');
+              // Aunque no haya pedido, si pide cambiar le mostramos las ventanas (no lo dejamos sin respuesta)
+              const idSinPedido = msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || '';
+              if (clasificar(texto, idSinPedido) === 'cambio') {
+                await enviarWALista(tel, 'cliente');
+              }
+              continue;
+            }
 
-            // 3) Si hay despacho, reflejarlo en su bitácora (confirma / reprograma)
-            if (desp) {
-              const norm = (texto || '').toString().trim().toLowerCase();
-              const esConfirma = ['✅', 'confirmo', 'confirm', 'sí', 'si', '1'].some(c => norm.includes(c));
-              const esReprog = ['🔄', 'reprogram', 'no puedo', 'cambiar', '2'].some(c => norm.includes(c));
-              const marca = esConfirma ? '✅ CONF' : (esReprog ? '🔄 REPROG' : '💬 MSG');
-              const sello = new Date().toISOString().slice(0, 16).replace('T', ' ');
-              const nuevas = (((desp as any).notas as string) || '') + '\n' + marca + ' ' + sello + ': ' + texto;
+            // 3) Clasificar y actuar según la DIRECTIVA
+            const idInteractivo = msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || '';
+            let notas = ((desp as any).notas as string) || '';
+            const nombre = String((desp as any).customer_name || 'cliente').split(' ')[0];
+            const destino = (desp as any).destino || 'tu punto de entrega';
+            const sello = new Date().toISOString().slice(0, 16).replace('T', ' ');
+            const primeraRespuesta = !notas.includes('RESP-OK');
 
-              await supabase
-                .from('despachos')
-                .update({ notas: nuevas.trim().slice(-4000), visto: false })
-                .eq('id', (desp as any).id);
+            // 3a) ELECCIÓN DE VENTANA → revalida cupo y decide: automático (caso seguro) o aprobación humana
+            if (idInteractivo.startsWith('VEN_')) {
+              const elegida = VENTANAS_DEF.find(v => v.id === idInteractivo);
+              const tituloVent = elegida ? (elegida.titulo + ' (' + elegida.desc + ')') : idInteractivo;
+              const destinoNuevo = DESTINOS_VENTANA[idInteractivo] || tituloVent;
+              const cuenta = await ocupacionVentanas();
+              const ocupada = (cuenta[idInteractivo] || 0) >= CUPO_POR_VENTANA;
+
+              if (ocupada) {
+                notas += '\n⚠️ VENTANA LLENA ' + sello + ': ' + tituloVent;
+                await supabase.from('despachos').update({ notas: notas.trim().slice(-4000), visto: false }).eq('id', (desp as any).id);
+                await responderWhatsApp(tel, 'Uy ' + nombre + ', esa ventana se acaba de llenar 😮 Te muestro las que todavía tienen lugar:');
+                await enviarWALista(tel, nombre);
+                await avisarTelegram('⚠️ VENTANA LLENA al elegir\n\nCliente: ' + (desp as any).customer_name +
+                  '\nQuería: ' + tituloVent + '\n(Se le ofrecieron las disponibles)');
+                continue;
+              }
+
+              // ===== ¿Caso seguro para aprobar automáticamente? =====
+              // 1) NO debe haber reprogramado antes (ni automática ni manual)  2) el bloque actual NO es hoy
+              const yaReprogramo = notas.includes('VENTANA CAMBIADA') ||
+                                   notas.includes('VENTANA SOLICITADA') ||
+                                   notas.includes('Ventana pedida');
+              const primeraVez = !yaReprogramo;
+              const fechaActual = fechaBloque(destino, (desp as any).created_at);
+              const hoySV = new Date(Date.now() - 6 * 3600000);
+              const bloqueHoy = fechaActual !== null &&
+                fechaActual.toISOString().slice(0, 10) === hoySV.toISOString().slice(0, 10);
+              const automatico = primeraVez && !bloqueHoy;
+
+              if (automatico) {
+                // ✅ APROBACIÓN AUTOMÁTICA (caso seguro): se cambia la ventana y se avisa
+                notas += '\n✅ VENTANA CAMBIADA (auto) ' + sello + ': ' + destinoNuevo;
+                await supabase.from('despachos').update({
+                  destino: destinoNuevo, notas: notas.trim().slice(-4000), visto: false
+                }).eq('id', (desp as any).id);
+                cruzados++;
+                await responderWhatsApp(tel, '¡Listo ' + nombre + '! 🙌 Tu entrega quedó reprogramada para ' +
+                  destinoNuevo + '. Te esperamos. Cualquier cosa, escribinos por acá.');
+                await avisarTelegram('✅ REPROGRAMACIÓN APROBADA AUTOMÁTICAMENTE\n\nPedido: ' +
+                  (desp as any).order_reference + '\nCliente: ' + (desp as any).customer_name +
+                  '\nDe: ' + destino + '\nA: ' + destinoNuevo +
+                  '\nCupo de la ventana nueva: ' + (cuenta[idInteractivo] || 0) + '/' + CUPO_POR_VENTANA +
+                  '\n(Cliente notificado. Sin acción requerida.)');
+                continue;
+              }
+
+              // 🙋 Requiere aprobación humana (última hora, segunda vez o conflicto)
+              notas += '\n🔄 VENTANA SOLICITADA ' + sello + ': ' + tituloVent;
+              await supabase.from('despachos').update({ notas: notas.trim().slice(-4000), visto: false }).eq('id', (desp as any).id);
               cruzados++;
+              await responderWhatsApp(tel, '¡Listo ' + nombre + '! Anotamos tu preferencia: ' +
+                tituloVent + '. Te confirmamos el cambio en breve. 🙌');
+              await avisarTelegram('🔄 SOLICITUD DE REPROGRAMACIÓN — REQUIERE APROBACIÓN\n\nPedido: ' +
+                (desp as any).order_reference + '\nCliente: ' + (desp as any).customer_name +
+                '\nDe: ' + destino + '\nA: ' + tituloVent +
+                '\nCupo de esa ventana: ' + (cuenta[idInteractivo] || 0) + '/' + CUPO_POR_VENTANA +
+                (bloqueHoy ? '\n⚠️ Es para HOY (última hora)' : '') +
+                (!primeraVez ? '\n⚠️ Ya había reprogramado antes' : '') +
+                '\n\n(Decidir con Cindy antes de confirmar)');
+              continue;
+            }
+
+            const clase = clasificar(texto, idInteractivo);
+
+            // Marcas de respuesta por TIPO (una consulta o un cambio siempre merecen respuesta,
+            // aunque ya se haya respondido antes una cortesía)
+            const respondidoConf = notas.includes('RESP-CONF') || notas.includes('RESP-OK');
+            const respondidoPreg = notas.includes('PREG-RESP');
+
+            if (clase === 'confirmacion') {
+              if (!notas.includes('✅ CONF')) notas += '\n✅ CONF ' + sello + ': ' + texto;
+              if (!respondidoConf) {
+                const ok = await responderWhatsApp(tel,
+                  '¡Gracias a vos, ' + nombre + '! 🛍️ Te esperamos: ' + destino +
+                  '. Cualquier cosa que necesites, escribinos por acá. ¡Que la disfrutes!');
+                if (ok) { notas += '\n📤 RESP-CONF ' + sello; respondidos++; }
+              }
+              await supabase.from('despachos').update({ notas: notas.trim().slice(-4000), visto: false }).eq('id', (desp as any).id);
+              cruzados++;
+              await avisarTelegram('✅ CLIENTE CONFIRMÓ' + (respondidoConf ? '' : ' (respuesta enviada)') +
+                '\n\nPedido: ' + (desp as any).order_reference + '\nCliente: ' + (desp as any).customer_name +
+                '\nMensaje: "' + texto + '"');
+
+            } else if (clase === 'pregunta') {
+              notas += '\n💬 PREG ' + sello + ': ' + texto;
+              // MEJORA: las consultas SIEMPRE reciben respuesta (no las bloquea un agradecimiento previo)
+              if (!respondidoPreg) {
+                const ok = await responderWhatsApp(tel,
+                  'Hola ' + nombre + ' 👋 Tu entrega de BARATUSS está programada para ' + destino +
+                  '. Si necesitás cambiarla, respondé *CAMBIAR* y te ayudamos.');
+                if (ok) { notas += '\n📤 PREG-RESP ' + sello; respondidos++; }
+              }
+              await supabase.from('despachos').update({ notas: notas.trim().slice(-4000), visto: false }).eq('id', (desp as any).id);
+              cruzados++;
+              await avisarTelegram('❓ CONSULTA DE CLIENTE' + (respondidoPreg ? '' : ' (respondida)') +
+                '\n\nPedido: ' + (desp as any).order_reference + '\nCliente: ' + (desp as any).customer_name +
+                '\nMensaje: "' + texto + '"');
+
+            } else if (clase === 'cambio') {
+              notas += '\n🔄 REPROG ' + sello + ': ' + texto;
+              // Menú de ventanas: se envía la primera vez, y se reenvía si el cliente insiste (pudo perderlo). Máximo 2 envíos.
+              const enviosMenu = (notas.match(/📤 MENU-VENT/g) || []).length;
+              const vecesPideCambio = (notas.match(/🔄 REPROG/g) || []).length;
+              if (enviosMenu === 0 || (vecesPideCambio >= 3 && enviosMenu < 2)) {
+                const okLista = await enviarWALista(tel, nombre);
+                if (okLista) notas += '\n📤 MENU-VENT ' + sello;
+              }
+              await supabase.from('despachos').update({ notas: notas.trim().slice(-4000), visto: false }).eq('id', (desp as any).id);
+              cruzados++;
+              await avisarTelegram('🔄 CLIENTE PIDE REPROGRAMAR — REQUIERE APROBACIÓN\n\nPedido: ' +
+                (desp as any).order_reference + '\nCliente: ' + (desp as any).customer_name +
+                '\nMensaje: "' + texto + '"\n\n(No se respondió automáticamente: espera decisión de Cindy/Leo)');
+
+            } else {
+              notas += '\n💬 MSG ' + sello + ': ' + texto;
+              await supabase.from('despachos').update({ notas: notas.trim().slice(-4000), visto: false }).eq('id', (desp as any).id);
+              cruzados++;
+              await avisarTelegram('💬 MENSAJE DE CLIENTE\n\nPedido: ' + (desp as any).order_reference +
+                '\nCliente: ' + (desp as any).customer_name + '\nMensaje: "' + texto + '"');
             }
           }
         }
       }
 
-      return new Response(JSON.stringify({ ok: true, guardados, cruzados, errores }), {
+      return new Response(JSON.stringify({ ok: true, guardados, cruzados, respondidos, errores }), {
         status: 200, headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {
