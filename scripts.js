@@ -1295,6 +1295,7 @@ function openCheckoutModal() {
     updateCheckoutUI();
     mostrarResumenCompra();
     renderPuntosCards();   // tarjetas de día/punto con la fecha real de la próxima entrega
+    toggleFacturaUI();     // estado inicial del bloque de comprobante
     if (typeof showPointWhatsApp === 'function') showPointWhatsApp();
     reservarCarrito(); // NUEVO: reserva los productos por 5 min (el primero que llega gana)
     $('checkout-overlay').style.display = '';
@@ -1581,7 +1582,9 @@ async function cashCheckout() {
             punto: punto,
             mapsUrl: null,
             total: total,
-            metodo: 'efectivo'
+            metodo: 'efectivo',
+            // Documento tributario elegido por el cliente (para el botón "Ver mi factura")
+            ...fac.datos
         });
         
     } catch (e) {
