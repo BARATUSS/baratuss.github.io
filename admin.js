@@ -626,6 +626,32 @@ async function loadStats() {
     } else {
         $('stock-alert').style.display = 'none';
     }
+
+    await loadMetricas();
+}
+
+// ===== MÉTRICAS DE ENTREGA Y WHATSAPP (vista metricas_resumen, solo sesión admin) =====
+async function loadMetricas() {
+    try {
+        const data = await api('GET', 'metricas_resumen?select=*');
+        const m = Array.isArray(data) ? data[0] : data;
+        if (!m) return;
+        const set = (id, v) => { const el = $(id); if (el) el.textContent = (v === null || v === undefined) ? '0' : v; };
+        set('m-pedidos-activos', m.pedidos_activos);
+        set('m-confirmaron', m.clientes_confirmaron);
+        set('m-agradecimientos', m.agradecimientos);
+        set('m-recordatorios', m.recordatorios);
+        set('m-conf1h', m.confirmaciones_1h);
+        set('m-reprog-auto', m.reprogramaciones_auto);
+        set('m-reprog-pend', m.reprogramaciones_pendientes);
+        set('m-bloqueadas', m.ventanas_bloqueadas);
+        set('m-recibidos', m.mensajes_recibidos);
+        set('m-enviados', m.mensajes_enviados);
+        set('m-entregados', m.mensajes_entregados);
+        set('m-fallidos', m.mensajes_fallidos);
+        const sello = $('m-actualizado');
+        if (sello) sello.textContent = 'Actualizado ' + new Date().toLocaleTimeString();
+    } catch (_e) { /* si falla, el resumen general no se debe romper */ }
 }
 
 // ===== HELPERS =====

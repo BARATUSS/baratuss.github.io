@@ -43,3 +43,20 @@ y `documentos/sistema_entregas/DIRECTIVA_MENSAJES.md`
 - Editar calendarios de Google
 - Enviar mensajes a clientes
 - Cambiar configuración de Meta/WhatsApp
+
+## ⚠️ REGLAS TÉCNICAS OBLIGATORIAS (aprendidas en QA 17/09/2026)
+
+### Git
+- **NUNCA usar `git add -A` en este proyecto**: contiene archivos de credenciales (tokens, códigos de recuperación, service keys). Un `add -A` subió los códigos de recuperación de GitHub al repo público.
+- Añadir archivos **uno por uno** y verificar antes: `git status --short | grep -iE "token|credential|recovery|secret|_key|codes"`
+- Nunca versionar: `*_token*`, `*_key*`, `*credential*`, `*recovery*`, `*_codes.txt`, `.env`, `*.pem`, `CREDENCIALES_*`
+
+### Edge Functions
+- Verificar que **todas las funciones usadas existan** en el archivo: un error de referencia muere en el try/catch general y falla **en silencio**.
+- Tras cada cambio: desplegar **y probar el flujo completo** antes de avisar a Leo/Cindy.
+- Usar el modo de prueba interno (header `x-test-key`) para simular mensajes sin depender de Meta.
+- Los mensajes al cliente se controlan **por PEDIDO**, no por despacho: un pedido con varios productos genera varios despachos → **un solo mensaje**.
+
+### Antes de decir "listo"
+- Probar el flujo real (no asumir por revisar el código) y verificar en producción.
+

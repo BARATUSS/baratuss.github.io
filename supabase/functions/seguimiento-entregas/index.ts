@@ -109,6 +109,28 @@ async function marcarPedido(ref: string, notas: string, marca: string) {
   return nuevas;
 }
 
+// ANTI-DUPLICADO ATÓMICO: reclama el pedido ANTES de enviar.
+// Un solo UPDATE ... WHERE notas NOT LIKE '%MARCA%' RETURNING id: si dos ejecuciones coinciden
+// (dos relojes, o el aviso instantáneo del checkout + el reloj), solo UNA escribe filas.
+// La que recibe 0 filas NO envía. Así la carrera queda cerrada en la base, no en el código.
+async function reclamarPedido(ref: string, notas: string, marca: string, guarda: string): Promise<boolean> {
+  if (!ref) return false;
+  const nuevas = ((notas || '') + '\n' + marca).trim().slice(-4000);
+  const { data, error } = await supabase.from('despachos')
+    .update({ notas: nuevas })
+    .eq('order_reference', ref)
+    .or('notas.is.null,notas.not.like.%' + guarda + '%')
+    .select('id');
+  if (error) { console.log('reclamo error', guarda, JSON.stringify(error).slice(0, 150)); return false; }
+  return !!(data && data.length);
+}
+
+// Si el envío falla después de reclamar, se devuelve la marca para que el próximo ciclo reintente
+async function devolverReclamo(ref: string, notas: string) {
+  if (!ref) return;
+  await supabase.from('despachos').update({ notas }).eq('order_reference', ref);
+}
+
 // ===== proceso principal =====
 serve(async (_req) => {
   const hoy = ahoraSV();
@@ -162,10 +184,14 @@ serve(async (_req) => {
     // (1) AGRADECIMIENTO (uno solo por PEDIDO, aunque tenga varios productos)
     if (!notas.includes('AGRAD') && !pedidosAgrad.has(ref)) {
       const monto = await montoOrden(ref);
-      if (await enviarPlantilla(tel, 'pedido_confirmado_baratuss', [nombre, ref, monto], 'AGRADECIMIENTO')) {
-        notas = await marcarPedido(ref, notas, '📤 AGRAD ' + sello);
-        pedidosAgrad.add(ref);
-        log.push('AGRAD -> ' + tel);
+      if (await reclamarPedido(ref, notas, '📤 AGRAD ' + sello, 'AGRAD')) {
+        if (await enviarPlantilla(tel, 'pedido_confirmado_baratuss', [nombre, ref, monto], 'AGRADECIMIENTO')) {
+          pedidosAgrad.add(ref);
+          log.push('AGRAD -> ' + tel);
+        } else {
+          await devolverReclamo(ref, notas);
+          log.push('AGRAD FALLO (se reintenta) -> ' + tel);
+        }
       }
     }
 
@@ -173,16 +199,24 @@ serve(async (_req) => {
     const difDias = Math.round((fecha.getTime() - new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate())).getTime()) / MS_DIA);
     if (difDias === 1) {
       if (hora < 12 && !notas.includes('RECORD-AM') && !pedidosRecAM.has(ref)) {
-        if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-AM')) {
-          notas = await marcarPedido(ref, notas, '📤 RECORD-AM ' + sello);
-          pedidosRecAM.add(ref);
-          log.push('RECORD-AM -> ' + tel);
+        if (await reclamarPedido(ref, notas, '📤 RECORD-AM ' + sello, 'RECORD-AM')) {
+          if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-AM')) {
+            pedidosRecAM.add(ref);
+            log.push('RECORD-AM -> ' + tel);
+          } else {
+            await devolverReclamo(ref, notas);
+            log.push('RECORD-AM FALLO (se reintenta) -> ' + tel);
+          }
         }
       } else if (hora >= 14 && !notas.includes('RECORD-PM') && !pedidosRecPM.has(ref)) {
-        if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-PM')) {
-          notas = await marcarPedido(ref, notas, '📤 RECORD-PM ' + sello);
-          pedidosRecPM.add(ref);
-          log.push('RECORD-PM -> ' + tel);
+        if (await reclamarPedido(ref, notas, '📤 RECORD-PM ' + sello, 'RECORD-PM')) {
+          if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, fechaStr, destino], 'RECORD-PM')) {
+            pedidosRecPM.add(ref);
+            log.push('RECORD-PM -> ' + tel);
+          } else {
+            await devolverReclamo(ref, notas);
+            log.push('RECORD-PM FALLO (se reintenta) -> ' + tel);
+          }
         }
       }
     }
@@ -191,10 +225,14 @@ serve(async (_req) => {
     if (fechaStr === hoyStr && !notas.includes('CONF-1H') && !pedidosConf1h.has(ref)) {
       const minutos = (hi - hora) * 60;
       if (minutos >= 0 && minutos <= 60) {
-        if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H')) {
-          notas = await marcarPedido(ref, notas, '📤 CONF-1H ' + sello);
-          pedidosConf1h.add(ref);
-          log.push('CONF-1H -> ' + tel);
+        if (await reclamarPedido(ref, notas, '📤 CONF-1H ' + sello, 'CONF-1H')) {
+          if (await enviarPlantilla(tel, 'recordatorio_entrega_baratuss', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H')) {
+            pedidosConf1h.add(ref);
+            log.push('CONF-1H -> ' + tel);
+          } else {
+            await devolverReclamo(ref, notas);
+            log.push('CONF-1H FALLO (se reintenta) -> ' + tel);
+          }
         }
       }
     }

@@ -161,9 +161,18 @@ async function ocupacionVentanas(): Promise<Record<string, number>> {
   return cuenta;
 }
 
+// Ventanas bloqueadas por conflictos con el calendario personal de Cindy (las carga un proceso en la PC)
+async function ventanasBloqueadas(): Promise<Set<string>> {
+  try {
+    const { data } = await supabase.from('ventanas_bloqueadas').select('ventana_id');
+    return new Set((data || []).map((x: any) => String(x.ventana_id)));
+  } catch (_e) { return new Set(); }
+}
+
 async function enviarWALista(telefono: string, nombre: string): Promise<boolean> {
   const cuenta = await ocupacionVentanas();
-  const libres = VENTANAS_DEF.filter(v => (cuenta[v.id] || 0) < CUPO_POR_VENTANA);
+  const bloqueadas = await ventanasBloqueadas();
+  const libres = VENTANAS_DEF.filter(v => !bloqueadas.has(v.id) && (cuenta[v.id] || 0) < CUPO_POR_VENTANA);
 
   // Todas llenas: no se ofrece nada, se avisa al equipo
   if (!libres.length) {
@@ -261,6 +270,20 @@ serve(async (req) => {
             const ts = msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : null;
             const ult8 = tel.slice(-8);
 
+            // ANTI-ABUSO: máximo 10 mensajes por hora por cliente (protege el sistema)
+            try {
+              const hace1h = new Date(Date.now() - 3600000).toISOString();
+              const { count } = await supabase.from('wa_mensajes')
+                .select('id', { count: 'exact', head: true })
+                .eq('telefono', tel).eq('direccion', 'entrante').gte('wa_timestamp', hace1h);
+              if ((count || 0) > 10) {
+                await avisarTelegram('⚠️ EXCESO DE MENSAJES DE UN CLIENTE\n\nNúmero: +' + tel +
+                  '\nMensajes en la última hora: ' + count + '\n(No se respondió automáticamente)');
+                errores++;
+                continue;
+              }
+            } catch (_e) { /* si el control falla, no se bloquea al cliente */ }
+
             // 1) Despacho activo de ese cliente
             const { data: desp } = await supabase
               .from('despachos')
@@ -333,7 +356,8 @@ serve(async (req) => {
               const hoySV = new Date(Date.now() - 6 * 3600000);
               const bloqueHoy = fechaActual !== null &&
                 fechaActual.toISOString().slice(0, 10) === hoySV.toISOString().slice(0, 10);
-              const automatico = primeraVez && !bloqueHoy;
+              const bloqueadasV = await ventanasBloqueadas();
+              const automatico = primeraVez && !bloqueHoy && !bloqueadasV.has(idInteractivo);
 
               if (automatico) {
                 // ✅ APROBACIÓN AUTOMÁTICA (caso seguro): se cambia la ventana y se avisa
