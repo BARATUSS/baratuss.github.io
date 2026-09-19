@@ -293,6 +293,9 @@ serve(async (_req) => {
     .from('despachos')
     .select('id, order_reference, customer_name, customer_phone, destino, notas, estado_logistico, created_at')
     .neq('estado_logistico', 'entregado')
+    // ⚠️ CONTINGENCIAS (2026-09-18): los despachos en contingencia, reprogramados, cancelados
+    // o reembolsados NO reciben recordatorios de la fecha vieja (los maneja la EF `contingencia`).
+    .not('estado_logistico', 'in', '("contingencia","reprogramado","cancelado","reembolsado")')
     .order('id', { ascending: false })
     .limit(50);
 

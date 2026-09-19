@@ -108,8 +108,36 @@ serve(async (req) => {
     // ===== CREATE PAYMENT =====
     if (req.method === 'POST' && path === '/create-payment') {
       const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone, token: tokenCliente,
-              facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo } = await req.json();
+              facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo,
+              cuponCodigo } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
+
+      // ===== CUPÓN (2026-09-18): se valida y se aplica EN EL SERVIDOR =====
+      // Nunca se confía en el descuento que manda el navegador: se recalcula desde los items.
+      // Reglas: solo producto (el envío no lleva descuento), un solo uso, con tope.
+      let descuentoCupon = 0;
+      let cuponAplicado: string | null = null;
+      const subtotalProductos = (items || []).reduce(
+        (s: number, it: any) => s + Number(it.price || 0) * Number(it.qty || 1), 0);
+      if (cuponCodigo) {
+        const { data: val } = await supabase.rpc('validar_cupon', {
+          p_codigo: String(cuponCodigo),
+          p_telefono: customerPhone || null,
+          p_subtotal: subtotalProductos,
+        });
+        if (!val?.ok) {
+          const msg = val?.motivo === 'vencido' ? 'Ese cupón ya venció'
+            : val?.motivo === 'ya_usado' ? 'Ese cupón ya fue usado'
+            : val?.motivo === 'no_corresponde' ? 'Ese cupón es de otro cliente'
+            : 'Ese cupón no es válido';
+          return new Response(JSON.stringify({ error: msg }), { status: 400, headers: corsHeaders });
+        }
+        descuentoCupon = Number(val.descuento || 0);
+        cuponAplicado = String(val.codigo || cuponCodigo).toUpperCase();
+      }
+      const totalFinal = cuponAplicado
+        ? Math.round((subtotalProductos + Number(deliveryFee || 0) - descuentoCupon) * 100) / 100
+        : total;
 
       const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
       const token = await getWompiToken();
@@ -119,7 +147,7 @@ serve(async (req) => {
         headers: { 'authorization': 'Bearer ' + token, 'content-type': 'application/json' },
         body: JSON.stringify({
           identificadorEnlaceComercio: ref,
-          monto: Math.round(total * 100) / 100,
+          monto: Math.round(totalFinal * 100) / 100,
           nombreProducto: 'BARATUSS - Pedido online',
           formaPago: { permitirTarjetaCreditoDebido: true, permitirPagoConPuntoAgricola: true, permitirPagoEnCuotasAgricola: false },
           configuracion: {
@@ -136,7 +164,8 @@ serve(async (req) => {
       if (!pay.ok) throw new Error(JSON.stringify(payData));
 
       await supabase.from('orders').insert({
-        user_id: userId || null, items, total, reference: ref,
+        user_id: userId || null, items, total: totalFinal, reference: ref,
+        cupon_codigo: cuponAplicado, cupon_descuento: descuentoCupon || null,
         status: 'pendiente', payment_status: 'pendiente',
         transaction_id: payData.idTransaccion || null,
         delivery_type: deliveryType || 'retiro-punto',
@@ -159,15 +188,15 @@ serve(async (req) => {
       // ✅ VENTA ATÓMICA de stock al confirmar el pedido (función en la base, imposible de pisar)
       // Si el producto ya se vendió o lo tiene reservado otro cliente → se rechaza el pago.
       const tokenSesion = String(tokenCliente || 'checkout') + '-' + ref;
-      for (const item of items) {
-        const qty = item.qty || 1;
-        const { data: venta } = await supabase.rpc('vender_stock', { p_id: Number(item.id), p_qty: qty, p_token: tokenSesion });
+      // ✅ VENTA ATÓMICA (2026-09-18): todo-o-nada con la misma función de la base.
+      // Antes se vendía producto por producto y, si uno fallaba, los anteriores quedaban
+      // vendidos sin pedido (stock desaparecido). Ya no hace falta el bucle de devolución.
+      {
+        const { data: venta } = await supabase.rpc('vender_carrito', {
+          p_items: (items || []).map((it: any) => ({ id: Number(it.id), qty: Number(it.qty || 1) })),
+          p_token: tokenSesion,
+        });
         if (!venta?.ok) {
-          // Liberar lo que sí se alcanzó a vender de este pedido
-          for (const ya of items) {
-            if (ya.id === item.id) break;
-            await supabase.rpc('devolver_stock', { p_id: Number(ya.id), p_qty: ya.qty || 1 });
-          }
           // ⚠️ Se borra el pedido Y sus despachos: el disparador de la base ya había creado el
           // despacho al registrar el pedido. Si quedaba suelto (huérfano), aparecía en el panel
           // como entrega activa, ensuciaba las métricas y podía generar mensajes de una compra
@@ -205,12 +234,21 @@ serve(async (req) => {
           // Si el pedido NO reservó stock al crearse (pedido anterior al fix),
           // descontar aquí al aprobarse
           if (!order?.stock_reservado) {
-            for (const item of items) {
-              const qty = item.qty || 1;
-              await supabase.rpc('vender_stock', { p_id: Number(item.id), p_qty: qty, p_token: 'webhook-' + ref });
-            }
+            // Venta atómica (todo-o-nada) para pedidos viejos que no reservaron stock
+            await supabase.rpc('vender_carrito', {
+              p_items: (items || []).map((it: any) => ({ id: Number(it.id), qty: Number(it.qty || 1) })),
+              p_token: 'webhook-' + ref,
+            });
             await supabase.from('orders').update({ stock_reservado: true }).eq('reference', ref);
           }
+
+          // 🎟️ Si el pedido usó un cupón, se marca como USADO (una sola vez, atómico)
+          try {
+            const { data: oc } = await supabase.from('orders').select('cupon_codigo').eq('reference', ref).maybeSingle();
+            if (oc?.cupon_codigo) {
+              await supabase.rpc('usar_cupon', { p_codigo: oc.cupon_codigo, p_reference: ref });
+            }
+          } catch (eCup) { console.log('error cupon webhook', String(eCup)); }
 
           // ===== FASE 1 ENTREGAS: alta de despachos al aprobarse el pago =====
           // (un registro por producto — cada uno es un paquete a preparar/entregar)

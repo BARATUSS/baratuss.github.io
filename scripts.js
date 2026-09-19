@@ -1346,6 +1346,90 @@ function iniciarTimerReserva(segundos) {
     }, 1000);
 }
 
+// ===== CUPÓN (plan contingencias v1.2 · Etapa 3) =====
+let cuponAplicado = null;   // { codigo, valor, tope } — lo llena la validación del servidor
+
+// Descuento SOLO sobre productos (el envío nunca lleva descuento), con tope
+function descuentoCupon(baseTotal) {
+    if (!cuponAplicado || !baseTotal) return 0;
+    const bruto = Number(baseTotal) * Number(cuponAplicado.valor || 0) / 100;
+    const tope = (cuponAplicado.tope === null || cuponAplicado.tope === undefined) ? 1e9 : Number(cuponAplicado.tope);
+    return Math.round(Math.min(bruto, tope) * 100) / 100;
+}
+
+async function aplicarCupon() {
+    const inp = $('cupon-codigo');
+    const msg = $('cupon-msg');
+    if (!inp || !msg) return;
+    const codigo = (inp.value || '').trim().toUpperCase();
+    msg.style.display = '';
+    if (!codigo) {
+        msg.style.color = '#b9453a';
+        msg.textContent = 'Escribí el código de tu cupón 🙂';
+        return;
+    }
+    msg.style.color = '#8a5b52';
+    msg.textContent = 'Verificando…';
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/cupones', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+                accion: 'validar', codigo,
+                telefono: ($('checkout-phone')?.value || '').trim(),
+                subtotal: getCartTotal()
+            })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!d || !d.ok) {
+            cuponAplicado = null;
+            msg.style.color = '#b9453a';
+            msg.textContent = '❌ ' + (d && (d.mensaje || d.error) ? (d.mensaje || d.error) : 'Ese cupón no es válido');
+            updateCheckoutUI();
+            return;
+        }
+        cuponAplicado = {
+            codigo: d.codigo || codigo,
+            valor: Number(d.valor || 0),
+            tope: (d.tope === null || d.tope === undefined) ? null : Number(d.tope)
+        };
+        const desc = descuentoCupon(getCartTotal());
+        msg.style.color = '#1a7f4b';
+        msg.textContent = '✅ Cupón aplicado: ' + cuponAplicado.valor + '% de descuento (−$' + desc.toFixed(2) + ')';
+        updateCheckoutUI();
+    } catch (e) {
+        cuponAplicado = null;
+        msg.style.color = '#b9453a';
+        msg.textContent = '❌ No pudimos verificar el cupón. Probá de nuevo.';
+        updateCheckoutUI();
+    }
+}
+
+function quitarCupon() {
+    cuponAplicado = null;
+    const msg = $('cupon-msg');
+    if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+    const inp = $('cupon-codigo');
+    if (inp) inp.value = '';
+    updateCheckoutUI();
+}
+
+function initCuponUI() {
+    const btn = $('cupon-aplicar');
+    const inp = $('cupon-codigo');
+    if (btn) btn.addEventListener('click', aplicarCupon);
+    if (inp) {
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarCupon(); } });
+        inp.addEventListener('input', () => { inp.value = inp.value.toUpperCase(); });
+    }
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCuponUI);
+else initCuponUI();
+
 function openCheckoutModal() {
     if (cart.length === 0) return;
     closeCart();
@@ -1413,12 +1497,17 @@ function updateCheckoutUI() {
     const fee = (!isCash && wantsC807) ? C807_FEE : 0;
     
     const baseTotal = getCartTotal();
-    const totalConFee = baseTotal + fee;
+    const descCupon = descuentoCupon(baseTotal);
+    const totalConFee = Math.max(0, baseTotal + fee - descCupon);
     $('checkout-total').textContent = '$' + totalConFee.toFixed(2);
     const breakdown = $('checkout-breakdown');
     if (breakdown) {
         breakdown.innerHTML =
-            (fee > 0 ? `<small style="opacity:.7;display:block;margin-top:4px;">Retiro C807: +$${fee.toFixed(2)}</small>` : '');
+            (fee > 0 ? `<small style="opacity:.7;display:block;margin-top:4px;">Retiro C807: +$${fee.toFixed(2)}</small>` : '')
+            + (descCupon > 0
+                ? `<small style="display:block;margin-top:4px;color:#1a7f4b;">🎟️ Cupón ${cuponAplicado.codigo}: −$${descCupon.toFixed(2)}`
+                  + ` <a href="#" onclick="quitarCupon();return false;" style="color:#b9453a;">(quitar)</a></small>`
+                : '');
     }
 }
 
@@ -1440,7 +1529,8 @@ async function wompiCheckout() {
     const punto = isC807 ? ($('checkout-c807-point').value || 'Agencia C807') : ($('checkout-point').value || 'Punto BARATUSS');
     const fee = isC807 ? C807_FEE : 0;
     const baseTotal = getCartTotal();
-    const total = baseTotal + fee;
+    const descCuponTarjeta = descuentoCupon(baseTotal);
+    const total = Math.max(0, baseTotal + fee - descCuponTarjeta);
 
     // Documento tributario (opcional, decidido por el cliente): se valida ANTES de cobrar
     const fac = datosFactura();
@@ -1474,7 +1564,9 @@ async function wompiCheckout() {
                 facturaGiro: fac.datos.factura_giro,
                 facturaDireccion: fac.datos.factura_direccion,
                 customerEmail: fac.datos.customer_email,
-                facturaPorCorreo: fac.datos.factura_por_correo
+                facturaPorCorreo: fac.datos.factura_por_correo,
+                // 🎟️ Cupón (el servidor lo valida y recalcula el descuento; nunca se confía en el navegador)
+                cuponCodigo: cuponAplicado ? cuponAplicado.codigo : null
             })
         });
         
@@ -1553,7 +1645,8 @@ async function cashCheckout() {
     
     const items = [...cart];
     const baseTotal = getCartTotal();
-    const total = baseTotal + fee;
+    const descCupon = descuentoCupon(baseTotal);
+    const total = Math.max(0, baseTotal + fee - descCupon);
     const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
     
     showToast('🔄 Procesando pedido...');
@@ -1581,6 +1674,8 @@ async function cashCheckout() {
             payment_status: 'efectivo',
             payment_method: 'efectivo',
             reference: ref,
+            cupon_codigo: cuponAplicado ? cuponAplicado.codigo : null,
+            cupon_descuento: descCupon > 0 ? descCupon : null,
             delivery_type: 'retiro-punto',
             delivery_fee: fee,
             delivery_point: punto,
@@ -1650,6 +1745,22 @@ async function cashCheckout() {
             return;
         }
         
+        // 🎟️ CUPÓN: el servidor recalcula el descuento real desde el pedido guardado y lo
+        // marca como usado (una sola vez). Así nadie puede usar el mismo cupón dos veces.
+        if (cuponAplicado) {
+            try {
+                await fetch(SUPABASE_URL + '/functions/v1/cupones', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+                    },
+                    body: JSON.stringify({ accion: 'usar', codigo: cuponAplicado.codigo, reference: ref })
+                });
+            } catch (_e) { /* silencioso: el cupón se puede revisar después */ }
+        }
+
         // Alta de despachos (las tarjetas de preparación) + ✅ VERIFICACIÓN (2026-09-18).
         // Antes no se revisaba nada: si fallaban, el pedido existía pero NO aparecía en el
         // panel, sin recordatorios ni aviso de entrega, y el cliente llegaba sin estar en la lista.
@@ -1694,6 +1805,7 @@ async function cashCheckout() {
         // El stock ya se descontó de forma atómica antes de crear el pedido (venderCarrito)
         
         // Si no está logueado y no hay supabase, igual confirmamos
+        cuponAplicado = null;   // el cupón ya quedó usado: se limpia del checkout
         cart = [];
         saveCart();
         updateCartUI();

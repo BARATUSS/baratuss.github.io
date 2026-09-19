@@ -322,6 +322,58 @@ serve(async (req) => {
             }, { onConflict: 'wa_message_id', ignoreDuplicates: true });
             if (errIns) errores++; else guardados++;
 
+            // ================== CONTINGENCIAS DE ENTREGA (plan v1.2) ==================
+            // Se atiende ANTES que el resto: si el mensaje es una respuesta al menú de
+            // recuperación (cliente) o al menú de niveles (Cindy), se maneja acá y se corta.
+            try {
+              const t8 = String(tel).replace(/\D/g, '');
+              const limpio = String(texto || '').trim().toLowerCase();
+              const opcionId = String(msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id || '');
+              const CONT_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/contingencia';
+              const llamarCont = async (payload: Record<string, unknown>) => {
+                try {
+                  await fetch(CONT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '') },
+                    body: JSON.stringify(payload),
+                  });
+                } catch (e) { console.log('error contingencia', String(e)); }
+              };
+
+              // (a) CINDY aprueba un nivel (1..5)
+              if (t8 === '50376626575') {
+                const n = parseInt(limpio.replace(/[^1-5]/g, '').slice(0, 1), 10);
+                if (n >= 1 && n <= 5) {
+                  const { data: pend } = await supabase.from('incidencias_entrega').select('id')
+                    .eq('estado', 'esperando_aprobacion').order('id', { ascending: false }).limit(1);
+                  if (pend && pend.length) {
+                    await llamarCont({ accion: 'aprobar_nivel', incidencia_id: pend[0].id, nivel: n });
+                    await avisarTelegram('🎚️ Nivel ' + n + ' aprobado por Cindy (caso #' + pend[0].id + ')');
+                    continue;
+                  }
+                }
+              }
+
+              // (b) CLIENTE elige del menú de recuperación (1/2/3 o palabras)
+              let opcion = '';
+              if (opcionId.startsWith('cont_')) opcion = opcionId.slice(5);
+              else if (/^1\b/.test(limpio) || limpio.includes('reagend')) opcion = 'reagendar';
+              else if (/^2\b/.test(limpio) || limpio.includes('reembolso') || limpio.includes('devolu')) opcion = 'reembolso';
+              else if (/^3\b/.test(limpio) || limpio.includes('mantener') || limpio.includes('cupon') || limpio.includes('cupón')) opcion = 'mantener';
+
+              if (opcion) {
+                const { data: abiertas } = await supabase.from('incidencias_entrega').select('id')
+                  .eq('customer_phone', t8).in('estado', ['abierta', 'esperando_cliente'])
+                  .order('id', { ascending: false }).limit(1);
+                if (abiertas && abiertas.length) {
+                  await llamarCont({ accion: 'opcion_cliente', incidencia_id: abiertas[0].id, opcion, telefono: t8 });
+                  await responderWhatsApp(t8, '¡Recibido! 🙌 Le paso tu elección a Cindy y te confirmo en un ratito 💛');
+                  await avisarTelegram('💬 Cliente eligió *' + opcion + '* en el caso #' + abiertas[0].id);
+                  continue;
+                }
+              }
+            } catch (eCont) { console.log('error bloque contingencias', String(eCont)); }
+
             if (!desp) {
               await avisarTelegram('📩 MENSAJE DE WHATSAPP (sin pedido asociado)\n\nDe: +' + tel + '\nMensaje: "' + texto + '"');
               // Aunque no haya pedido, si pide cambiar le mostramos las ventanas (no lo dejamos sin respuesta)

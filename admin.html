@@ -40,6 +40,7 @@
             <a href="#" class="admin-nav__item" data-section="salidas"><i class="fas fa-route"></i> Salidas <span class="nav-badge" id="nav-salidas-badge" style="display:none;"></span></a>
             <a href="#" class="admin-nav__item" data-section="preparar"><i class="fas fa-clipboard-list"></i> Preparar</a>
             <a href="#" class="admin-nav__item" data-section="whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp <span class="nav-badge" id="nav-wa-badge" style="display:none;"></span></a>
+            <a href="#" class="admin-nav__item" data-section="contingencias"><i class="fas fa-triangle-exclamation"></i> Contingencias <span class="nav-badge" id="nav-cont-badge" style="display:none;"></span></a>
             <a href="#" class="admin-nav__item" data-section="resumen"><i class="fas fa-chart-pie"></i> Resumen</a>
         </nav>
         <div class="admin-sidebar__footer">
@@ -217,6 +218,19 @@
                     </div>
                 </div>
             </div>
+        </section>
+
+        <!-- ===== CONTINGENCIAS DE ENTREGA (plan v1.2) ===== -->
+        <section class="admin-section" id="section-contingencias" style="display:none;">
+            <div class="admin-section__header">
+                <h1>Contingencias</h1>
+                <span style="font-size:.8rem;color:#999;">Imprevistos de entrega · el cliente recibe el aviso automático y vos aprobás la compensación</span>
+                <button class="admin-btn admin-btn--primary" id="cont-reportar" style="width:auto;">
+                    <i class="fas fa-plus"></i> Reportar contingencia
+                </button>
+            </div>
+            <div id="cont-nuevo" style="display:none;margin-bottom:18px;"></div>
+            <div id="cont-lista"></div>
         </section>
 
         <!-- ===== RESUMEN ===== -->
@@ -526,6 +540,6 @@
 <div class="admin-toast" id="admin-toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="admin.js?v=20260918fix"></script>
+<script src="admin.js?v=20260919cont"></script>
 </body>
 </html>

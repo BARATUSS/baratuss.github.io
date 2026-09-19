@@ -113,9 +113,11 @@ function enterDashboard() {
     loadSalidasSilencioso();
     // Badge de mensajes de WhatsApp sin leer
     cargarBadgeWaSilencioso();
+    cargarBadgeContingencias();
     // Verificar nuevos pedidos cada 45 segundos → notificación en menú
     setInterval(loadSalidasSilencioso, 45000);
     setInterval(cargarBadgeWaSilencioso, 45000);
+    setInterval(cargarBadgeContingencias, 60000);
 }
 async function loadSalidasSilencioso() {
     try {
@@ -154,6 +156,7 @@ document.querySelectorAll('.admin-nav__item').forEach(item => {
         if (item.dataset.section === 'salidas') loadSalidas();
         if (item.dataset.section === 'preparar') loadPreparar();
         if (item.dataset.section === 'whatsapp') loadWhatsApp();
+        if (item.dataset.section === 'contingencias') loadContingencias();
         if (item.dataset.section === 'resumen') loadStats();
     });
 });
@@ -962,13 +965,20 @@ const ESTADOS_LABEL = {
     'en-preparacion': '🔨 En preparación',
     'listo': '✅ Listo',
     'salio': '🚚 Salió',
-    'entregado': '📦 Entregado/Enviado'
+    'entregado': '📦 Entregado/Enviado',
+    // ===== CONTINGENCIAS (plan v1.2 · 2026-09-18) =====
+    'contingencia': '⚠️ En contingencia',
+    'reprogramado': '🔄 Reprogramado',
+    'reembolsado': '💸 Reembolsado',
+    'cancelado': '🚫 Cancelado'
 };
 const ESTADOS_NEXT = {
     'pendiente-preparacion': 'en-preparacion',
     'en-preparacion': 'listo',
     'listo': 'salio',
-    'salio': 'entregado'
+    'salio': 'entregado',
+    // Un despacho reprogramado vuelve al flujo normal desde "listo"
+    'reprogramado': 'listo'
 };
 
 // Mapeo destino -> salida logística
@@ -1017,6 +1027,12 @@ function renderDespachos() {
         const accion = !isTerminal && next
             ? '<button class="admin-btn admin-btn--primary" style="padding:5px 10px;font-size:.72rem;width:auto;" onclick="avanzarDespacho(' + d.id + ')">' + ESTADOS_LABEL[next] + '</button>'
             : '<span style="color:#27ae60;">✔</span>';
+        // 🚫 Cancelación por enojo (efectivo): devuelve el stock, disculpa al cliente y cupón 45% automático
+        const btnEnojo = (estado !== 'entregado' && estado !== 'cancelado')
+            ? '<button class="admin-btn admin-btn--danger" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+              + 'title="El cliente no quiere el producto: cancela la venta, devuelve el stock y le manda disculpa + cupón 45%" '
+              + 'onclick="cancelarPorEnojo(\'' + (d.order_reference || '') + '\')">🚫 Canceló</button>'
+            : '';
         return '<tr>' +
             '<td><strong>' + (d.order_reference || '') + '</strong></td>' +
             '<td style="min-width:200px;"><div style="display:flex;align-items:center;gap:10px;">' + foto +
@@ -1027,7 +1043,7 @@ function renderDespachos() {
             '<td>' + fmtEntrega(d.metodo_entrega) + '</td>' +
             '<td style="max-width:180px;">' + (d.destino || '—') + '</td>' +
             '<td><span class="log-estado log-estado--' + estado + '">' + ESTADOS_LABEL[estado] + '</span></td>' +
-            '<td>' + accion + '</td>' +
+            '<td>' + accion + btnEnojo + '</td>' +
         '</tr>';
     }).join('');
 }
@@ -1381,6 +1397,224 @@ function waHora(iso) {
     return mismoDia
         ? d.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' })
         : d.toLocaleDateString('es-SV', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ======================================================================
+// CONTINGENCIAS DE ENTREGA (plan v1.2 · 2026-09-18)
+//   · Reportar un imprevisto (avisa al cliente AUTOMÁTICO con Isabel/motorista)
+//   · Aprobar el nivel de compensación (escala 10/20/30/45 + sin compensación)
+//   · Cancelación por enojo (efectivo): stock + disculpa + cupón 45% automático
+//   · Historial completo de cada caso
+// ======================================================================
+const CONT_URL = SUPABASE_URL + '/functions/v1/contingencia';
+const CONT_NIVELES = {
+    1: '1️⃣ Leve · 10% (tope $5)',
+    2: '2️⃣ Moderado · 20% ($8)',
+    3: '3️⃣ Grave · 30% ($12)',
+    4: '4️⃣ Muy grave · 45% ($15)',
+    5: '5️⃣ Sin compensación'
+};
+const CONT_ESTADOS = {
+    abierta: '🟡 Abierta',
+    esperando_cliente: '💬 Esperando al cliente',
+    esperando_aprobacion: '🎚️ Esperando tu aprobación',
+    resuelta: '✅ Resuelta',
+    sin_resolver: '⚪ Sin resolver'
+};
+
+async function contApi(payload) {
+    const headers = { 'Content-Type': 'application/json', 'apikey': ANON_KEY };
+    if (session?.token) headers['Authorization'] = 'Bearer ' + session.token;
+    const r = await fetch(CONT_URL, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || (d && d.ok === false)) throw new Error((d && (d.error || d.mensaje)) || ('HTTP ' + r.status));
+    return d;
+}
+
+async function cargarBadgeContingencias() {
+    try {
+        const data = await api('GET', 'incidencias_entrega?select=id&estado=neq.resuelta');
+        const n = Array.isArray(data) ? data.length : 0;
+        const badge = $('nav-cont-badge');
+        if (badge) { badge.textContent = n; badge.style.display = n ? '' : 'none'; }
+    } catch (_e) { /* silencioso */ }
+}
+
+async function loadContingencias() {
+    const cont = $('cont-lista');
+    if (!cont) return;
+    cont.innerHTML = '<div style="padding:24px;color:#999;">Cargando casos…</div>';
+    try {
+        const data = await api('GET', 'incidencias_entrega?select=*&order=id.desc&limit=100');
+        const todas = Array.isArray(data) ? data : [];
+        const abiertas = todas.filter(i => i.estado !== 'resuelta');
+        const cerradas = todas.filter(i => i.estado === 'resuelta');
+        const badge = $('nav-cont-badge');
+        if (badge) { badge.textContent = abiertas.length; badge.style.display = abiertas.length ? '' : 'none'; }
+
+        const tarjeta = (i, cerrada) => {
+            const ref = i.order_reference || '';
+            const fecha = (i.creado_en || '').slice(0, 16).replace('T', ' ');
+            const opciones = (Array.isArray(i.opciones_probadas) ? i.opciones_probadas : [])
+                .map(o => '· ' + (o.opcion || '') + (o.resultado ? ' → ' + o.resultado : '')).join('<br>') || '—';
+            const botones = [];
+            if (!cerrada) {
+                if (i.estado === 'esperando_aprobacion' || i.opcion_cliente) {
+                    for (const n of [1, 2, 3, 4, 5]) {
+                        botones.push('<button class="admin-btn ' + (n === 5 ? 'admin-btn--ghost' : 'admin-btn--primary')
+                            + '" style="padding:5px 9px;font-size:.72rem;width:auto;margin:3px 3px 0 0;" '
+                            + 'onclick="contAprobar(' + i.id + ',' + n + ')">' + CONT_NIVELES[n] + '</button>');
+                    }
+                } else {
+                    botones.push('<button class="admin-btn admin-btn--ghost" style="padding:5px 10px;font-size:.72rem;width:auto;" '
+                        + 'onclick="contPedirNivel(' + i.id + ')">🎚️ Pedirme el menú de niveles</button>');
+                }
+                if (i.opcion_cliente === 'reembolso') {
+                    botones.push('<button class="admin-btn admin-btn--ghost" style="padding:5px 10px;font-size:.72rem;width:auto;margin-left:4px;" '
+                        + 'onclick="contReembolsoPagado(' + i.id + ')">💸 Ya pagué el reembolso (Wompi)</button>');
+                }
+            }
+            return '<div style="border:1.5px solid ' + (cerrada ? '#eee' : '#ffd9d2') + ';border-radius:14px;padding:14px 16px;margin-bottom:12px;background:' + (cerrada ? '#fafafa' : '#fff7f5') + ';">'
+                + '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
+                + '<div><strong>' + (i.customer_name || 'Sin nombre') + '</strong>'
+                + (i.customer_phone ? ' · ' + i.customer_phone : '')
+                + (ref ? ' · <span style="font-size:.78rem;color:#999;">' + ref + '</span>' : '') + '</div>'
+                + '<div style="font-size:.78rem;">' + (CONT_ESTADOS[i.estado] || i.estado) + ' · ' + fecha + '</div></div>'
+                + '<div style="font-size:.82rem;margin-top:8px;">'
+                + '🔎 <strong>Motivo:</strong> ' + (i.motivo || '—') + (i.detalle ? ' — ' + i.detalle : '')
+                + (i.tipo === 'cancelacion_enojo' ? ' <span style="color:#b9453a;">(cancelación por enojo)</span>' : '')
+                + '</div>'
+                + '<div style="font-size:.78rem;color:#666;margin-top:6px;">👩 Entregador: ' + (i.entregador_nombre || i.entregador || '—')
+                + (i.entregador_telefono ? ' (' + i.entregador_telefono + ')' : '') + '</div>'
+                + '<div style="font-size:.75rem;color:#888;margin-top:6px;line-height:1.5;">' + opciones + '</div>'
+                + (i.opcion_cliente ? '<div style="font-size:.82rem;margin-top:6px;">💬 El cliente eligió: <strong>' + i.opcion_cliente + '</strong></div>' : '')
+                + (i.nivel_aprobado ? '<div style="font-size:.82rem;margin-top:4px;">🎚️ Nivel aprobado: <strong>' + i.nivel_aprobado + '</strong> · ' + (CONT_NIVELES[i.nivel_aprobado] || '') + '</div>' : '')
+                + (i.cupon_codigo ? '<div style="font-size:.82rem;margin-top:4px;">🎁 Cupón: <strong>' + i.cupon_codigo + '</strong>' + (i.cupon_descuento ? ' (−$' + Number(i.cupon_descuento).toFixed(2) + ')' : '') + '</div>' : '')
+                + (botones.length ? '<div style="margin-top:10px;">' + botones.join('') + '</div>' : '')
+                + '</div>';
+        };
+
+        let html = '';
+        if (abiertas.length) {
+            html += '<h3 style="margin:6px 0 10px;font-size:1rem;">🟠 Casos abiertos (' + abiertas.length + ')</h3>'
+                + abiertas.map(i => tarjeta(i, false)).join('');
+        } else {
+            html += '<div style="padding:22px;background:#f8fffa;border:1.5px solid #d8f0e0;border-radius:14px;color:#2c7a4b;">'
+                + '✅ No hay contingencias abiertas. ¡Todo en orden!</div>';
+        }
+        if (cerradas.length) {
+            html += '<details style="margin-top:18px;"><summary style="cursor:pointer;font-size:.9rem;color:#666;">📚 Historial (' + cerradas.length + ' casos resueltos)</summary>'
+                + '<div style="margin-top:12px;">' + cerradas.map(i => tarjeta(i, true)).join('') + '</div></details>';
+        }
+        cont.innerHTML = html;
+    } catch (e) {
+        cont.innerHTML = '<div style="padding:20px;color:#b9453a;">❌ No se pudieron cargar los casos: ' + e.message + '</div>';
+    }
+}
+
+// Reportar un imprevisto: elegís el pedido activo + motivo
+async function contReportar() {
+    const box = $('cont-nuevo');
+    if (!box) return;
+    box.style.display = '';
+    box.innerHTML = '<div style="border:1.5px solid #ffd9d2;border-radius:14px;padding:16px;background:#fff;">'
+        + '<strong>🚨 Reportar contingencia</strong>'
+        + '<div style="font-size:.8rem;color:#777;margin:6px 0 10px;">El cliente recibe el aviso automático con la disculpa y el entregador de respaldo.</div>'
+        + '<div id="cont-pedidos" style="font-size:.85rem;color:#999;">Cargando pedidos activos…</div>'
+        + '<label style="display:block;font-size:.8rem;margin:10px 0 4px;">Motivo</label>'
+        + '<select id="cont-motivo" style="width:100%;padding:9px;border:1.5px solid #ffd9d2;border-radius:10px;">'
+        + '<option value="no_puedo_entregar_hoy">No puedo entregar hoy</option>'
+        + '<option value="me_voy_a_atrasar">Me voy a atrasar</option>'
+        + '<option value="problema_con_el_producto">El producto tuvo un problema</option>'
+        + '<option value="otro">Otro (lo describo abajo)</option>'
+        + '</select>'
+        + '<label style="display:block;font-size:.8rem;margin:10px 0 4px;">Detalle (opcional)</label>'
+        + '<textarea id="cont-detalle" rows="2" style="width:100%;padding:9px;border:1.5px solid #ffd9d2;border-radius:10px;"></textarea>'
+        + '<div style="margin-top:12px;display:flex;gap:8px;">'
+        + '<button class="admin-btn admin-btn--primary" style="width:auto;" onclick="contReportarEnviar()">🚨 Reportar y avisar al cliente</button>'
+        + '<button class="admin-btn admin-btn--ghost" style="width:auto;" onclick="contCerrarFormulario()">Cancelar</button>'
+        + '</div></div>';
+    try {
+        const data = await api('GET', 'orders?select=reference,customer_name,customer_phone,total,status,payment_status,delivery_point&status=in.(pendiente,pagado)&order=created_at.desc&limit=40');
+        const pedidos = Array.isArray(data) ? data : [];
+        const sel = $('cont-pedidos');
+        if (!pedidos.length) { sel.innerHTML = 'No hay pedidos activos.'; return; }
+        sel.innerHTML = '<label style="display:block;font-size:.8rem;margin-bottom:4px;">Pedido</label>'
+            + '<select id="cont-ref" style="width:100%;padding:9px;border:1.5px solid #ffd9d2;border-radius:10px;">'
+            + pedidos.map(p => '<option value="' + p.reference + '">' + p.reference + ' · ' + (p.customer_name || 'sin nombre')
+                + ' · $' + Number(p.total || 0).toFixed(2) + ' · ' + (p.delivery_point || 'sin punto') + '</option>').join('')
+            + '</select>';
+    } catch (e) {
+        $('cont-pedidos').innerHTML = '❌ No se pudieron cargar los pedidos: ' + e.message;
+    }
+}
+
+// Engancha el botón de reportar (una sola vez, cuando el panel ya cargó)
+function initContingenciasUI() {
+    const b = $('cont-reportar');
+    if (b) b.addEventListener('click', contReportar);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initContingenciasUI);
+else initContingenciasUI();
+
+function contCerrarFormulario() {
+    const b = $('cont-nuevo');
+    if (b) b.style.display = 'none';
+}
+
+async function contReportarEnviar() {
+    const ref = ($('cont-ref') || {}).value;
+    const motivo = ($('cont-motivo') || {}).value;
+    const detalle = ($('cont-detalle') || {}).value || '';
+    if (!ref) { showToast('Elegí un pedido'); return; }
+    try {
+        const d = await contApi({ accion: 'reportar', reference: ref, motivo, detalle });
+        showToast(d.avisado_cliente ? '✅ Contingencia reportada · cliente avisado' : '⚠️ Reportada, pero el WhatsApp del cliente estaba cerrado');
+        $('cont-nuevo').style.display = 'none';
+        loadContingencias();
+        loadDespachos();
+    } catch (e) { showToast('❌ ' + e.message); }
+}
+
+async function contPedirNivel(id) {
+    try { await contApi({ accion: 'pedir_nivel', incidencia_id: id }); showToast('📲 Te mandé el menú de niveles a tu WhatsApp'); }
+    catch (e) { showToast('❌ ' + e.message); }
+}
+
+async function contAprobar(id, nivel) {
+    const txt = CONT_NIVELES[nivel] || ('Nivel ' + nivel);
+    if (!confirm('¿Aprobar ' + txt + '?\\n\\nSe le envía el cupón al cliente y el caso queda cerrado.')) return;
+    try {
+        const d = await contApi({ accion: 'aprobar_nivel', incidencia_id: id, nivel });
+        showToast(d.cupon ? ('🎁 Listo: cupón ' + d.cupon + ' enviado al cliente') : '✅ Caso cerrado sin compensación');
+        loadContingencias();
+    } catch (e) { showToast('❌ ' + e.message); }
+}
+
+async function contReembolsoPagado(incidenciaId) {
+    if (!confirm('¿Confirmás que ya pagaste el reembolso a mano (Wompi)?\\n\\nQueda registrado en la ficha del caso.')) return;
+    try {
+        const data = await api('GET', 'reembolsos?select=id&incidencia_id=eq.' + incidenciaId + '&estado=neq.pagado&order=id.desc&limit=1');
+        const r = Array.isArray(data) ? data[0] : null;
+        if (!r) { showToast('No hay reembolso pendiente para este caso'); return; }
+        await contApi({ accion: 'reembolso_pagado', reembolso_id: r.id, incidencia_id: incidenciaId });
+        showToast('✅ Reembolso marcado como pagado');
+        loadContingencias();
+    } catch (e) { showToast('❌ ' + e.message); }
+}
+
+// 🚫 Cancelación por enojo (efectivo): devuelve stock, disculpa y cupón 45% automático
+async function cancelarPorEnojo(ref) {
+    if (!ref) return;
+    if (!confirm('🚫 CANCELAR LA VENTA por enojo\\n\\nPedido: ' + ref + '\\n\\nEsto hace:\\n'
+        + '1) devuelve el stock al catálogo\\n2) cancela el pedido y su despacho\\n'
+        + '3) manda la disculpa al cliente\\n4) le genera el cupón del 45% automáticamente\\n\\n¿Confirmás?')) return;
+    try {
+        const d = await contApi({ accion: 'cancelar_enojo', reference: ref });
+        showToast('✅ Venta cancelada · stock devuelto (' + (d.stock_devuelto || 0) + ') · cupón ' + (d.cupon || '—') + ' enviado');
+        loadDespachos();
+        loadContingencias();
+    } catch (e) { showToast('❌ No se pudo cancelar: ' + e.message); }
 }
 
 async function loadWhatsApp() {

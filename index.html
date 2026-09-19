@@ -460,6 +460,23 @@
             </div>
         </div>
 
+        <!-- ===== CUPÓN (plan contingencias v1.2 · Etapa 3) ===== -->
+        <div id="cupon-box" style="margin:14px 0;padding:12px 14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+            <label for="cupon-codigo" style="display:block;font-size:.82rem;font-weight:600;color:#b9453a;margin-bottom:6px;">
+                🎟️ ¿Tenés un cupón?
+            </label>
+            <div style="display:flex;gap:8px;">
+                <input id="cupon-codigo" type="text" placeholder="Escribí tu código"
+                       autocomplete="off" autocapitalize="characters"
+                       style="flex:1;padding:10px 12px;border:1.5px solid #ffd9d2;border-radius:10px;font-size:.85rem;text-transform:uppercase;">
+                <button type="button" id="cupon-aplicar"
+                        style="padding:10px 16px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;">
+                    Aplicar
+                </button>
+            </div>
+            <div id="cupon-msg" style="font-size:.78rem;margin-top:7px;display:none;"></div>
+        </div>
+
         <div class="cart-total" style="margin:16px 0;">
             <span>Total a pagar</span>
             <span id="checkout-total">$0.00</span>
@@ -693,6 +710,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260918esc2"></script>
+<script src="scripts.js?v=20260919cupon"></script>
 </body>
 </html>
