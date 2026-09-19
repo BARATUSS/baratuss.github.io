@@ -56,6 +56,16 @@ serve(async (req) => {
     const token = String(body.token || '');
     if (!items.length) return json({ ok: false, error: 'faltan_datos' });
 
+    // ✅ VENTA ATÓMICA (2026-09-18): todo-o-nada en una sola operación de la base.
+    // Antes se vendía producto por producto: si uno fallaba, los anteriores quedaban
+    // vendidos SIN pedido → productos desaparecidos del catálogo (Escenario 2, punto 1).
+    const { data: atom, error: errAtom } = await supabase.rpc('vender_carrito', {
+      p_items: items.map((i: any) => ({ id: Number(i.id), qty: Number(i.qty || 1) })),
+      p_token: token
+    });
+    if (!errAtom && atom) return json(atom);
+
+    // Respaldo: si la función nueva no estuviera disponible, se mantiene el camino viejo
     for (const it of items) {
       const { data, error } = await supabase.rpc('vender_stock', {
         p_id: Number(it.id), p_qty: Number(it.qty || 1), p_token: token

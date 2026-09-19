@@ -24,18 +24,23 @@ async function getWompiToken() {
 // Único punto de creación (webhook aprobado + efectivo vía /create-despachos).
 // IDEMPOTENTE: si ya existen despachos para la orden, no duplica (Wompi reintenta ante timeout).
 async function crearDespachos(ref: string, items: any[], datos: any) {
-  const { count } = await supabase.from('despachos')
-    .select('id', { count: 'exact', head: true })
+  // ✅ VERIFICACIÓN (2026-09-18): antes, si ya existía UNA tarjeta, se cortaba acá y NUNCA se
+  // creaban las que faltaban → pedido sin seguimiento. Ahora se comparan una por una
+  // (producto + talla) y se crean SOLO las que faltan.
+  const { data: existentes } = await supabase.from('despachos')
+    .select('inventory_id, talla')
     .eq('order_reference', ref);
-  if ((count ?? 0) > 0) {
-    // Los despachos YA existían: los creó el disparador de la base al registrar el pedido.
-    // ⚠️ Antes esto cortaba acá y NUNCA avisaba al seguimiento → el agradecimiento esperaba
-    // hasta 5 minutos al cron. Es seguro avisar igual: el seguimiento reclama el pedido de
-    // forma atómica antes de enviar, así que repetir la llamada NO duplica mensajes.
+  const clave = (id: any, talla: any) => String(id) + '|' + String(talla || '');
+  const yaHay = new Set((existentes || []).map((d: any) => clave(d.inventory_id, d.talla)));
+  const faltan = (items || []).filter((it: any) => !yaHay.has(clave(it.id, it.size || it.talla)));
+
+  if (!faltan.length) {
+    // Ya estaban todas: solo se avisa al seguimiento (es idempotente, no duplica mensajes)
     await avisarSeguimiento();
-    return { duplicado: true, count };
+    return { duplicado: true, count: (existentes || []).length, creados: 0 };
   }
-  for (const item of items) {
+
+  for (const item of faltan) {
     await supabase.from('despachos').insert({
       order_reference: ref,
       inventory_id: item.id,
@@ -46,7 +51,9 @@ async function crearDespachos(ref: string, items: any[], datos: any) {
       metodo_entrega: datos.delivery_type || 'retiro-punto',
       destino: datos.delivery_point || null,
       fecha_programada: null,
-      estado_logistico: 'pendiente_confirmacion',
+      // ⚠️ 2026-09-18: antes decía 'pendiente_confirmacion' (con guion bajo) y el panel
+      // usa 'pendiente-preparacion' → esa tarjeta no aparecía en la lista de preparación.
+      estado_logistico: 'pendiente-preparacion',
       customer_name: datos.customer_name || null,
       customer_phone: datos.customer_phone || null,
       visto: false
@@ -56,7 +63,7 @@ async function crearDespachos(ref: string, items: any[], datos: any) {
   // Si esto falla, el cron cada 5 minutos lo recupera igual.
   await avisarSeguimiento();
 
-  return { creados: items.length };
+  return { creados: faltan.length, ya_existian: (existentes || []).length };
 }
 
 // Avisa a `seguimiento-entregas` para que evalúe y envíe lo que corresponda AHORA.

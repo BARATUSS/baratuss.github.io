@@ -1277,6 +1277,21 @@ async function devolverCarrito(items) {
     }
 }
 
+// Avisa al negocio por Telegram cuando algo no salió bien con un pedido
+async function avisarFalloPedido(datos) {
+    try {
+        await fetch(SUPABASE_URL + '/functions/v1/avisar-fallo', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify(datos)
+        });
+    } catch (_e) { /* silencioso: no romper la experiencia del cliente */ }
+}
+
 // Pantalla de fallo: NUNCA mostrar ticket falso. Mensaje claro + WhatsApp directo.
 function mostrarFalloPedido(waUrl, items, total, detalle) {
     const viejo = document.getElementById('fallo-pedido');
@@ -1620,21 +1635,11 @@ async function cashCheckout() {
                 }));
             } catch (_e) { /* sin espacio en el navegador */ }
             // 3) alerta al negocio (para que Cindy se entere al instante)
-            try {
-                await fetch(SUPABASE_URL + '/functions/v1/avisar-fallo', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
-                    },
-                    body: JSON.stringify({
-                        reference: ref, nombre: name, telefono: phone, total: total,
-                        items: (items || []).map(i => ({ id: i.id, qty: i.qty || 1, name: i.name })),
-                        motivo: orderErr
-                    })
-                });
-            } catch (_e) { /* silencioso: no romper la experiencia del cliente */ }
+            await avisarFalloPedido({
+                reference: ref, nombre: name, telefono: phone, total: total,
+                items: (items || []).map(i => ({ id: i.id, qty: i.qty || 1, name: i.name })),
+                motivo: orderErr
+            });
             // 4) mensaje claro al cliente (sin ticket falso) + WhatsApp
             const detalleWa = (items || []).map(i => (i.qty || 1) + 'x ' + i.name).join(', ');
             const waUrl = 'https://wa.me/50362852631?text=' + encodeURIComponent(
@@ -1645,9 +1650,11 @@ async function cashCheckout() {
             return;
         }
         
-        // Fase 1 entregas: alta de despachos vía Edge Function (un solo camino, sin depender de RLS)
+        // Alta de despachos (las tarjetas de preparación) + ✅ VERIFICACIÓN (2026-09-18).
+        // Antes no se revisaba nada: si fallaban, el pedido existía pero NO aparecía en el
+        // panel, sin recordatorios ni aviso de entrega, y el cliente llegaba sin estar en la lista.
         try {
-            await fetch(WOMPI_API_URL + '/create-despachos', {
+            const rd = await fetch(WOMPI_API_URL + '/create-despachos', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1663,8 +1670,25 @@ async function cashCheckout() {
                     customerPhone: phone || null
                 })
             });
+            const dd = await rd.json().catch(() => ({}));
+            const listas = Number(dd && dd.creados ? dd.creados : 0)
+                + Number(dd && dd.ya_existian ? dd.ya_existian : (dd && dd.count ? dd.count : 0));
+            if (!rd.ok || listas < items.length) {
+                console.log('⚠️ Faltan tarjetas de despacho:', JSON.stringify(dd));
+                await avisarFalloPedido({
+                    reference: ref, nombre: name, telefono: phone, total: total,
+                    items: (items || []).map(i => ({ id: i.id, qty: i.qty || 1, name: i.name })),
+                    motivo: 'El pedido se guardó, pero faltan tarjetas de despacho ('
+                        + listas + ' de ' + items.length + ')'
+                });
+            }
         } catch (despErr) {
             console.log('No se pudo crear el despacho:', despErr.message);
+            await avisarFalloPedido({
+                reference: ref, nombre: name, telefono: phone, total: total,
+                items: (items || []).map(i => ({ id: i.id, qty: i.qty || 1, name: i.name })),
+                motivo: 'No se pudo contactar el alta de despachos: ' + (despErr.message || despErr)
+            });
         }
         
         // El stock ya se descontó de forma atómica antes de crear el pedido (venderCarrito)
