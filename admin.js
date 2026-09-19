@@ -126,7 +126,12 @@ async function loadSalidasSilencioso() {
         const sec = visible ? visible.id : '';
         if (sec === 'section-salidas') { await loadSalidas(); return; }
         if (sec === 'section-despachos') { await loadDespachos(); return; }
-        if (sec === 'section-preparar') { await loadPreparar(); return; }
+        if (sec === 'section-preparar') {
+            // Si Cindy está seleccionando artículos, NO refrescar (le borraba los check)
+            if (prepSelected.size > 0) return;
+            await loadPreparar();
+            return;
+        }
         // En otra sección: solo consulta ligera para el badge
         const data = await api('GET', 'despachos?select=id,order_reference,destino,estado_logistico,visto&limit=300');
         if (Array.isArray(data)) {
@@ -1345,11 +1350,21 @@ function renderPreparar() {
         if (!porPedido[d.order_reference]) porPedido[d.order_reference] = [];
         porPedido[d.order_reference].push(d);
     });
-    prepSelected.clear();
+    // ⚠️ ARREGLO 2026-09-19: antes decía `prepSelected.clear()` y los checkboxes se dibujaban
+    // SIEMPRE sin marcar. Como el panel se refresca solo cada 45 s (loadSalidasSilencioso →
+    // loadPreparar), el check que Cindy marcaba DESAPARECÍA y el botón decía "seleccioná un
+    // artículo" → parecía que "no se guardaba". Ahora la selección se conserva y se vuelve a
+    // pintar marcada.
+    const idsVisibles = new Set(pendientes.map(d => String(d.id)));
+    for (const id of [...prepSelected]) {
+        if (!idsVisibles.has(String(id))) prepSelected.delete(id);   // descartar los que ya no están
+    }
     grid.innerHTML = Object.entries(porPedido).map(([ref, items]) => {
         const itemsHtml = items.map(d =>
-            '<div class="prep-item">' +
-                '<label class="prep-check-wrap"><input type="checkbox" class="prep-check-item" data-despacho="' + d.id + '" onchange="togglePrepItem(' + d.id + ', this.checked)"></label>' +
+            '<div class="prep-item' + (prepSelected.has(String(d.id)) ? ' prep-item--sel' : '') + '">' +
+                '<label class="prep-check-wrap"><input type="checkbox" class="prep-check-item" data-despacho="' + d.id + '"' +
+                (prepSelected.has(String(d.id)) ? ' checked' : '') +
+                ' onchange="togglePrepItem(' + d.id + ', this.checked)"></label>' +
                 '<div class="prep-item__foto">' + (d.imagen_url ? '<img src="' + d.imagen_url + '" onerror="this.remove()">' : '🛍️') + '</div>' +
                 '<div class="prep-item__info">' +
                     '<div><strong>' + (d.nombre_capturado || '') + '</strong> ×' + (d.qty || 1) + (d.talla ? ' (' + d.talla + ')' : '') + '</div>' +
@@ -1377,7 +1392,20 @@ async function cargarDescripcionesPreparar() {
     });
 }
 function togglePrepItem(id, checked) {
-    if (checked) prepSelected.add(id); else prepSelected.delete(id);
+    const k = String(id);
+    if (checked) prepSelected.add(k); else prepSelected.delete(k);
+    // Feedback visual inmediato en la tarjeta
+    const box = document.querySelector('.prep-check-item[data-despacho="' + id + '"]');
+    const card = box ? box.closest('.prep-item') : null;
+    if (card) card.classList.toggle('prep-item--sel', !!checked);
+    actualizarContadorPrep();
+}
+
+function actualizarContadorPrep() {
+    const b = $('prep-marcar-preparado');
+    if (!b) return;
+    const n = prepSelected.size;
+    b.textContent = n ? ('✅ Marcar ' + n + ' como en preparación') : '✅ Marcar como en preparación';
 }
 document.querySelectorAll('.prep-filter').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1395,8 +1423,12 @@ $('prep-marcar-preparado').addEventListener('click', async () => {
         for (const id of ids) {
             await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: 'en-preparacion', updated_at: new Date().toISOString() });
         }
+        prepSelected.clear();
+        actualizarContadorPrep();
+        showToast('✅ ' + ids.length + ' artículo(s) en preparación');
     } catch (e) {
-        showToast('❌ No se pudo marcar: ' + e.message);
+        if (e.status === 401) { showToast('🔒 Tu sesión expiró — volvé a entrar al panel'); }
+        else showToast('❌ No se pudo marcar: ' + e.message);
         return;
     }
     showToast('✅ Artículos en preparación');

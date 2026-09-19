@@ -581,3 +581,11 @@ body {
     #factura-doc, #factura-doc * { visibility: visible !important; }
     #factura-doc { position: absolute; left: 0; top: 0; width: 100%; padding: 16px; }
 }
+
+/* ===== PREPARAR: artículo seleccionado (arreglo 2026-09-19: los checks se borraban solos) ===== */
+.prep-item--sel {
+    outline: 2.5px solid #ff9686;
+    background: #fff7f5 !important;
+    border-radius: 12px;
+}
+.prep-check-item { width: 20px; height: 20px; accent-color: #ff9686; cursor: pointer; }
