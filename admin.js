@@ -1027,6 +1027,13 @@ function renderDespachos() {
         const accion = !isTerminal && next
             ? '<button class="admin-btn admin-btn--primary" style="padding:5px 10px;font-size:.72rem;width:auto;" onclick="avanzarDespacho(' + d.id + ')">' + ESTADOS_LABEL[next] + '</button>'
             : '<span style="color:#27ae60;">✔</span>';
+        // 📦 ENTREGADO DIRECTO (2026-09-19): un solo toque entrega TODO el pedido y registra la
+        // venta (antes había que avanzar estado por estado, y Cindy no encontraba cómo marcarlo).
+        const btnEntregar = (estado !== 'entregado' && estado !== 'cancelado')
+            ? '<button class="admin-btn admin-btn--primary" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+              + 'title="Marcar TODO el pedido como entregado y registrar la venta en finanzas" '
+              + 'onclick="entregarTodo(\'' + (d.order_reference || '') + '\')">📦 Entregado</button>'
+            : '';
         // 🚫 Cancelación por enojo (efectivo): devuelve el stock, disculpa al cliente y cupón 45% automático
         const btnEnojo = (estado !== 'entregado' && estado !== 'cancelado')
             ? '<button class="admin-btn admin-btn--danger" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
@@ -1043,7 +1050,7 @@ function renderDespachos() {
             '<td>' + fmtEntrega(d.metodo_entrega) + '</td>' +
             '<td style="max-width:180px;">' + (d.destino || '—') + '</td>' +
             '<td><span class="log-estado log-estado--' + estado + '">' + ESTADOS_LABEL[estado] + '</span></td>' +
-            '<td>' + accion + btnEnojo + '</td>' +
+            '<td>' + accion + btnEntregar + btnEnojo + '</td>' +
         '</tr>';
     }).join('');
 }
@@ -1053,6 +1060,24 @@ function fmtEntrega(t) {
     if (s === 'punto') return 'Punto BARATUSS';
     if (s === 'domicilio') return 'Domicilio';
     return s || '—';
+}
+
+// 📦 Entregar TODO el pedido de una vez (registra la venta en finanzas)
+async function entregarTodo(ref) {
+    if (!ref) return;
+    if (!confirm('¿Marcar TODO el pedido ' + ref + ' como ENTREGADO?\n\n'
+        + 'Se registra la venta en finanzas (IVA, costo, comisión y utilidad).')) return;
+    try {
+        await api('POST', 'rpc/entregar_pedido', { p_ref: ref });
+        showToast('✅ Entregado · 💰 venta registrada en finanzas');
+    } catch (e) {
+        if (e.status === 401) { showToast('🔒 Tu sesión expiró — volvé a entrar al panel'); return; }
+        showToast('❌ No se pudo marcar entregado: ' + e.message);
+        return;
+    }
+    loadDespachos();
+    loadStats();
+    cargarBadgeContingencias();
 }
 
 // Avanzar estado logístico (acción manual, nunca automática)
@@ -1066,6 +1091,7 @@ async function avanzarDespacho(id) {
     try {
         await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: next, updated_at: new Date().toISOString() });
     } catch (e) {
+        if (e.status === 401) { showToast('🔒 Tu sesión expiró — volvé a entrar al panel'); return; }
         showToast('❌ No se pudo actualizar: ' + e.message);
         return;
     }

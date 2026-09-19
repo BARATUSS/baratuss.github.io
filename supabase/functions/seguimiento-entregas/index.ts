@@ -281,6 +281,8 @@ serve(async (_req) => {
   const hoyStr = fmtFecha(hoy);
   const hora = hoy.getUTCHours();
   const resumen = new Map<string, { total: number; conf: number; destino: string }>();
+  // Para el go/no-go: guardamos los pedidos de cada bloque, así se marca ANTES de avisar
+  const resumenGrupo = new Map<string, { ref: string; notas: string }[]>();
   const log: string[] = [];
 
   // 0. Liberar reservas vencidas (libera productos que nadie terminó de comprar)
@@ -409,6 +411,9 @@ serve(async (_req) => {
     r.total++;
     if (notas.includes('✅ CONF')) r.conf++;
     resumen.set(clave, r);
+    const grupo = resumenGrupo.get(clave) || [];
+    grupo.push({ ref: ref, notas: notas });
+    resumenGrupo.set(clave, grupo);
   }
 
   // (5) Go/no-go a Cindy (día de la entrega, a las 7 y a las 13)
@@ -419,11 +424,28 @@ serve(async (_req) => {
     const esManana = hi === 8 && hora === 7;
     const esTarde = hi === 14 && hora === 13;
     if (!esManana && !esTarde) continue;
+    // ⚠️ ANTI-DUPLICADO (arreglo 2026-09-19): este aviso NO tenía marca, así que se enviaba
+    // en CADA corrida dentro de la hora (7 y 13) → llegaba ~12 veces. Bug real reportado por
+    // Cindy. Ahora se marca ANTES de enviar (misma marca atómica que los otros pasos).
+    const marcaGo = esManana ? 'GONOGO-AM' : 'GONOGO-PM';
+    const grupoGo = resumenGrupo.get(clave) || [];
+    if (grupoGo.some((g) => (g.notas || '').includes(marcaGo))) continue;   // ya se avisó hoy
+    const selloGo = ahoraSV().toISOString().slice(0, 16).replace('T', ' ');
+    for (const g of grupoGo) {
+      if (g.ref) await marcarPedido(g.ref, g.notas, '🔔 ' + marcaGo + ' ' + selloGo);
+    }
+
     const aviso = '📋 BARATUSS — bloque de ' + (esManana ? 'hoy (mañana)' : 'hoy (tarde)') + ': ' +
       r.total + ' pedido(s), ' + r.conf + ' confirmado(s).\n' + r.destino + '\n' +
       (r.conf > 0 ? '✅ SÍ vas: hay clientes confirmados.' : '❌ Dejá el bloque: nadie confirmó (ahorrás el viaje).');
     const env = await enviarPaso(CINDY_WA, 'retiro', ['Cindy', 'resumen del día', r.destino], 'GO/NO-GO', aviso);
-    await registrarSaliente(env?.wamid || null, CINDY_WA, env?.plantilla || 'pedido_listo_retiro_baratuss', '');
+    if (!env) {
+      // Si falló el envío, se quita la marca para que el próximo ciclo lo reintente
+      for (const g of grupoGo) { if (g.ref) await devolverReclamo(g.ref, g.notas); }
+      log.push('go/no-go FALLO (se reintenta): ' + clave);
+      continue;
+    }
+    await registrarSaliente(env.wamid, CINDY_WA, env.plantilla, '', env.texto || '');
     await avisarTG(aviso);
     log.push('go/no-go enviado: ' + clave);
   }
