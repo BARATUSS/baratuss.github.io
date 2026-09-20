@@ -330,6 +330,7 @@ serve(async (req) => {
               const limpio = String(texto || '').trim().toLowerCase();
               const opcionId = String(msg.interactive?.list_reply?.id || msg.interactive?.button_reply?.id || '');
               const CONT_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/contingencia';
+              const PAGOS_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/pagos-noshow';
               const llamarCont = async (payload: Record<string, unknown>) => {
                 try {
                   await fetch(CONT_URL, {
@@ -362,13 +363,38 @@ serve(async (req) => {
               else if (/^3\b/.test(limpio) || limpio.includes('mantener') || limpio.includes('cupon') || limpio.includes('cupón')) opcion = 'mantener';
 
               if (opcion) {
-                const { data: abiertas } = await supabase.from('incidencias_entrega').select('id')
+                const { data: abiertas } = await supabase.from('incidencias_entrega').select('id, tipo, estado')
                   .eq('customer_phone', t8).in('estado', ['abierta', 'esperando_cliente'])
                   .order('id', { ascending: false }).limit(1);
                 if (abiertas && abiertas.length) {
-                  await llamarCont({ accion: 'opcion_cliente', incidencia_id: abiertas[0].id, opcion, telefono: t8 });
+                  const caso = abiertas[0];
+
+                  // (b2) MENÚ DEL NO_SHOW (plan 3): 1 reprogramar · 2 cancelar · 3 hablar con Cindy/crédito
+                  if (String(caso.tipo) === 'no_show') {
+                    const opNS = (/^1\b/.test(limpio) || limpio.includes('reagend') || limpio.includes('guard') || limpio.includes('proximo') || limpio.includes('próximo')) ? '1'
+                      : (/^2\b/.test(limpio) || limpio.includes('cancel') || limpio.includes('devolu') || limpio.includes('ya no')) ? '2'
+                      : (/^3\b/.test(limpio) || limpio.includes('hablar') || limpio.includes('llamar') || limpio.includes('credito') || limpio.includes('crédito') || limpio.includes('saldo')) ? '3'
+                      : '';
+                    if (opNS) {
+                      try {
+                        await fetch(PAGOS_URL, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '') },
+                          body: JSON.stringify({ accion: 'noshow_opcion', incidencia_id: caso.id, opcion: opNS }),
+                        });
+                      } catch (eNS) { console.log('error noshow opcion', String(eNS)); }
+                      await responderWhatsApp(t8, opNS === '3'
+                        ? '¡Listo! 🙌 Cindy te escribe en un ratito 💛'
+                        : '¡Recibido! 🙌 Ya lo estoy coordinando — te confirmo en un ratito 💛');
+                      await avisarTelegram('🚫 Cliente eligió la opción *' + opNS + '* en el caso NO-SHOW #' + caso.id);
+                      continue;
+                    }
+                  }
+
+                  // (b) CONTINGENCIA (planes anteriores)
+                  await llamarCont({ accion: 'opcion_cliente', incidencia_id: caso.id, opcion, telefono: t8 });
                   await responderWhatsApp(t8, '¡Recibido! 🙌 Le paso tu elección a Cindy y te confirmo en un ratito 💛');
-                  await avisarTelegram('💬 Cliente eligió *' + opcion + '* en el caso #' + abiertas[0].id);
+                  await avisarTelegram('💬 Cliente eligió *' + opcion + '* en el caso #' + caso.id);
                   continue;
                 }
               }

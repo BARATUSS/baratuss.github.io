@@ -109,7 +109,7 @@ serve(async (req) => {
     if (req.method === 'POST' && path === '/create-payment') {
       const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone, token: tokenCliente,
               facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo,
-              cuponCodigo } = await req.json();
+              contactoPreferido, cuponCodigo } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
       // ===== CUPÓN (2026-09-18): se valida y se aplica EN EL SERVIDOR =====
@@ -168,8 +168,15 @@ serve(async (req) => {
         cupon_codigo: cuponAplicado, cupon_descuento: descuentoCupon || null,
         status: 'pendiente', payment_status: 'pendiente',
         transaction_id: payData.idTransaccion || null,
-        delivery_type: deliveryType || 'retiro-punto',
-        delivery_fee: deliveryFee || 0,
+        delivery_type: deliveryType,
+        delivery_fee: deliveryFee,
+        contacto_preferido: contactoPreferido || 'whatsapp',
+        // PLAN 2 (19-sep-2026): teléfono normalizado (para avisos y búsquedas) y
+        // vencimiento a las 48 h si el pago con tarjeta no se completa.
+        telefono_normalizado: String(customerPhone || '').replace(/\D/g, '').length === 8
+          ? '503' + String(customerPhone || '').replace(/\D/g, '')
+          : String(customerPhone || '').replace(/\D/g, ''),
+        pago_expira_en: new Date(Date.now() + 48 * 3600000).toISOString(),
         delivery_point: deliveryPoint || null,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,

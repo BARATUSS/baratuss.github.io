@@ -19,7 +19,7 @@ const G_ID = Deno.env.get('GOOGLE_CLIENT_ID') || '';
 const G_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
 const G_REFRESH = Deno.env.get('GOOGLE_REFRESH_TOKEN') || '';
 const FACTURA_KEY = Deno.env.get('FACTURA_KEY') || '';
-const REMITENTE = Deno.env.get('FACTURA_REMITENTE') || 'BARATUSS <cindyrubiomusic@gmail.com>';
+const REMITENTE = Deno.env.get('FACTURA_REMITENTE') || 'BARATUSS <baratusses@gmail.com>';
 
 const IVA = 0.13;
 const EMISOR = {
@@ -30,7 +30,7 @@ const EMISOR = {
   giro: 'Comercio al por menor de prendas de vestir, accesorios y cosméticos',
   direccion: 'San Salvador, El Salvador',
   telefono: '+503 6285 2631',
-  correo: 'cindyrubiomusic@gmail.com',
+  correo: 'baratusses@gmail.com',
   establecimiento: '0001',
   simulacion: true, // ← false cuando exista NRC + DTE autorizado
 };
@@ -302,7 +302,10 @@ async function enviarCorreo(accessToken: string, destinatario: string, asunto: s
 
 async function pendientes() {
   const q = 'orders?select=reference,customer_name,customer_phone,customer_email,factura_tipo,factura_nombre,factura_nit,factura_nrc,factura_giro,factura_direccion,total,items,delivery_point,created_at'
-    + '&factura_por_correo=eq.true&factura_enviada_en=is.null&factura_tipo=neq.ninguna&customer_email=not.is.null&order=created_at.asc&limit=20';
+    // ⚠️ PLAN 2 (19-sep-2026): la factura sale SOLO cuando la compra está PAGADA.
+    // Tarjeta → al aprobarse el pago · Efectivo → cuando se marca ENTREGADO.
+    + '&factura_por_correo=eq.true&factura_enviada_en=is.null&factura_tipo=neq.ninguna&customer_email=not.is.null'
+    + '&payment_status=in.(pagado,aprobado)&order=created_at.asc&limit=20';
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, {
     headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
   });

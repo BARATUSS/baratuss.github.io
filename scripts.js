@@ -1430,6 +1430,102 @@ function initCuponUI() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCuponUI);
 else initCuponUI();
 
+// ===== PLAN 2 (19-sep-2026): teléfono obligatorio, WhatsApp y pago adelantado =====
+const EF_PAGOS = SUPABASE_URL + '/functions/v1/pagos-noshow';
+const HEADERS_PAGOS = {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+};
+
+// Normaliza el teléfono: 8 dígitos (7000-0000) → 503XXXXXXXX. Devuelve '' si no es válido.
+function normalizarTelefono(v) {
+    let t = String(v || '').replace(/\D/g, '');
+    if (t.startsWith('0')) t = '503' + t.slice(1);
+    if (t.length === 8) t = '503' + t;
+    return (t.length === 11 && t.startsWith('503')) ? t : '';
+}
+
+function usaWhatsApp() {
+    const r = document.querySelector('input[name="usa-wa"]:checked');
+    return !r || r.value !== 'no';
+}
+
+function correoCliente() {
+    const wa = $('checkout-email-wa');
+    const fac = $('checkout-email');
+    return ((wa && wa.value.trim()) || (fac && fac.value.trim()) || '');
+}
+
+// Valida nombre + teléfono (+ correo si no usa WhatsApp) ANTES de crear el pedido
+function validarDatosCompra() {
+    const nombre = $('checkout-name').value.trim();
+    const tel = normalizarTelefono($('checkout-phone').value);
+    if (!nombre) { showToast('📝 Escribí tu nombre'); return null; }
+    if (!tel) {
+        showToast('📱 Escribí tu teléfono de 8 dígitos (ej. 7000-0000)');
+        mostrarAvisoTel('❌ Ese número no parece correcto — escribilo así: 7000-0000', false);
+        return null;
+    }
+    if (!usaWhatsApp() && !correoCliente()) {
+        const g = $('wa-correo-grupo');
+        if (g) g.style.display = '';
+        showToast('📧 Como no usás WhatsApp, dejanos tu correo para avisarte');
+        return null;
+    }
+    mostrarAvisoTel('✅ Te escribiremos al ' + tel.slice(3, 7) + '-' + tel.slice(7), true);
+    return { nombre, tel, correo: correoCliente() || null, preferido: usaWhatsApp() ? 'whatsapp' : 'correo' };
+}
+
+function mostrarAvisoTel(msg, ok) {
+    const el = $('telefono-aviso');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok ? '#1a7f4b' : '#b9453a';
+    el.style.display = msg ? '' : 'none';
+}
+
+// Bloquea el pago en efectivo cuando el cliente ya no retiró antes (2ª vez → pago adelantado)
+function bloquearEfectivo(on) {
+    const radio = document.querySelector('input[name="pay-method"][value="efectivo"]');
+    const aviso = $('pago-adelantado-aviso');
+    if (!radio) return;
+    if (on) {
+        if (radio.checked) document.querySelector('input[name="pay-method"][value="tarjeta"]').checked = true;
+        radio.disabled = true;
+        const label = radio.closest('label');
+        if (label) { label.style.opacity = '.45'; label.style.pointerEvents = 'none'; }
+        if (aviso) aviso.style.display = '';
+    } else {
+        radio.disabled = false;
+        const label = radio.closest('label');
+        if (label) { label.style.opacity = ''; label.style.pointerEvents = ''; }
+        if (aviso) aviso.style.display = 'none';
+    }
+}
+
+// Al escribir el teléfono: guarda el intento (recuperación de carrito) y consulta
+// si el cliente tiene entregas sin retirar → pide pago adelantado.
+async function revisarClienteEnCheckout() {
+    const tel = normalizarTelefono($('checkout-phone').value);
+    if (!tel) { bloquearEfectivo(false); return; }
+    const nombre = $('checkout-name').value.trim();
+    try {
+        if (cart.length) {
+            fetch(EF_PAGOS, {
+                method: 'POST', headers: HEADERS_PAGOS,
+                body: JSON.stringify({ accion: 'guardar-intento', telefono: tel, nombre, items: cart, total: getCartTotal() })
+            }).catch(() => {});
+        }
+        const r = await fetch(EF_PAGOS, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ accion: 'consultar-cliente', telefono: tel })
+        });
+        const d = await r.json().catch(() => ({}));
+        bloquearEfectivo(!!(d && d.pago_adelantado));
+    } catch (_e) { bloquearEfectivo(false); }
+}
+
 function openCheckoutModal() {
     if (cart.length === 0) return;
     closeCart();
@@ -1522,8 +1618,11 @@ async function wompiCheckout() {
     if (cart.length === 0) return;
     
     // Datos de retiro (tarjeta puede elegir punto BARATUSS o C807)
-    const name = $('checkout-name').value.trim();
-    const phone = $('checkout-phone').value.trim();
+    // PLAN 2: nombre + teléfono (+ correo si no usa WhatsApp) validados ANTES de cobrar
+    const datos = validarDatosCompra();
+    if (!datos) return;
+    const name = datos.nombre;
+    const phone = datos.tel;
     const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked').value;
     const isC807 = deliveryMethod === 'c807';
     const punto = isC807 ? ($('checkout-c807-point').value || 'Agencia C807') : ($('checkout-point').value || 'Punto BARATUSS');
@@ -1555,6 +1654,8 @@ async function wompiCheckout() {
                 deliveryPoint: punto,
                 customerName: name || null,
                 customerPhone: phone || null,
+                // PLAN 2: si no usa WhatsApp, el correo es el canal de aviso
+                contactoPreferido: datos.preferido,
                 token: sessionToken(),
                 // Documento tributario (si el cliente lo pidió)
                 facturaTipo: fac.datos.factura_tipo,
@@ -1563,7 +1664,7 @@ async function wompiCheckout() {
                 facturaNrc: fac.datos.factura_nrc,
                 facturaGiro: fac.datos.factura_giro,
                 facturaDireccion: fac.datos.factura_direccion,
-                customerEmail: fac.datos.customer_email,
+                customerEmail: fac.datos.customer_email || datos.correo || null,
                 facturaPorCorreo: fac.datos.factura_por_correo,
                 // 🎟️ Cupón (el servidor lo valida y recalcula el descuento; nunca se confía en el navegador)
                 cuponCodigo: cuponAplicado ? cuponAplicado.codigo : null
@@ -1628,12 +1729,10 @@ async function wompiCheckout() {
 
 // ===== CHECKOUT — Efectivo (contra entrega / retiro) =====
 async function cashCheckout() {
-    const name = $('checkout-name').value.trim();
-    const phone = $('checkout-phone').value.trim();
-    if (!name || !phone) {
-        showToast('📝 Completá tu nombre y teléfono');
-        return;
-    }
+    const datos = validarDatosCompra();
+    if (!datos) return;
+    const name = datos.nombre;
+    const phone = datos.tel;
 
     // Documento tributario (opcional, decidido por el cliente): se valida ANTES de vender el stock
     const fac = datosFactura();
@@ -1681,8 +1780,13 @@ async function cashCheckout() {
             delivery_point: punto,
             customer_name: name,
             customer_phone: phone,
+            // PLAN 2 (19-sep-2026): datos de contacto normalizados + canal preferido
+            telefono_normalizado: phone,
+            contacto_preferido: datos.preferido,
             // Documento tributario elegido por el cliente (opcional)
-            ...fac.datos
+            ...fac.datos,
+            // (va al final para que el correo alterno no lo pise el bloque de factura)
+            customer_email: fac.datos.customer_email || datos.correo || null
         };
         if (currentUser) orderPayload.user_id = currentUser.id;
 
@@ -2117,6 +2221,20 @@ function cerrarFactura() {
         alert('El envío automático por correo se activa en el próximo paso (falta conectar el servicio de correo).\n\nTu documento ya quedó registrado con el correo ' + ((_facturaPedido && _facturaPedido.customer_email) || '') + '.');
     });
 })();
+
+// ===== PLAN 2: WhatsApp / teléfono / pago adelantado =====
+document.querySelectorAll('input[name="usa-wa"]').forEach(r => {
+    r.addEventListener('change', () => {
+        const g = $('wa-correo-grupo');
+        if (g) g.style.display = usaWhatsApp() ? 'none' : '';
+        if (!usaWhatsApp()) showToast('📧 Dejanos tu correo para avisarte del pedido');
+    });
+});
+const _telInput = $('checkout-phone');
+if (_telInput) {
+    _telInput.addEventListener('blur', revisarClienteEnCheckout);
+    _telInput.addEventListener('change', revisarClienteEnCheckout);
+}
 
 // ===== BOTÓN PRINCIPAL DE CHECKOUT =====
 $('checkout-btn').addEventListener('click', openCheckoutModal);

@@ -261,6 +261,10 @@
     </div>
     <div class="cart-sidebar__footer" id="cart-footer" style="display:none;">
         <div class="cart-total"><span>Total</span><span id="cart-total">$0.00</span></div>
+        <!-- PLAN 2 (19-sep-2026): aviso aprobado por Cindy (texto exacto) -->
+        <p style="font-size:.74rem;color:#8a6b66;line-height:1.45;margin:8px 0 0;">
+            🛍️ Tu producto queda guardado acá. Si confirmás con tarjeta y no completás el pago, se libera solo a las 48 h.
+        </p>
         <button class="btn btn--primary btn--full checkout-btn" id="checkout-btn">Pagar ahora <i class="fas fa-lock"></i></button>
     </div>
 </div>
@@ -278,6 +282,16 @@
         <!-- Reserva de 5 minutos (el primero que llega gana) -->
         <div id="reserva-aviso" style="display:none; background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:14px;">
             ⏳ Te reservamos estos productos por <b><span id="reserva-timer">5:00</span></b> — completá tu compra antes de que expire.
+        </div>
+        <!-- PLAN 2 (19-sep-2026): aviso de pago adelantado (solo si es reincidente) -->
+        <div id="pago-adelantado-aviso" style="display:none;background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:.84rem;color:#8a5a1f;line-height:1.5;">
+            💳 <b>Esta compra va con pago adelantado (tarjeta)</b><br>
+            Como tuvimos un par de entregas que no se retiraron, te pedimos completar el pago al hacer el pedido 💛
+        </div>
+        <!-- Aviso aprobado de las 48 h -->
+        <div style="background:#f7f7ff;border:1.5px solid #e3e3f7;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:.8rem;color:#5b5b7a;line-height:1.5;">
+            ⏳ Si elegís tarjeta y el pago no se completa, te guardamos el pedido <b>48 h</b>. Te escribimos una vez para
+            ayudarte y, pasado ese tiempo, el producto vuelve a la tienda.
         </div>
         <div class="checkout-options">
             <label class="checkout-option">
@@ -409,8 +423,31 @@
                     <input type="text" id="checkout-name" placeholder="Nombre completo" required>
                 </div>
                 <div class="form-group">
-                    <label>Tu teléfono (WhatsApp)</label>
+                    <label>Tu teléfono</label>
                     <input type="tel" id="checkout-phone" placeholder="7000-0000" required>
+                    <small id="telefono-aviso" style="display:none;margin-top:6px;font-size:.78rem;"></small>
+                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">
+                        🔒 Usamos tu WhatsApp <b>solo</b> para coordinar tu pedido (nunca para publicidad).
+                    </small>
+                </div>
+                <!-- PLAN 2 (19-sep-2026): si el cliente no usa WhatsApp, se le pide el correo -->
+                <div class="form-group">
+                    <label style="font-size:.88rem;">¿Usás WhatsApp?</label>
+                    <div style="display:flex;gap:16px;font-size:.92rem;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="usa-wa" value="si" checked style="width:auto;"> Sí 👍
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="usa-wa" value="no" style="width:auto;"> No
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group" id="wa-correo-grupo" style="display:none;">
+                    <label>Tu correo electrónico</label>
+                    <input type="email" id="checkout-email-wa" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">
+                        📧 Te avisamos por correo: confirmación, día de entrega y recordatorios.
+                    </small>
                 </div>
             </div>
         </div>
@@ -710,6 +747,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260919cupon"></script>
+<script src="scripts.js?v=20260919plan23"></script>
 </body>
 </html>

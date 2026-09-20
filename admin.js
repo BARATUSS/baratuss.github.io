@@ -569,7 +569,11 @@ function renderOrders() {
             : o.delivery_type === 'retiro' ? '🏪 Retiro' : '';
         const customer = (o.customer_name ? `${o.customer_name}<br><small>📱 ${o.customer_phone || ''}</small>` : '') +
             (o.customer_address ? `<br><small>📍 ${o.customer_address}, ${o.customer_city || ''}</small>` : '');
-        const canMarkPaid = isCash && payStatus !== 'pagado';
+        // PLAN 2: se puede marcar PAGADO cualquier pedido que todavía no esté pago
+        // (por ejemplo, un pedido con tarjeta que el cliente decidió pagar en efectivo al retirar)
+        const canMarkPaid = payStatus !== 'pagado' && payStatus !== 'aprobado'
+            && o.status !== 'cancelado' && o.status !== 'entregado' && o.status !== 'vencido'
+            && o.status !== 'no-retirado';
         const canCancel = (payStatus !== 'pagado' && payStatus !== 'aprobado') || o.status === 'cancelado';
         return `
         <tr>
@@ -579,6 +583,8 @@ function renderOrders() {
             <td><span class="admin-badge admin-badge--${o.status || 'pendiente'}">${capitalize(o.status || 'pendiente')}</span></td>
             <td>
                 <span class="admin-badge ${isCash ? 'admin-badge--efectivo' : 'admin-badge--aprobado'}">${isCash ? '💵 Efectivo' : capitalize(payStatus)}</span>
+                ${o.requiere_pago_adelantado ? '<br><span class="admin-badge" style="background:#fff4e5;color:#8a5a1f;">💳 Pago adelantado</span>' : ''}
+                ${String(o.whatsapp_estado || '') === 'sin_whatsapp' ? '<br><span class="admin-badge" style="background:#fdecea;color:#b9453a;">📵 Sin WhatsApp</span>' : ''}
                 ${delivery ? `<br><small style="color:#888;">${delivery}</small>` : ''}
             </td>
             <td>${customer || new Date(o.created_at).toLocaleDateString('es-SV')}</td>
@@ -973,6 +979,9 @@ const ESTADOS_LABEL = {
     'entregado': '📦 Entregado/Enviado',
     // ===== CONTINGENCIAS (plan v1.2 · 2026-09-18) =====
     'contingencia': '⚠️ En contingencia',
+    'no-show': '🚫 No vino',
+    'no-retirado': '🚫 No retirado',
+    'vencido': '⌛ Vencido',
     'reprogramado': '🔄 Reprogramado',
     'reembolsado': '💸 Reembolsado',
     'cancelado': '🚫 Cancelado'
@@ -1008,8 +1017,30 @@ let logFilter = 'todos';
 let prepFilter = 'pendiente-preparacion';
 let prepSelected = new Set();
 
+// ===== ESTADOS DE PAGO (plan 2 · 19-sep-2026) =====
+// El panel lee los despachos sin mirar si el pedido está pagado. Acá se trae el pago
+// de cada pedido para: (1) NO mostrar sin pagar en "Preparar", (2) poner la etiqueta
+// naranja en Despachos, (3) avisar cuando al cliente le falta el teléfono.
+let _pagoPorRef = {};
+const SIN_PAGAR = ['pendiente', 'creado', 'rechazado'];
+async function cargarEstadosPago() {
+    try {
+        const d = await api('GET', 'orders?select=reference,payment_status,status,customer_phone,telefono_normalizado,whatsapp_estado,total&order=created_at.desc&limit=200');
+        _pagoPorRef = {};
+        (Array.isArray(d) ? d : []).forEach(o => { _pagoPorRef[o.reference] = o; });
+    } catch (_e) { _pagoPorRef = {}; }
+}
+function pagoDe(ref) { return _pagoPorRef[ref] || {}; }
+function estaSinPagar(ref) { return SIN_PAGAR.includes(String(pagoDe(ref).payment_status || '')); }
+function telDe(ref, fallback) {
+    const p = pagoDe(ref);
+    return String(p.telefono_normalizado || p.customer_phone || fallback || '').replace(/\D/g, '');
+}
+async function entregarTodoDe(ref) { return entregarTodo(ref); }
+
 // ===== CARGAR DESPACHOS =====
 async function loadDespachos() {
+    await cargarEstadosPago();
     const data = await api('GET', 'despachos?select=*&order=created_at.desc&limit=200');
     despachos = Array.isArray(data) ? data : [];
     renderDespachos();
@@ -1045,17 +1076,40 @@ function renderDespachos() {
               + 'title="El cliente no quiere el producto: cancela la venta, devuelve el stock y le manda disculpa + cupón 45%" '
               + 'onclick="cancelarPorEnojo(\'' + (d.order_reference || '') + '\')">🚫 Canceló</button>'
             : '';
+        // ── ETIQUETAS DEL PLAN 2 (19-sep-2026) ──
+        const pago = pagoDe(d.order_reference);
+        const tagSinPagar = estaSinPagar(d.order_reference)
+            ? '<br><span class="admin-badge" style="background:#fff4e5;color:#8a5a1f;border:1px solid #ffd8a8;">⏳ Sin pagar — no preparar</span>'
+            : '';
+        const tel = telDe(d.order_reference, d.customer_phone);
+        const tagSinTel = !tel
+            ? '<br><span class="admin-badge" style="background:#fdecea;color:#b9453a;">⚠️ Sin teléfono — no se puede coordinar</span>'
+            : '';
+        const tagSinWa = String(pago.whatsapp_estado || '') === 'sin_whatsapp'
+            ? '<br><span class="admin-badge" style="background:#fdecea;color:#b9453a;">📵 Sin WhatsApp — llamarlo</span>'
+            : '';
+        const btnLlamar = tel
+            ? '<a class="admin-btn admin-btn--ghost" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;text-decoration:none;" '
+              + 'title="Llamar al cliente" href="tel:+' + tel + '">📞</a>'
+            : '';
+        // 🚫 NO VINO (plan 3): registra el caso, avisa al cliente y aplica las 48 h
+        const cerrado = ['entregado', 'cancelado', 'vencido', 'no-retirado'].includes(estado);
+        const btnNoShow = !cerrado
+            ? '<button class="admin-btn admin-btn--danger" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+              + 'title="El cliente no llegó a retirar: se le manda el menú de opciones y tiene 48 h para responder" '
+              + 'onclick="marcarNoVino(\'' + (d.order_reference || '') + '\')">🚫 No vino</button>'
+            : '';
         return '<tr>' +
-            '<td><strong>' + (d.order_reference || '') + '</strong></td>' +
+            '<td><strong>' + (d.order_reference || '') + '</strong>' + tagSinPagar + '</td>' +
             '<td style="min-width:200px;"><div style="display:flex;align-items:center;gap:10px;">' + foto +
                 '<div><div><strong>' + (d.nombre_capturado || 'Artículo') + '</strong> ×' + (d.qty || 1) + '</div>' +
                 '<div style="font-size:.72rem;color:#999;">#' + (d.inventory_id || '') + '</div></div></div></td>' +
             '<td>' + (d.talla || '—') + '</td>' +
-            '<td>' + (d.customer_name || '—') + '</td>' +
+            '<td>' + (d.customer_name || '—') + tagSinTel + tagSinWa + '</td>' +
             '<td>' + fmtEntrega(d.metodo_entrega) + '</td>' +
             '<td style="max-width:180px;">' + (d.destino || '—') + '</td>' +
             '<td><span class="log-estado log-estado--' + estado + '">' + ESTADOS_LABEL[estado] + '</span></td>' +
-            '<td>' + accion + btnEntregar + btnEnojo + '</td>' +
+            '<td>' + accion + btnEntregar + btnNoShow + btnEnojo + btnLlamar + '</td>' +
         '</tr>';
     }).join('');
 }
@@ -1065,6 +1119,31 @@ function fmtEntrega(t) {
     if (s === 'punto') return 'Punto BARATUSS';
     if (s === 'domicilio') return 'Domicilio';
     return s || '—';
+}
+
+// 🚫 NO VINO (plan 3 · 19-sep-2026): el cliente no llegó a retirar.
+// Se registra el caso, se le manda el menú (reprogramar / cancelar / hablar con Cindy)
+// y tiene 48 h para responder. Si no responde: el stock vuelve solo.
+async function marcarNoVino(ref) {
+    if (!ref) return;
+    if (!confirm('¿El cliente NO vino a retirar el pedido ' + ref + '?\n\n'
+        + 'Se le va a enviar el menú de opciones (reprogramar / cancelar / hablar con Cindy) '
+        + 'y tiene 48 horas para responder. Si no responde, el producto vuelve a la tienda.')) return;
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/pagos-noshow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ((session && session.token) || ANON_KEY) },
+            body: JSON.stringify({ accion: 'noshow', reference: ref })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) throw new Error(d.error || ('HTTP ' + r.status));
+        showToast('🚫 Caso registrado · ' + (d.pagado ? 'AVISADO: ya pagó, te toca decidir 💰' : 'menú enviado al cliente, 48 h'));
+    } catch (e) {
+        showToast('❌ No se pudo registrar: ' + e.message);
+        return;
+    }
+    loadDespachos();
+    loadContingencias();
 }
 
 // 📦 Entregar TODO el pedido de una vez (registra la venta en finanzas)
@@ -1329,20 +1408,31 @@ function renderProximaSalida() {
 
 // ===== PREPARAR PEDIDOS (foto + código + descripción) =====
 async function loadPreparar() {
+    await cargarEstadosPago();   // PLAN 2: para saber qué pedidos están pagados
     const data = await api('GET', 'despachos?select=*&order=created_at.asc&limit=200');
     despachos = Array.isArray(data) ? data : [];
     renderPreparar();
 }
 function renderPreparar() {
     const grid = $('prep-grid');
+    // PLAN 2 (19-sep-2026): los pedidos SIN PAGAR no se preparan (quedan visibles en Despachos
+    // con la etiqueta naranja, y saltan acá solos cuando el cliente paga).
+    const ocultosSinPagar = despachos.filter(d => estaSinPagar(d.order_reference)
+        && ['pendiente-preparacion', 'en-preparacion'].includes(d.estado_logistico || 'pendiente-preparacion'));
+    const avisoSinPagar = ocultosSinPagar.length
+        ? '<div style="background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:.82rem;color:#8a5a1f;line-height:1.5;">'
+          + '⏳ <b>' + ocultosSinPagar.length + ' artículo(s) no están acá</b> porque su pedido todavía no está pagado. '
+          + 'Los ves en <b>Despachos</b> con la etiqueta <i>«Sin pagar — no preparar»</i> y aparecen acá solos cuando el pago se completa 💛</div>'
+        : '';
     // Vista "Pendiente de preparación" muestra pendientes + en preparación
     const pendientes = despachos.filter(d => {
+        if (estaSinPagar(d.order_reference)) return false;
         const e = d.estado_logistico || 'pendiente-preparacion';
         if (prepFilter === 'pendiente-preparacion') return e === 'pendiente-preparacion' || e === 'en-preparacion';
         return e === prepFilter;
     });
     if (!pendientes.length) {
-        grid.innerHTML = '<div style="text-align:center;padding:50px;color:#999;">No hay artículos que preparar aquí 🎉</div>';
+        grid.innerHTML = avisoSinPagar + '<div style="text-align:center;padding:50px;color:#999;">No hay artículos que preparar aquí 🎉</div>';
         return;
     }
     const porPedido = {};
@@ -1359,7 +1449,7 @@ function renderPreparar() {
     for (const id of [...prepSelected]) {
         if (!idsVisibles.has(String(id))) prepSelected.delete(id);   // descartar los que ya no están
     }
-    grid.innerHTML = Object.entries(porPedido).map(([ref, items]) => {
+    grid.innerHTML = avisoSinPagar + Object.entries(porPedido).map(([ref, items]) => {
         const itemsHtml = items.map(d =>
             '<div class="prep-item' + (prepSelected.has(String(d.id)) ? ' prep-item--sel' : '') + '">' +
                 '<label class="prep-check-wrap"><input type="checkbox" class="prep-check-item" data-despacho="' + d.id + '"' +
