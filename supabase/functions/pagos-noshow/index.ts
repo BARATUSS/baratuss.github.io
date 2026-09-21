@@ -57,6 +57,16 @@ function normalizarTel(tel: string): string {
   return t;
 }
 function primerNombre(n: string): string { return String(n || 'cliente').split(' ')[0]; }
+// Fecha límite (48 h) en hora de El Salvador, para la plantilla de trámite
+function fechaLimiteTexto(o: { created_at?: string; pago_expira_en?: string | null }): string {
+  const base = o.pago_expira_en
+    ? new Date(o.pago_expira_en)
+    : new Date(new Date(o.created_at || Date.now()).getTime() + HORAS_VENCE * 3600000);
+  const sv = new Date(base.getTime() - 6 * 3600000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return p(sv.getUTCDate()) + '/' + p(sv.getUTCMonth() + 1) + ' a las ' + p(sv.getUTCHours()) + ':' + p(sv.getUTCMinutes());
+}
+
 function productoDe(items: any[]): string {
   const it = (items || [])[0] || {};
   const n = String(it.name || 'tu producto');
@@ -292,10 +302,12 @@ async function revisar() {
       // Recordatorio 1 (a las 2 h)
       if (!avisos.r1 && horas >= 2 && !String(avisos.r1_fallo || '').includes('sin_whatsapp')) {
         const enlace = await enlaceWompi(o.reference, Number(o.total) || 0) || 'https://baratuss.github.io';
+        const limite = fechaLimiteTexto(o);
         const via = await avisar(tel, {
           texto: msjPago1(nombre, producto, enlace),
-          plantilla: 'pago_pendiente_baratuss',
-          params: [nombre, producto, enlace],
+          // Plantilla "de trámite" (utilidad): habla del pedido, la referencia y el plazo
+          plantilla: ((globalThis as Record<string, unknown>)._usarPlantillaPago === true) ? 'pago_pendiente_baratuss_v2' : undefined,
+          params: [o.reference, limite, enlace],
           correo: o.customer_email || undefined, asunto: 'Tu pedido en BARATUSS quedó esperando el pago',
           html: htmlSimple('Tu pedido te está esperando 💛', msjPago1(nombre, producto, enlace)),
           ref: o.reference, etiqueta: 'PAGO-1',
@@ -314,8 +326,8 @@ async function revisar() {
       if (avisos.r1 && !avisos.r2 && horas >= 24) {
         const via = await avisar(tel, {
           texto: msjPago2(nombre, producto),
-          plantilla: 'pago_pendiente_baratuss',
-          params: [nombre, producto, 'https://baratuss.github.io'],
+          plantilla: ((globalThis as Record<string, unknown>)._usarPlantillaPago === true) ? 'pago_pendiente_baratuss_v2' : undefined,
+          params: [o.reference, fechaLimiteTexto(o), 'https://baratuss.github.io'],
           correo: o.customer_email || undefined, asunto: 'Último recordatorio de tu pedido en BARATUSS',
           html: htmlSimple('Último recordatorio 🙂', msjPago2(nombre, producto)),
           ref: o.reference, etiqueta: 'PAGO-2',
@@ -442,7 +454,12 @@ async function revisar() {
     }
   } catch (e) { log.push('err no-show: ' + String(e).slice(0, 90)); }
 
-  return { ok: true, log, errores_correo: erroresCorreo.length ? erroresCorreo : undefined };
+  // La plantilla de pago se usa SOLO si Cindy la autorizó (costo por mensaje).
+  // Mientras esté en 'off', los recordatorios salen por ventana de 24 h o correo.
+  const { data: cfg } = await supabase.from('config_operativa')
+    .select('valor').eq('clave', 'recordatorio_pago_plantilla').maybeSingle();
+  (globalThis as Record<string, unknown>)._usarPlantillaPago = String(cfg?.valor || 'off') === 'on';
+  return { ok: true, log, plantilla_pago: String(cfg?.valor || 'off'), errores_correo: erroresCorreo.length ? erroresCorreo : undefined };
 }
 
 // ========================================================================
