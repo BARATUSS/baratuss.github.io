@@ -76,25 +76,33 @@ async function avisarTG(texto: string) {
 }
 
 // ===== correo (Gmail API, mismas credenciales que las facturas) =====
+const erroresCorreo: string[] = [];
 async function correo(destino: string, asunto: string, html: string): Promise<boolean> {
-  if (!G_ID || !G_SECRET || !G_REFRESH || !destino) return false;
+  if (!G_ID || !G_SECRET || !G_REFRESH || !destino) {
+    erroresCorreo.push('faltan credenciales o destino (' + (!G_ID ? 'sin cliente ' : '') + (!G_REFRESH ? 'sin refresh ' : '') + (!destino ? 'sin correo' : '') + ')');
+    return false;
+  }
   try {
     const r = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: G_ID, client_secret: G_SECRET, refresh_token: G_REFRESH, grant_type: 'refresh_token' }),
     });
     const t = await r.json();
-    if (!t.access_token) { console.log('correo: sin token', JSON.stringify(t).slice(0, 150)); return false; }
+    if (!t.access_token) { erroresCorreo.push('token: ' + JSON.stringify(t).slice(0, 120)); console.log('correo: sin token', JSON.stringify(t).slice(0, 150)); return false; }
+    // Igual que en las facturas (que ya funciona): base64url SIN relleno ('=')
     const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
+    const b64url = (s: string) => b64(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const envolver = (c: string) => (c.match(/.{1,76}/g) || []).join('\r\n');
     const cab = ['From: ' + G_FROM, 'To: ' + destino, 'Subject: =?UTF-8?B?' + b64(asunto) + '?=', 'MIME-Version: 1.0',
                  'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64'].join('\r\n');
-    const raw = btoa(unescape(encodeURIComponent(cab + '\r\n\r\n' + b64(html)))).replace(/\+/g, '-').replace(/\//g, '_');
+    const raw = b64url(cab + '\r\n\r\n' + envolver(b64(html)));
     const e = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST', headers: { 'Authorization': 'Bearer ' + t.access_token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ raw }),
     });
     const d = await e.json();
     console.log('correo ->', destino, e.ok ? 'OK' : JSON.stringify(d).slice(0, 150));
+    if (!e.ok) erroresCorreo.push('envio: ' + JSON.stringify(d).slice(0, 140));
     return e.ok;
   } catch (e) { console.log('correo err', String(e)); return false; }
 }
@@ -434,7 +442,7 @@ async function revisar() {
     }
   } catch (e) { log.push('err no-show: ' + String(e).slice(0, 90)); }
 
-  return { ok: true, log };
+  return { ok: true, log, errores_correo: erroresCorreo.length ? erroresCorreo : undefined };
 }
 
 // ========================================================================
@@ -564,6 +572,22 @@ async function opcionNoShow(incidencia_id: number, opcion: string) {
   return json({ ok: true, opcion: op, hecho, pagado });
 }
 
+// ¿La llamada es interna (cron / otro servicio)? Se acepta la clave del servicio o
+// cualquier token con privilegios de servicio (se comprueba leyendo una tabla con RLS).
+async function esLlamadaInterna(req: Request): Promise<boolean> {
+  const auth = String(req.headers.get('Authorization') || '').trim();
+  const key = String(req.headers.get('apikey') || '').trim();
+  const tok = auth.replace(/^Bearer\s+/i, '') || key;
+  if (!tok) return false;
+  if (SERVICE_KEY && (tok === SERVICE_KEY || auth.includes(SERVICE_KEY))) return true;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/wa_telefonos?select=telefono&limit=1', {
+      headers: { apikey: tok, Authorization: 'Bearer ' + tok },
+    });
+    return r.ok;
+  } catch (_e) { return false; }
+}
+
 // ========================================================================
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -573,11 +597,7 @@ serve(async (req) => {
 
     // Acciones automáticas: solo con la clave del servicio (las llama el cron)
     if (accion === 'revisar') {
-      const auth = req.headers.get('Authorization') || '';
-      const nota = req.headers.get('apikey') || '';
-      if (!auth.includes(SERVICE_KEY.slice(-24)) && !nota.includes(SERVICE_KEY.slice(-24)) && SERVICE_KEY) {
-        return json({ ok: false, error: 'no autorizado' }, 401);
-      }
+      if (!(await esLlamadaInterna(req))) return json({ ok: false, error: 'no autorizado' }, 401);
       return json(await revisar());
     }
 
@@ -599,6 +619,12 @@ serve(async (req) => {
         total: Number(body.total || 0), actualizado_en: new Date().toISOString(),
       });
       return json({ ok: true, guardado: tel });
+    }
+    // Correo genérico (interno): lo usan otras funciones para avisos/notas de crédito
+    if (accion === 'enviar-correo') {
+      if (!(await esLlamadaInterna(req))) return json({ ok: false, error: 'no autorizado' }, 401);
+      const ok = await correo(String(body.destino || ''), String(body.asunto || 'BARATUSS'), String(body.html || ''));
+      return json({ ok, via: ok ? 'correo' : 'no_enviado', errores: erroresCorreo });
     }
     if (accion === 'consultar-cliente') {
       const tel = normalizarTel(String(body.telefono || ''));

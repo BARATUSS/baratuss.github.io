@@ -298,7 +298,7 @@ serve(async (_req) => {
     // ⚠️ CONTINGENCIAS (2026-09-18): los despachos en contingencia, reprogramados, cancelados
     // o reembolsados NO reciben recordatorios de la fecha vieja (los maneja la EF `contingencia`).
     // Se excluyen los que están fuera del flujo normal (planes 2 y 3)
-    .not('estado_logistico', 'in', '("contingencia","reprogramado","cancelado","reembolsado","no-show","no-retirado","vencido")')
+    .not('estado_logistico', 'in', '("contingencia","reprogramado","cancelado","reembolsado","no-show","no-retirado","vencido","no-disponible")')
     .order('id', { ascending: false })
     .limit(50);
 

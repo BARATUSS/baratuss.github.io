@@ -592,6 +592,7 @@ function renderOrders() {
                 <small style="color:#aaa;">${new Date(o.created_at).toLocaleDateString('es-SV')}</small>
                 ${canMarkPaid ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markCashPaid('${o.id}')">✅ Marcar pagado</button>` : ''}
                 ${canCancel ? `<br><button class="admin-btn admin-btn--danger" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="cancelOrder('${o.id}')">❌ Cancelar y devolver stock</button>` : ''}
+                ${!['cancelado', 'entregado', 'vencido', 'no-retirado'].includes(o.status) ? `<br><button class="admin-btn admin-btn--ghost" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="abrirAjuste('${o.reference}')">✂️ Ajustar pedido</button>` : ''}
             </td>
         </tr>`;
     }).join('');
@@ -980,6 +981,7 @@ const ESTADOS_LABEL = {
     // ===== CONTINGENCIAS (plan v1.2 · 2026-09-18) =====
     'contingencia': '⚠️ En contingencia',
     'no-show': '🚫 No vino',
+    'no-disponible': '✂️ No disponible',
     'no-retirado': '🚫 No retirado',
     'vencido': '⌛ Vencido',
     'reprogramado': '🔄 Reprogramado',
@@ -1119,6 +1121,72 @@ function fmtEntrega(t) {
     if (s === 'punto') return 'Punto BARATUSS';
     if (s === 'domicilio') return 'Domicilio';
     return s || '—';
+}
+
+// ✂️ AJUSTAR PEDIDO (escenario 3 · 20-sep-2026): sacar el producto que no se puede entregar.
+// Devuelve el stock, su tarjeta queda "no disponible", se recalcula el total y —si ya pagó—
+// el cliente elige entre devolución o crédito.
+function abrirAjuste(ref) {
+    const o = (orders || []).find(x => x.reference === ref);
+    if (!o) { showToast('❌ No encontré el pedido'); return; }
+    const items = o.items || [];
+    if (!items.length) { showToast('❌ El pedido no tiene productos'); return; }
+
+    const filas = items.map((it, i) =>
+        '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1.5px solid #ffd9d2;border-radius:12px;margin-bottom:8px;cursor:pointer;">'
+        + '<input type="checkbox" class="ajuste-item" data-idx="' + i + '" style="width:auto;margin-top:4px;">'
+        + '<div><b>' + (it.name || 'Producto') + '</b> ×' + (it.qty || 1) + (it.size ? ' · Talla ' + it.size : '')
+        + '<br><small style="color:#8a6b66;">$' + (Number(it.price) || 0).toFixed(2) + ' c/u</small></div></label>').join('');
+
+    const d = document.createElement('div');
+    d.id = 'ajuste-overlay';
+    d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    d.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:88vh;overflow:auto;padding:22px;">'
+        + '<h3 style="margin:0 0 6px;">✂️ Ajustar pedido</h3>'
+        + '<p style="font-size:.82rem;color:#8a6b66;margin:0 0 14px;">Pedido <b>' + ref + '</b> · Total actual <b>$' + (Number(o.total) || 0).toFixed(2) + '</b><br>'
+        + 'Marcá el producto que <b>no se puede entregar</b> 👇</p>'
+        + filas
+        + '<label style="display:block;font-size:.82rem;font-weight:600;margin:12px 0 6px;">¿Qué pasó?</label>'
+        + '<select id="ajuste-motivo" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid #ffd9d2;">'
+        + '<option value="se dañó">Se dañó o se manchó</option><option value="se perdió">Se perdió</option>'
+        + '<option value="no está">No lo encuentro</option><option value="otro">Otro motivo</option></select>'
+        + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">'
+        + '<button class="admin-btn admin-btn--ghost" id="ajuste-cancelar" style="width:auto;">Cancelar</button>'
+        + '<button class="admin-btn admin-btn--danger" id="ajuste-ok" style="width:auto;">Quitar del pedido</button>'
+        + '</div></div>';
+    document.body.appendChild(d);
+    $('ajuste-cancelar').addEventListener('click', () => d.remove());
+    $('ajuste-ok').addEventListener('click', () => ejecutarAjuste(ref, items, d));
+}
+
+async function ejecutarAjuste(ref, items, overlay) {
+    const marcados = [...document.querySelectorAll('.ajuste-item:checked')].map(c => items[Number(c.dataset.idx)]);
+    if (!marcados.length) { showToast('📝 Marcá al menos un producto'); return; }
+    const motivo = ($('ajuste-motivo') && $('ajuste-motivo').value) || 'no disponible';
+    const nombres = marcados.map(i => i.name || 'producto').join(', ');
+    const monto = marcados.reduce((s, i) => s + (Number(i.price) || 0) * (i.qty || 1), 0);
+    if (!confirm('¿Sacar del pedido ' + nombres + '?\n\nSe devuelve el stock y el total baja $' + monto.toFixed(2) + '.')) return;
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/contingencia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ((session && session.token) || ANON_KEY) },
+            body: JSON.stringify({
+                accion: 'ajustar', reference: ref, motivo,
+                items: marcados.map(i => ({ id: i.id, qty: i.qty || 1, talla: i.size || i.talla || null, name: i.name || null }))
+            })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) throw new Error(d.error || ('HTTP ' + r.status));
+        showToast('✂️ Ajustado · total nuevo $' + Number(d.total_nuevo || 0).toFixed(2) + (d.pagado ? ' · cliente elige devolución o crédito 💛' : ''));
+    } catch (e) {
+        showToast('❌ No se pudo ajustar: ' + e.message);
+        return;
+    }
+    if (overlay) overlay.remove();
+    loadOrders();
+    loadDespachos();
+    loadContingencias();
+    loadStats();
 }
 
 // 🚫 NO VINO (plan 3 · 19-sep-2026): el cliente no llegó a retirar.

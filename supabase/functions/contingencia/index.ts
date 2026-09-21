@@ -412,6 +412,134 @@ Deno.serve(async (req) => {
     // ---------------------------------------------------------------
     // Reembolso ya pagado a mano (Cindy lo hizo en Wompi)
     // ---------------------------------------------------------------
+    // ===== ESCENARIO 3 · AJUSTE DE PEDIDO (aprobado 20-sep-2026) =====
+    // Se saca del pedido el producto que no se puede entregar: vuelve el stock, su
+    // tarjeta queda "no disponible", el total se recalcula y, si ya pagó, el cliente
+    // elige entre devolución o crédito.
+    if (accion === 'ajustar') {
+      const ref = String(b.reference || '');
+      const items = Array.isArray(b.items) ? b.items : [];
+      const motivo = String(b.motivo || 'no disponible');
+      if (!ref || !items.length) return json({ ok: false, error: 'faltan datos' }, 400);
+
+      const o = await datosPedido(ref);
+      if (!o) return json({ ok: false, error: 'pedido no encontrado' }, 404);
+
+      const { data: rpc } = await supabase.rpc('ajustar_pedido', { p_ref: ref, p_items: items, p_motivo: motivo });
+      if (!rpc || rpc.ok === false) return json({ ok: false, error: (rpc && rpc.motivo) || 'no se pudo ajustar' }, 400);
+
+      const pagado = ['pagado', 'aprobado'].includes(String(o.payment_status));
+      const nombre = primerNombre(o.customer_name);
+      const dif = Number(rpc.descontado || 0);
+      const nuevo = Number(rpc.total_nuevo || 0);
+      const antes = Number(rpc.total_anterior || 0);
+      const prod = items.map((i: { name?: string; id?: number }) => i.name || ('producto #' + i.id)).join(', ');
+      const todoFuera = nuevo <= 0.01;
+
+      const incId = await guardarIncidencia({
+        order_reference: ref,
+        customer_name: o.customer_name, customer_phone: o.customer_phone,
+        tipo: 'ajuste', motivo: motivo,
+        detalle: 'Producto(s): ' + prod + ' · descontado $' + dif.toFixed(2) + ' · total $' + antes.toFixed(2) + ' → $' + nuevo.toFixed(2) + (todoFuera ? ' (pedido completo)' : ''),
+        estado: pagado && !todoFuera ? 'esperando_cliente' : 'resuelto',
+        reembolso_monto: dif,
+        opciones_probadas: JSON.stringify(items),
+      });
+
+      // Mensaje al cliente
+      const texto = todoFuera
+        ? ('¡Hola ' + nombre + '! 😊 Te cuento algo de tu pedido: el *' + prod + '* se nos dañó justo antes de la entrega 😔\n\n'
+           + 'Por eso damos de baja el pedido completo' + (pagado ? ' y te devolvemos el dinero 💛' : ' (no llegaste a pagarlo).') + '\n\nPerdoná el inconveniente, ya te escribo para ver cómo lo resolvemos 💛')
+        : (pagado
+          ? ('¡Hola ' + nombre + '! 😊 Te cuento algo de tu pedido: el *' + prod + '* se nos dañó justo antes de la entrega 😔\n\n'
+             + 'Como eso ya lo tenías pagado, decime qué preferís:\n'
+             + '*1)* Te devuelvo la diferencia (*$' + dif.toFixed(2) + '*) · *2)* Te dejo un crédito por $' + dif.toFixed(2) + ' para tu próxima compra 💛')
+          : ('¡Hola ' + nombre + '! 😊 Te cuento algo de tu pedido: el *' + prod + '* se nos dañó justo antes de la entrega 😔 '
+             + 'Por eso lo sacamos y te queda un total de *$' + nuevo.toFixed(2) + '* en vez de $' + antes.toFixed(2) + '.\n\n'
+             + 'El resto de tu pedido va normal 📅 ¿Te parece bien? Cualquier cosa escribime 💛'));
+
+      await enviarTexto(o.customer_phone, texto, 'AJUSTE');
+
+      // Si no queda nada por entregar: el pedido se cierra (y se registra el reembolso si pagó)
+      if (todoFuera) {
+        await supabase.from('orders').update({ status: 'cancelado', updated_at: new Date().toISOString() }).eq('reference', ref);
+        await supabase.from('despachos').update({ estado_logistico: 'cancelado', updated_at: new Date().toISOString() })
+          .eq('order_reference', ref).neq('estado_logistico', 'no-disponible');
+        if (pagado) {
+          await supabase.from('reembolsos').insert({
+            order_reference: ref, incidencia_id: incId, customer_name: o.customer_name,
+            customer_phone: o.customer_phone, monto: Number(antes.toFixed(2)),
+            motivo: 'producto no disponible — pedido completo', metodo: 'wompi', estado: 'solicitado',
+          });
+        }
+      }
+
+      const aviso = '✂️ *Ajuste de pedido*: ' + o.customer_name + ' · ' + o.customer_phone
+        + '\nPedido ' + ref + '\nSe sacó: ' + prod + '\nDescontado: $' + dif.toFixed(2) + ' · Total nuevo: $' + nuevo.toFixed(2)
+        + (todoFuera ? '\n\n⚠️ Se dio de baja el pedido completo.' : (pagado ? '\n\n💳 Ya estaba pagado: le mandé el menú (1 devolución / 2 crédito).' : '\n\n✅ Sin plata de por medio: paga el total ajustado al retirar.'));
+      await avisarTelegram(aviso);
+      await enviarTexto(CINDY_WA, aviso, 'AJUSTE-AVISO');
+
+      return json({ ok: true, incidencia_id: incId, descontado: dif, total_nuevo: nuevo, pagado, todo_fuera: todoFuera });
+    }
+
+    // El cliente eligió qué hacer con la diferencia (1 = devolución · 2 = crédito)
+    if (accion === 'ajuste_opcion') {
+      const incId = Number(b.incidencia_id || 0);
+      const op = String(b.opcion || '');
+      if (!incId) return json({ ok: false, error: 'falta incidencia_id' }, 400);
+      const { data: inc } = await supabase.from('incidencias_entrega').select('*').eq('id', incId).limit(1);
+      const i = inc && inc[0];
+      if (!i) return json({ ok: false, error: 'caso no encontrado' }, 404);
+      const o = await datosPedido(i.order_reference);
+      const dif = Number(i.reembolso_monto || 0);
+      const nombre = primerNombre(i.customer_name);
+
+      if (op === '1') {
+        await supabase.from('reembolsos').insert({
+          order_reference: i.order_reference, incidencia_id: incId, customer_name: i.customer_name,
+          customer_phone: i.customer_phone, monto: dif, motivo: 'ajuste de pedido — pidió devolución',
+          metodo: 'wompi', estado: 'solicitado',
+        });
+        await actualizarIncidencia(incId, { estado: 'resuelto', opcion_cliente: 'reembolso', respuesta_cliente: 'devolucion', resuelto_en: new Date().toISOString() });
+        await enviarTexto(i.customer_phone, '¡Listo, ' + nombre + '! 💛 Te devolvemos *$' + dif.toFixed(2) + '* por el producto que no pudimos entregar. Cindy lo procesa y te aviso apenas esté 🙂💛', 'AJUSTE-DEV');
+        await avisarTelegram('💸 *Reembolso por ajuste*: ' + i.customer_name + ' · $' + dif.toFixed(2) + '\nPedido ' + i.order_reference + '\nPagarlo a mano en Wompi y marcarlo en Contingencias.');
+        await enviarTexto(CINDY_WA, '💸 *Devolución pedida* (ajuste)\n' + i.customer_name + ' · $' + dif.toFixed(2) + '\nPedido ' + i.order_reference + '\n→ Pagala en Wompi y marcala en el panel.', 'AJUSTE-DEV-C');
+      } else if (op === '2') {
+        const codigo = nuevoCodigo(2);
+        await supabase.from('cupones').insert({
+          codigo, tipo: 'credito', valor: dif, tope: dif, cliente_telefono: i.customer_phone,
+          origen: 'ajuste', incidencia_id: incId, aprobado_por: 'cindy',
+          expira_en: new Date(Date.now() + 30 * 86400000).toISOString(),
+        });
+        await actualizarIncidencia(incId, { estado: 'resuelto', opcion_cliente: 'credito', respuesta_cliente: 'credito', cupon_codigo: codigo, cupon_descuento: dif, resuelto_en: new Date().toISOString() });
+        await enviarTexto(i.customer_phone, '¡Listo, ' + nombre + '! 💛 Te dejé un *crédito de $' + dif.toFixed(2) + '* para tu próxima compra.\n\nTu código es *' + codigo + '* — lo escribís en el checkout y se te descuenta. Vale 30 días 🙂', 'AJUSTE-CR');
+        await avisarTelegram('🎟️ *Crédito entregado* (ajuste): ' + i.customer_name + ' · $' + dif.toFixed(2) + ' · código ' + codigo);
+        await enviarTexto(CINDY_WA, '🎟️ Cliente eligió *crédito* por el ajuste\n' + i.customer_name + ' · $' + dif.toFixed(2) + '\nCódigo ' + codigo, 'AJUSTE-CR-C');
+      } else {
+        return json({ ok: false, error: 'opción no válida' }, 400);
+      }
+
+      // 🧾 NOTA DE CRÉDITO por correo (decisión 4a): constancia del ajuste
+      if (o && o.customer_email && dif > 0) {
+        const nota = '<div style="font-family:system-ui,sans-serif;max-width:560px;color:#3b2b28;">'
+          + '<h2 style="color:#c2574a;margin:0 0 10px;">Nota de crédito — BARATUSS</h2>'
+          + '<p>Cliente: <b>' + (i.customer_name || '') + '</b><br>Pedido: <b>' + i.order_reference + '</b><br>Fecha: ' + (await sello()) + '</p>'
+          + '<p>Por el producto que no pudimos entregar, se ajustó tu pedido por un monto de <b>$' + dif.toFixed(2) + '</b> '
+          + (op === '1' ? '(se te devuelve el dinero)' : '(acreditado para tu próxima compra)') + '.</p>'
+          + '<p style="font-size:13px;color:#8a6b66;">Este documento respalda el ajuste de tu pedido. Cualquier duda, escribinos al WhatsApp 6285-2631 💛</p></div>';
+        try {
+          await fetch('https://lizybztwnlrlvsrmgnug.functions.supabase.co/pagos-noshow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SERVICE_KEY },
+            body: JSON.stringify({ accion: 'enviar-correo', destino: o.customer_email, asunto: 'Nota de crédito de tu pedido ' + i.order_reference, html: nota }),
+          });
+        } catch (e) { console.log('nota de credito: no se pudo enviar', String(e)); }
+      }
+
+      return json({ ok: true, opcion: op, monto: dif });
+    }
+
     if (accion === 'reembolso_pagado') {
       const id = Number(b.reembolso_id || 0);
       if (!id) return json({ ok: false, error: 'datos' });

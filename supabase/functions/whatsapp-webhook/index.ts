@@ -391,6 +391,27 @@ serve(async (req) => {
                     }
                   }
 
+                  // (b3) AJUSTE DE PEDIDO (escenario 3): 1 = devolución · 2 = crédito
+                  if (String(caso.tipo) === 'ajuste') {
+                    const opAj = (/^1\b/.test(limpio) || limpio.includes('devol') || limpio.includes('devolu') || limpio.includes('dinero') || limpio.includes('reembol')) ? '1'
+                      : (/^2\b/.test(limpio) || limpio.includes('credito') || limpio.includes('crédito') || limpio.includes('saldo') || limpio.includes('cupon') || limpio.includes('cupón')) ? '2'
+                      : '';
+                    if (opAj) {
+                      try {
+                        await fetch(CONT_URL, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '') },
+                          body: JSON.stringify({ accion: 'ajuste_opcion', incidencia_id: caso.id, opcion: opAj }),
+                        });
+                      } catch (eAj) { console.log('error ajuste opcion', String(eAj)); }
+                      await responderWhatsApp(t8, opAj === '1'
+                        ? '¡Listo! 💛 Cindy procesa la devolución y te aviso apenas esté 🙂'
+                        : '¡Listo! 💛 Te mandé el crédito con su código para tu próxima compra 🎟️');
+                      await avisarTelegram('✂️ Cliente eligió la opción *' + opAj + '* en el ajuste #' + caso.id);
+                      continue;
+                    }
+                  }
+
                   // (b) CONTINGENCIA (planes anteriores)
                   await llamarCont({ accion: 'opcion_cliente', incidencia_id: caso.id, opcion, telefono: t8 });
                   await responderWhatsApp(t8, '¡Recibido! 🙌 Le paso tu elección a Cindy y te confirmo en un ratito 💛');
