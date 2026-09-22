@@ -318,7 +318,7 @@ ul { list-style: none; }
     flex-direction: column; gap: 6px; opacity: 1; cursor: pointer;
 }
 .product-card__img.foto-error .product-card__placeholder::after {
-    content: '📷 No cargó · tocá para reintentar';
+    content: 'No cargó · tocá para reintentar';    /* sin emoji: se ve igual en todos los celulares */
     font-size: .6rem; font-weight: 600; color: var(--gray-500);
     text-align: center; line-height: 1.25; padding: 0 10px;
 }
