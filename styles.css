@@ -301,9 +301,38 @@ ul { list-style: none; }
     width: 100%; height: 100%;
     object-fit: contain;  /* foto COMPLETA, sin recortar */
     position: absolute; inset: 0;
-    background: #fafafa;
+    background: transparent;   /* mientras carga se ve el icono de atrás */
     padding: 4px;
 }
+.product-card__photo.cargada { background: #fafafa; }
+/* FOTOS EN CELULAR (22-sep-2026): mientras carga (o si falla) se ve el icono del
+   producto → nunca más un hueco blanco. Si falla, avisa y se puede reintentar. */
+.product-card__placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(2.4rem, 11vw, 3.4rem);
+    opacity: .38;
+}
+.product-card__img.con-foto .product-card__placeholder { display: none; }
+.product-card__img.foto-error .product-card__placeholder {
+    flex-direction: column; gap: 6px; opacity: 1; cursor: pointer;
+}
+.product-card__img.foto-error .product-card__placeholder::after {
+    content: '📷 No cargó · tocá para reintentar';
+    font-size: .6rem; font-weight: 600; color: var(--gray-500);
+    text-align: center; line-height: 1.25; padding: 0 10px;
+}
+/* Botón de ampliar: visible para que se descubra solo */
+.product-card__zoom {
+    position: absolute; right: 8px; bottom: 8px; z-index: 3;
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.94); color: var(--gray-800);
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 2px 8px rgba(0,0,0,.14);
+    font-size: .92rem; cursor: pointer;
+}
+.product-card__zoom:active { transform: scale(.94); }
 .product-card__img .badge {
     position: absolute; top: 12px; left: 12px;
     background: var(--accent); color: white;
@@ -377,10 +406,11 @@ ul { list-style: none; }
 }
 .detail__gallery { padding: 28px; display: flex; flex-direction: column; align-items: center; position: relative; }
 .detail__zoom-badge {
-    position: absolute; top: 36px; right: 36px; z-index: 2;
-    background: rgba(0,0,0,0.45); color: #fff; width: 34px; height: 34px;
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: .8rem; pointer-events: none; opacity: .85;
+    position: absolute; top: 34px; right: 34px; z-index: 2;
+    background: rgba(0,0,0,0.55); color: #fff;
+    border-radius: 100px; display: flex; align-items: center; gap: 6px;
+    font-size: .72rem; font-weight: 600; padding: 7px 12px;
+    pointer-events: none; opacity: .92;
 }
 .detail__photo {
     width: 100%; height: auto; max-height: 62vh; object-fit: contain;
@@ -874,6 +904,9 @@ ul { list-style: none; }
 
     .categories__grid { grid-template-columns: 1fr; max-width: 360px; margin: 0 auto; }
     .products { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    /* Foto más alta: la prenda se ve grande y NO se recorta nada */
+    .product-card__img { aspect-ratio: 4/5; }
+    .product-card__zoom { width: 38px; height: 38px; font-size: .85rem; }
     .about__grid { grid-template-columns: 1fr; text-align: center; }
     .about__visual { display: none; }
     .about__features { align-items: center; }
@@ -883,9 +916,20 @@ ul { list-style: none; }
     .cart-sidebar { width: 100vw; }
 }
 @media (max-width: 480px) {
-    .products { grid-template-columns: 1fr; }
+    /* 2 productos por fila (decisión de Cindy, 22-sep-2026) */
+    .products { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .container { padding: 0 16px; }
     .section { padding: 60px 0; }
+    /* Con 2 por fila: letra y espacios un poco más chicos para que entre cómodo */
+    .product-card__name { font-size: .84rem; line-height: 1.25; }
+    .product-card__category { font-size: .62rem; }
+    .product-card__price { font-size: .92rem; }
+    .product-card__thumbs { padding: 6px 6px 0; gap: 4px; }
+    .product-card__thumb { width: 34px; height: 34px; }
+    .product-card__img .badge { font-size: .56rem; padding: 3px 7px; top: 8px; left: 8px; }
+    .product-card__img .badge--condition,
+    .product-card__img .badge--agotado { top: 8px; right: 8px; left: auto; }
+    .product-card__zoom { width: 34px; height: 34px; right: 6px; bottom: 6px; font-size: .8rem; }
 }
 
 /* ========== ICON BUTTONS (Header) ========== */

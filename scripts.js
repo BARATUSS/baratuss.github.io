@@ -385,7 +385,7 @@ function renderProducts(filter = 'all') {
     const filtered = (filter === 'all' ? products : products.filter(p => p.category === filter));
     // Mostrar TODOS: los agotados aparecen con etiqueta roja y compra bloqueada
     
-    productsGrid.innerHTML = filtered.map(p => {
+    productsGrid.innerHTML = filtered.map((p, posicion) => {
         const isFav = wishlist.has(p.id);
         const agotado = (p.stock || 0) <= 0;
         // Reservada por otro cliente (reserva activa de 5 min que no es la mía)
@@ -397,7 +397,9 @@ function renderProducts(filter = 'all') {
                 <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
             </button>
             <div class="product-card__img ${p.imgClass}">
-                ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-card__photo" loading="lazy" onerror="this.remove()">` : `<span style="font-size:3.5rem;">${p.emoji}</span>`}
+                <span class="product-card__placeholder" aria-hidden="true" onclick="event.stopPropagation(); if(this.parentElement.classList.contains('foto-error')) reintentarFoto(this.parentElement);">${p.emoji}</span>
+                ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-card__photo" loading="${posicion < 6 ? 'eager' : 'lazy'}"${posicion < 2 ? ' fetchpriority="high"' : ''} decoding="async" onload="fotoCargada(this)" onerror="fotoFallo(this)">` : ''}
+                <button class="product-card__zoom" type="button" title="Ampliar foto" aria-label="Ampliar foto" onclick="event.stopPropagation(); abrirZoomProducto(${p.id}, 0)"><i class="fas fa-search-plus"></i></button>
                 ${p.badge ? `<span class="badge">${p.badge}</span>` : ''}
                 ${p.condition === 'segunda-mano' ? `<span class="badge badge--condition">♻️ Segunda mano</span>` : ''}
                 ${p.condition === 'como-nuevo' ? `<span class="badge badge--condition">✨ Como nuevo</span>` : ''}
@@ -448,6 +450,35 @@ document.querySelectorAll('.cat-card, .filter-link').forEach(el => {
         document.getElementById('tienda').scrollIntoView({ behavior: 'smooth' });
     });
 });
+
+// ===== FOTOS EN EL CELULAR (22-sep-2026) =====
+// Antes: mientras la foto cargaba quedaba un hueco blanco, y si fallaba se borraba sin avisar.
+// Ahora: se ve el icono del producto, avisa si falla y se puede reintentar tocando.
+function fotoCargada(img) {
+    img.classList.add('cargada');
+    const caja = img.parentElement;
+    if (caja) { caja.classList.add('con-foto'); caja.classList.remove('foto-error'); }
+}
+function fotoFallo(img) {
+    const caja = img.parentElement;
+    if (!caja) return;
+    img.classList.remove('cargada');
+    img.style.display = 'none';
+    caja.classList.add('foto-error');
+    // Un reintento automático (por si fue un parpadeo de la red)
+    if (!caja.dataset.reintento) {
+        caja.dataset.reintento = '1';
+        setTimeout(() => { reintentarFoto(caja); }, 1800);
+    }
+}
+function reintentarFoto(caja) {
+    const img = caja && caja.querySelector('.product-card__photo');
+    if (!img) return;
+    caja.classList.remove('foto-error');
+    delete caja.dataset.reintento;
+    img.style.display = '';
+    img.src = img.src.split('?')[0] + '?r=' + Date.now();
+}
 
 // ===== GALERÍA DE FOTOS =====
 function switchProductPhoto(id, idx, el) {
@@ -568,7 +599,18 @@ function switchDetailPhoto(idx, el) {
 let zoomIndex = 0, zoomScale = 1, zoomTx = 0, zoomTy = 0;
 let zoomDragging = false, zoomStartX = 0, zoomStartY = 0, touchDist = 0;
 
+let zoomListaManual = null;   // cuando el zoom se abre desde una tarjeta de la tienda
+function abrirZoomProducto(id, idx) {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+    if (!imgs.length) { showToast('📷 Este producto todavía no tiene foto'); return; }
+    zoomListaManual = imgs;
+    openZoom(idx);
+}
+
 function zoomImagesList() {
+    if (zoomListaManual && zoomListaManual.length) return zoomListaManual;
     if (!detailProduct) return [];
     return detailProduct.images && detailProduct.images.length
         ? detailProduct.images
@@ -597,6 +639,7 @@ function openZoom(idx) {
 }
 
 function closeZoom() {
+    zoomListaManual = null;
     $('zoom-overlay').classList.remove('open');
     if (!$('detail-modal').classList.contains('modal--open')) document.body.style.overflow = '';
 }
