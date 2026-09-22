@@ -94,6 +94,9 @@ Deno.serve(async (req) => {
   if (!usaWhatsapp && !correo) return json({ ok: false, error: 'Como no usás WhatsApp, necesitamos tu correo electrónico' }, 400);
   if (correo && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(correo)) return json({ ok: false, error: 'El correo no parece válido' }, 400);
 
+  // Token del carrito de la clienta: sirve para reconocer SU reserva de 5 minutos como propia
+  const tokenCarrito = String(b.token || '').trim();
+
   const tipoEntrega = String(ent.tipo || 'retiro-punto');
   if (!['retiro-punto', 'retiro-c807'].includes(tipoEntrega)) return json({ ok: false, error: 'Forma de entrega no válida' }, 400);
   const punto = String(ent.punto || (tipoEntrega === 'retiro-c807' ? 'Agencia C807' : 'Punto BARATUSS')).trim();
@@ -142,8 +145,9 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'Se agotó: ' + String(p.name || 'un producto'), motivo: 'sin_stock', producto: id }, 409);
     }
     const reservadoHasta = p.reservado_hasta ? new Date(String(p.reservado_hasta)).getTime() : 0;
-    if (reservadoHasta > Date.now() && String(p.reservado_token || '') !== '' ) {
-      // Hay una reserva activa de otro carrito: no lo dejamos pasar (se libera solo en minutos)
+    const reservaActiva = reservadoHasta > Date.now() && String(p.reservado_token || '') !== '';
+    // Se rechaza SOLO si la reserva es de otra persona (la propia se respeta ✅)
+    if (reservaActiva && String(p.reservado_token) !== tokenCarrito) {
       return json({ ok: false, error: 'Alguien está comprando: ' + String(p.name || 'un producto') + '. Probá en unos minutos 🙏', motivo: 'reservada_por_otro', producto: id }, 409);
     }
 
@@ -247,9 +251,11 @@ Deno.serve(async (req) => {
 
   // ------------------------------------------------- 8) APARTAR EL STOCK
   // Descuenta el stock de una sola vez (todo o nada). Si algo falla, se borra el pedido.
+  // Usamos el token del carrito (o la referencia si no vino): así vender_carrito reconoce
+  // la reserva de 5 minutos que la propia clienta hizo como suya.
   const { data: venta, error: errVenta } = await supabase.rpc('vender_carrito', {
     p_items: paraVender,
-    p_token: referencia,
+    p_token: tokenCarrito || referencia,
   });
   const v = venta as Record<string, unknown> | null;
   if (errVenta || !v || v.ok === false) {

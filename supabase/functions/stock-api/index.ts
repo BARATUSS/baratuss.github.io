@@ -77,7 +77,22 @@ serve(async (req) => {
   }
 
   // ===== LIBERAR reservas vencidas (para el proceso automatico) =====
+  // ===== LIBERAR =====
+  // Con items + token: suelta LA reserva de ese carrito (cuando el cliente quita un producto).
+  // Sin datos: mantiene el comportamiento anterior (limpia las reservas vencidas).
   if (ruta === 'liberar') {
+    const items = Array.isArray(body.items) ? body.items : [];
+    const token = String(body.token || '');
+    if (items.length && token) {
+      let liberadas = 0;
+      for (const it of items) {
+        const { data } = await supabase.rpc('liberar_mi_reserva', {
+          p_id: Number(it.id), p_token: token,
+        });
+        if (data && data.ok) liberadas += Number(data.liberadas || 0);
+      }
+      return json({ ok: true, liberadas: liberadas });
+    }
     const { data, error } = await supabase.rpc('liberar_reservas_vencidas');
     if (error) return json({ ok: false, detalle: error.message });
     return json({ ok: true, liberadas: data });

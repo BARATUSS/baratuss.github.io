@@ -6,6 +6,8 @@
 const SUPABASE_URL = 'https://lizybztwnlrlvsrmgnug.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_m85uJKNu8Izi5ujT8ukWWQ_XvEMOToA';
 const WOMPI_API_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/wompi-checkout';
+// NIVEL B (21-sep-2026): el pedido lo arma el servidor (nadie puede tocar los precios)
+const CREAR_PEDIDO_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/crear-pedido';
 let supabaseClient = null;
 
 function getSupabase() {
@@ -732,6 +734,37 @@ $('detail-buy-now').addEventListener('click', () => {
 });
 
 // ===== CART OPERATIONS =====
+// ═══ RESERVA REAL DE 5 MINUTOS (21-sep-2026) ═══
+// Antes la tienda MOSTRABA "reservada" pero nadie creaba la reserva. Ahora sí:
+// al agregar al carrito se aparta el producto por 5 minutos para esa clienta.
+async function reservarMiCarrito(items) {
+    if (!items || !items.length) return;
+    try {
+        await fetch(STOCK_API_URL + '/reservar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                items: items.map(i => ({ id: i.id, qty: i.qty || 1 })),
+                token: sessionToken(),
+                minutos: 5
+            })
+        });
+    } catch (_e) { /* si falla la red, no se bloquea la compra */ }
+}
+async function liberarMiReserva(items) {
+    if (!items || !items.length) return;
+    try {
+        await fetch(STOCK_API_URL + '/liberar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                items: items.map(i => ({ id: i.id, qty: i.qty || 1 })),
+                token: sessionToken()
+            })
+        });
+    } catch (_e) { /* silencioso */ }
+}
+
 function addToCart(id, size) {
     const product = products.find(p => p.id === id);
     if (!product) return;
@@ -743,9 +776,16 @@ function addToCart(id, size) {
     }
     saveCart();
     updateCartUI();
+    reservarMiCarrito([{ id: id, qty: (existing ? existing.qty : 1) }]);   // aparta 5 min
     showToast('🛒 Añadido al carrito' + (size ? ' (talla ' + size + ')' : ''));
 }
-function removeFromCart(key) { cart = cart.filter(item => item.key !== key); saveCart(); updateCartUI(); }
+function removeFromCart(key) {
+    const quitado = cart.find(item => item.key === key);
+    cart = cart.filter(item => item.key !== key);
+    saveCart();
+    updateCartUI();
+    if (quitado) liberarMiReserva([{ id: quitado.id, qty: quitado.qty || 1 }]);   // suelto la reserva
+}
 function updateQty(key, delta) {
     const item = cart.find(i => i.key === key);
     if (!item) return;
@@ -1527,6 +1567,8 @@ async function revisarClienteEnCheckout() {
 }
 
 function openCheckoutModal() {
+    // La reserva de 5 minutos se renueva cada vez que abre el checkout
+    reservarMiCarrito(cart);
     if (cart.length === 0) return;
     closeCart();
     // Autocompletar datos del usuario logueado
@@ -1745,88 +1787,98 @@ async function cashCheckout() {
     const items = [...cart];
     const baseTotal = getCartTotal();
     const descCupon = descuentoCupon(baseTotal);
-    const total = Math.max(0, baseTotal + fee - descCupon);
-    const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    // NIVEL B: el total y la referencia definitivos los devuelve el servidor
+    let total = Math.max(0, baseTotal + fee - descCupon);
+    let ref = '';
     
     showToast('🔄 Procesando pedido...');
     
+    // ═══════════════════════════════════════════════════════════════════════
+    // NIVEL B (21-sep-2026) · el pedido lo arma el SERVIDOR
+    // El navegador solo manda QUÉ quiere (ids + cantidades + talla). El servidor
+    // busca los precios reales, valida el cupón, calcula el envío y el total,
+    // aparta el stock y crea el pedido. Nadie puede tocar los números.
+    // ═══════════════════════════════════════════════════════════════════════
     try {
-        // Venta definitiva de stock (atomica, en el servidor): si ya se vendio -> rechazar
-        const venta = await venderCarrito(items);
-        if (!venta.ok) {
-            const msg = venta.motivo === 'reservada_por_otro'
-                ? '😮 Otra persona está comprando este producto ahora mismo. Intentá de nuevo en unos minutos.'
-                : '❌ Uno de los productos acaba de venderse. Quitalo del carrito para continuar.';
-            showToast(msg);
-            if (venta.producto) {
-                cart = cart.filter(i => String(i.id) !== String(venta.producto));
-                saveCart(); updateCartUI(); updateCheckoutUI();
-            }
-            return;
-        }
 
-        // Insertar pedido con fetch directo (evita problemas de la librería CDN)
-        const orderPayload = {
-            items: items,
-            total: total,
-            status: 'pendiente',
-            payment_status: 'efectivo',
-            payment_method: 'efectivo',
-            reference: ref,
-            cupon_codigo: cuponAplicado ? cuponAplicado.codigo : null,
-            cupon_descuento: descCupon > 0 ? descCupon : null,
-            delivery_type: 'retiro-punto',
-            delivery_fee: fee,
-            delivery_point: punto,
-            customer_name: name,
-            customer_phone: phone,
-            // PLAN 2 (19-sep-2026): datos de contacto normalizados + canal preferido
-            telefono_normalizado: phone,
-            contacto_preferido: datos.preferido,
-            // Documento tributario elegido por el cliente (opcional)
-            ...fac.datos,
-            // (va al final para que el correo alterno no lo pise el bloque de factura)
-            customer_email: fac.datos.customer_email || datos.correo || null
-        };
-        if (currentUser) orderPayload.user_id = currentUser.id;
-
-        // ✅ VERIFICACIÓN (2026-09-18): antes se mostraba "Pedido confirmado" AUNQUE el guardado
-        // fallara → quedaban ventas fantasma y el stock descontado sin pedido. Ahora se
-        // comprueba que el pedido EXISTE antes de mostrar el ticket.
+        // El pedido lo crea el SERVIDOR: la tienda solo dice QUÉ se lleva el cliente.
         // (?simular_fallo=1 en la URL fuerza el fallo para poder probar este camino)
         const simularFallo = new URLSearchParams(location.search).get('simular_fallo') === '1';
-        let orderOk = false;
         let orderErr = '';
         if (simularFallo) {
             orderErr = 'SIMULACIÓN de fallo (prueba pedida desde la URL)';
         } else {
             try {
-                const r = await fetch(SUPABASE_URL + '/rest/v1/orders', {
+                const facTipo = (fac.datos && fac.datos.factura_tipo) ? fac.datos.factura_tipo : 'ninguna';
+                const resp = await fetch(CREAR_PEDIDO_URL, {
                     method: 'POST',
                     headers: {
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
                         'Content-Type': 'application/json',
-                        'Prefer': 'return=representation'
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
                     },
-                    body: JSON.stringify(orderPayload)
+                    body: JSON.stringify({
+                        items: items.map(i => ({ id: i.id, qty: i.qty || 1, talla: i.size || null })),
+                        cliente: {
+                            nombre: name,
+                            telefono: phone,
+                            correo: fac.datos.customer_email || datos.correo || null,
+                            usa_whatsapp: datos.preferido === 'whatsapp'
+                        },
+                        entrega: { tipo: 'retiro-punto', punto: punto },
+                        cupon: (cuponAplicado && cuponAplicado.codigo) || null,
+                        factura: {
+                            tipo: facTipo,
+                            nombre: fac.datos.factura_nombre,
+                            nit: fac.datos.factura_nit,
+                            nrc: fac.datos.factura_nrc,
+                            giro: fac.datos.factura_giro,
+                            direccion: fac.datos.factura_direccion,
+                            por_correo: !!fac.datos.factura_por_correo
+                        },
+                        metodo: 'efectivo',
+                        token: sessionToken(),
+                        user_id: currentUser ? currentUser.id : null
+                    })
                 });
-                if (r.ok) {
-                    const creados = await r.json().catch(() => null);
-                    orderOk = Array.isArray(creados) && creados.length > 0;
-                    if (!orderOk) orderErr = 'la respuesta no devolvió el pedido guardado';
+                const creado = await resp.json().catch(() => ({}));
+                if (resp.ok && creado && creado.ok) {
+                    ref = creado.reference;                 // ← la referencia la da el servidor
+                    total = Number(creado.total || 0);      // ← y el total también
                 } else {
-                    orderErr = 'HTTP ' + r.status + ': ' + (await r.text().catch(() => '')).slice(0, 140);
+                    const motivo = (creado && creado.motivo) || '';
+                    const msg = motivo === 'sin_stock'
+                            ? '😮 ' + (creado.error || 'Se agotó un producto') + ' — quitalo del carrito para seguir'
+                        : motivo === 'reservada_por_otro'
+                            ? '😮 Otra persona está comprando este producto ahora mismo. Intentá en unos minutos.'
+                        : motivo === 'ya_usado' ? '🎟️ ' + (creado.error || 'Ese cupón ya fue usado')
+                        : '❌ ' + ((creado && creado.error) || 'No se pudo registrar el pedido');
+                    showToast(msg);
+                    // Si el problema es un producto, lo saco del carrito para que pueda seguir
+                    if ((motivo === 'sin_stock' || motivo === 'reservada_por_otro') && creado.producto) {
+                        cart = cart.filter(i => String(i.id) !== String(creado.producto));
+                        saveCart(); updateCartUI(); updateCheckoutUI();
+                    }
+                    // Si el cupón ya no sirve, lo saco del checkout
+                    if (cuponAplicado && ['ya_usado', 'no_existe', 'vencido', 'inactivo', 'no_corresponde'].includes(motivo)) {
+                        cuponAplicado = null; updateCheckoutUI();
+                    }
+                    return;
                 }
             } catch (insertErr) {
                 orderErr = (insertErr && insertErr.message) ? insertErr.message : String(insertErr);
             }
         }
 
+        // ✅ VERIFICACIÓN (2026-09-18 · actualizado con Nivel B): el pedido YA quedó creado
+        // por el servidor (con el stock apartado en la misma operación). Acá solo revisamos
+        // que no haya habido error para no mostrar un ticket falso.
+        const orderOk = !orderErr && !!ref;
+
         if (!orderOk) {
             console.log('⚠️ El pedido NO se guardó:', orderErr);
-            // 1) devolver el stock (se había descontado ANTES de crear el pedido)
-            await devolverCarrito(items);
+            // 1) NO se devuelve stock desde acá: con Nivel B el servidor crea el pedido y
+            //    aparta el stock en la misma operación, así que si falló no se tocó nada.
             // 2) respaldo local: si el cliente recarga, no se pierden sus datos
             try {
                 localStorage.setItem('baratuss_pedido_fallido', JSON.stringify({
@@ -1849,21 +1901,8 @@ async function cashCheckout() {
             return;
         }
         
-        // 🎟️ CUPÓN: el servidor recalcula el descuento real desde el pedido guardado y lo
-        // marca como usado (una sola vez). Así nadie puede usar el mismo cupón dos veces.
-        if (cuponAplicado) {
-            try {
-                await fetch(SUPABASE_URL + '/functions/v1/cupones', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
-                    },
-                    body: JSON.stringify({ accion: 'usar', codigo: cuponAplicado.codigo, reference: ref })
-                });
-            } catch (_e) { /* silencioso: el cupón se puede revisar después */ }
-        }
+        // 🎟️ CUPÓN: ya lo validó y lo marcó como usado el SERVIDOR (dentro de crear-pedido),
+        // en la misma operación que el pedido. Acá no hay nada que hacer.
 
         // Alta de despachos (las tarjetas de preparación) + ✅ VERIFICACIÓN (2026-09-18).
         // Antes no se revisaba nada: si fallaban, el pedido existía pero NO aparecía en el
@@ -1906,7 +1945,7 @@ async function cashCheckout() {
             });
         }
         
-        // El stock ya se descontó de forma atómica antes de crear el pedido (venderCarrito)
+        // El stock ya quedó apartado por el servidor en la MISMA operación del pedido (Nivel B)
         
         // Si no está logueado y no hay supabase, igual confirmamos
         cuponAplicado = null;   // el cupón ya quedó usado: se limpia del checkout
