@@ -257,6 +257,9 @@ ul { list-style: none; }
     display: flex; align-items: center; justify-content: center;
     margin: 0 auto 20px;
 }
+/* Foto dentro del círculo de la categoría (23-sep-2026) */
+.cat-card__img--foto { overflow: hidden; padding: 0; }
+.cat-card__foto { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cat-card__emoji { font-size: 2.5rem; }
 .cat-card__title {
     font-family: var(--ff-display);
