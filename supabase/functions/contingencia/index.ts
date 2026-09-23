@@ -223,6 +223,17 @@ Deno.serve(async (req) => {
   console.log('contingencia:', accion);
 
   try {
+    // =====================================================================
+    // 🔒 SEGURIDAD (22-sep-2026) — TODAS las acciones de esta función
+    // modifican pedidos, cupones o dinero: exigen ser ADMINISTRADOR logueado
+    // (el panel) o venir del sistema interno con la clave de servicio.
+    // Antes estaban abiertas: cualquiera con la clave pública podía llamarlas.
+    // =====================================================================
+    if (!(await esAdmin(req))) {
+      console.log('contingencia RECHAZADA (sin autorización):', accion);
+      return json({ ok: false, error: 'no_autorizado' }, 401);
+    }
+
     // ---------------------------------------------------------------
     // REPORTAR contingencia
     // ---------------------------------------------------------------
@@ -608,8 +619,6 @@ Deno.serve(async (req) => {
     // se acepta igual ✅
     // =====================================================================
     if (accion === 'cambiar_punto') {
-      if (!(await esAdmin(req))) return json({ ok: false, error: 'no_autorizado' }, 401);
-
       const ref = String(b.reference || '').trim();
       const nuevoPunto = String(b.nuevo_punto || '').trim();
       const nuevoDestino = String(b.nuevo_destino || '').trim();   // ej: "Jue — Plaza Merliot (17:00-19:00)"
