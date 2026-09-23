@@ -260,6 +260,13 @@ ul { list-style: none; }
 /* Foto dentro del círculo de la categoría (23-sep-2026) */
 .cat-card__img--foto { overflow: hidden; padding: 0; }
 .cat-card__foto { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Sub-filtros dentro de una categoría (ej: Belleza → Maquillaje / Skincare) · 23-sep-2026 */
+.filters--sub { margin-top: -8px; padding-top: 2px; }
+.filter-btn--sub {
+    font-size: .78rem; padding: 6px 14px;
+    background: #fff; border: 1.5px dashed var(--gray-200);
+}
+.filter-btn--sub.active { border-style: solid; border-color: var(--accent); }
 .cat-card__emoji { font-size: 2.5rem; }
 .cat-card__title {
     font-family: var(--ff-display);

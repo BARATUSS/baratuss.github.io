@@ -381,8 +381,40 @@ function getWishlistProducts() {
 }
 
 // ===== RENDER PRODUCTS =====
-function renderProducts(filter = 'all') {
-    const filtered = (filter === 'all' ? products : products.filter(p => p.category === filter));
+// ============================================================
+// 🗂️ GRUPOS DE CATEGORÍAS (23-sep-2026)
+// Un botón puede mostrar VARIAS categorías juntas:
+// "Belleza" muestra Maquillaje + Skincare + Belleza ✅
+// ============================================================
+const GRUPOS_CATEGORIA = {
+    belleza: ['belleza', 'maquillaje', 'skincare'],
+};
+function productosDelFiltro(filter) {
+    if (filter === 'all') return products;
+    const grupo = GRUPOS_CATEGORIA[filter];
+    if (grupo) {
+        return products.filter(p => grupo.includes(String(p.category || '').toLowerCase()));
+    }
+    return products.filter(p => p.category === filter);
+}
+// Muestra u oculta los sub-filtros (dentro de Belleza) y marca el botón correcto
+function actualizarSubfiltros(filter) {
+    const sub = document.getElementById('subfiltros-belleza');
+    if (!sub) return;
+    const esBelleza = ['belleza', 'maquillaje', 'skincare'].includes(filter);
+    sub.style.display = esBelleza ? '' : 'none';
+    sub.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === filter);
+    });
+    if (esBelleza) {
+        // el chip principal de "Belleza" queda marcado
+        document.querySelectorAll('.filter-btn:not(.filter-btn--sub)').forEach(b => b.classList.remove('active'));
+        document.querySelector('.filter-btn[data-filter="belleza"]')?.classList.add('active');
+    }
+}
+
+function renderProducts(filter) {
+    const filtered = productosDelFiltro(filter);
     // Mostrar TODOS: los agotados aparecen con etiqueta roja y compra bloqueada
     
     productsGrid.innerHTML = filtered.map((p, posicion) => {
@@ -446,6 +478,7 @@ document.querySelectorAll('.cat-card, .filter-link').forEach(el => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         document.querySelector(`.filter-btn[data-filter="${filter}"]`)?.classList.add('active');
         currentFilter = filter;
+        actualizarSubfiltros(filter);
         renderProducts(filter);
         document.getElementById('tienda').scrollIntoView({ behavior: 'smooth' });
     });
@@ -1013,10 +1046,18 @@ cartOverlay.addEventListener('click', closeCart);
 // ===== FILTERS =====
 document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', function() {
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-        currentFilter = this.dataset.filter;
-        renderProducts(currentFilter);
+        const f = this.dataset.filter;
+        if (this.classList.contains('filter-btn--sub')) {
+            // Sub-filtro (dentro de Belleza): se mantiene encendido el chip "Belleza" de arriba
+            document.querySelectorAll('.filter-btn--sub').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+        } else {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            actualizarSubfiltros(f);
+        }
+        currentFilter = f;
+        renderProducts(f);
     });
 });
 

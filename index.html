@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260923categorias">
+    <link rel="stylesheet" href="styles.css?v=20260923belleza">
 </head>
 <body>
 
@@ -113,12 +113,12 @@
                 <h3 class="cat-card__title">Accesorios</h3>
                 <span class="cat-card__link">Ver todo →</span>
             </a>
-            <a href="#tienda" class="cat-card" data-filter="skincare">
+            <a href="#tienda" class="cat-card" data-filter="belleza">
                 <div class="cat-card__img cat-card__img--foto">
-                    <img class="cat-card__foto" loading="lazy" alt="Skincare"
+                    <img class="cat-card__foto" loading="lazy" alt="Belleza"
                          src="https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/categoria-skincare.jpg">
                 </div>
-                <h3 class="cat-card__title">Skincare</h3>
+                <h3 class="cat-card__title">Belleza</h3>
                 <span class="cat-card__link">Ver todo →</span>
             </a>
         </div>
@@ -136,7 +136,13 @@
             <button class="filter-btn active" data-filter="all">Todos</button>
             <button class="filter-btn" data-filter="ropa">Ropa</button>
             <button class="filter-btn" data-filter="accesorios">Accesorios</button>
-            <button class="filter-btn" data-filter="skincare">Skincare</button>
+            <button class="filter-btn" data-filter="belleza">Belleza</button>
+        </div>
+        <!-- 🔎 Filtros DENTRO de Belleza (23-sep-2026): solo se ven al elegir Belleza -->
+        <div class="filters filters--sub" id="subfiltros-belleza" style="display:none;">
+            <button class="filter-btn filter-btn--sub active" data-filter="belleza">Todo</button>
+            <button class="filter-btn filter-btn--sub" data-filter="maquillaje">💄 Maquillaje</button>
+            <button class="filter-btn filter-btn--sub" data-filter="skincare">🧴 Skincare</button>
         </div>
         <div class="products" id="products-grid"></div>
     </div>
@@ -235,7 +241,7 @@
                 <h4>Tienda</h4>
                 <a href="#tienda" class="filter-link" data-filter="ropa">Ropa</a>
                 <a href="#tienda" class="filter-link" data-filter="accesorios">Accesorios</a>
-                <a href="#tienda" class="filter-link" data-filter="skincare">Skincare</a>
+                <a href="#tienda" class="filter-link" data-filter="belleza">Belleza</a>
             </div>
             <div class="footer__links">
                 <h4>Mi cuenta</h4>
@@ -762,6 +768,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260923portada5"></script>
+<script src="scripts.js?v=20260923belleza"></script>
 </body>
 </html>
