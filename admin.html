@@ -41,6 +41,7 @@
             <a href="#" class="admin-nav__item" data-section="preparar"><i class="fas fa-clipboard-list"></i> Preparar</a>
             <a href="#" class="admin-nav__item" data-section="whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp <span class="nav-badge" id="nav-wa-badge" style="display:none;"></span></a>
             <a href="#" class="admin-nav__item" data-section="contingencias"><i class="fas fa-triangle-exclamation"></i> Contingencias <span class="nav-badge" id="nav-cont-badge" style="display:none;"></span></a>
+            <a href="#" class="admin-nav__item" data-section="agenda"><i class="fas fa-address-book"></i> Agenda</a>
             <a href="#" class="admin-nav__item" data-section="resumen"><i class="fas fa-chart-pie"></i> Resumen</a>
         </nav>
         <div class="admin-sidebar__footer">
@@ -234,6 +235,59 @@
         </section>
 
         <!-- ===== RESUMEN ===== -->
+        <!-- 📇 AGENDA DE CLIENTAS (23-sep-2026 · Etapa 1)
+             Muestra quién compró, cuánto, de qué punto y cómo paga.
+             Los datos ya existían (orders + ventas) — no se creó nada nuevo en la base. -->
+        <section class="admin-section" id="section-agenda" style="display:none;">
+            <div class="admin-section__header">
+                <h1>📇 Agenda de clientas</h1>
+            </div>
+
+            <div class="admin-stats">
+                <div class="admin-stat">
+                    <i class="fas fa-users"></i>
+                    <div><strong id="ag-clientas">0</strong><span>Clientas</span></div>
+                </div>
+                <div class="admin-stat">
+                    <i class="fas fa-dollar-sign"></i>
+                    <div><strong id="ag-vendido">$0.00</strong><span>Vendido</span></div>
+                </div>
+                <div class="admin-stat">
+                    <i class="fas fa-shopping-bag"></i>
+                    <div><strong id="ag-compras">0</strong><span>Compras</span></div>
+                </div>
+                <div class="admin-stat">
+                    <i class="fas fa-receipt"></i>
+                    <div><strong id="ag-ticket">$0.00</strong><span>Ticket promedio</span></div>
+                </div>
+            </div>
+
+            <div class="admin-form__field" style="max-width:430px;">
+                <label>Buscar clienta (nombre o teléfono)</label>
+                <input type="text" id="ag-buscar" placeholder="Ej: María  ó  7777" oninput="renderAgenda()">
+            </div>
+
+            <p style="color:#8a8a8a;font-size:.85rem;margin:6px 0 14px;">
+                👆 Tocá una clienta para ver <strong>todo su historial</strong> y escribirle por WhatsApp.
+            </p>
+
+            <div class="admin-table-wrap">
+                <table class="admin-table" id="agenda-table">
+                    <thead>
+                        <tr>
+                            <th>Clienta</th><th>Teléfono</th><th>Compras</th>
+                            <th>Total</th><th>Última</th><th>Punto</th><th>Paga con</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="agenda-tbody">
+                        <tr><td colspan="8" style="text-align:center;color:#999;padding:22px;">Cargando…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="agenda-detalle" style="display:none;margin-top:24px;"></div>
+        </section>
+
         <section class="admin-section" id="section-resumen" style="display:none;">
             <div class="admin-section__header">
                 <h1>Resumen</h1>

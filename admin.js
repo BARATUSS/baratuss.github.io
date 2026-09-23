@@ -163,8 +163,153 @@ document.querySelectorAll('.admin-nav__item').forEach(item => {
         if (item.dataset.section === 'whatsapp') loadWhatsApp();
         if (item.dataset.section === 'contingencias') loadContingencias();
         if (item.dataset.section === 'resumen') loadStats();
+        if (item.dataset.section === 'agenda') cargarAgenda();
     });
 });
+
+// ══════════════════════════════════════════════════════════════════
+// 📇 AGENDA DE CLIENTAS (23-sep-2026 · Etapa 1)
+// Arma una ficha por clienta juntando lo que YA estaba guardado:
+//   · tabla "ventas"  → las compras reales (total, utilidad, punto, pago)
+//   · tabla "orders"  → el detalle de cada pedido (qué se llevó)
+// NO se creó nada nuevo en la base de datos ✅
+// ══════════════════════════════════════════════════════════════════
+let agendaClientas = [];
+let agendaPedidos = {};
+
+function agMoney(n) { return '$' + (Number(n) || 0).toFixed(2); }
+function agEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function agTel8(t) {
+    const d = String(t || '').replace(/\D/g, '');
+    return d.length > 8 ? d.slice(-8) : d;
+}
+function agFecha(iso) {
+    if (!iso) return '—';
+    const M = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const f = new Date(iso);
+    if (isNaN(f)) return '—';
+    return f.getDate() + '-' + M[f.getMonth()] + '-' + f.getFullYear();
+}
+
+async function cargarAgenda() {
+    const tbody = $('agenda-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:22px;">Cargando…</td></tr>';
+    try {
+        const res = await Promise.all([
+            api('GET', 'ventas?select=order_reference,cliente,telefono,punto_entrega,metodo_pago,total_bruto,utilidad_neta,fecha_compra&order=fecha_compra.desc&limit=3000'),
+            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items&order=created_at.desc&limit=3000')
+        ]);
+        const ventas = Array.isArray(res[0]) ? res[0] : [];
+        const pedidos = Array.isArray(res[1]) ? res[1] : [];
+
+        agendaPedidos = {};
+        pedidos.forEach(p => { agendaPedidos[p.reference] = p; });
+
+        const mapa = {};
+        ventas.forEach(v => {
+            const t8 = agTel8(v.telefono);
+            if (!t8) return;
+            if (!mapa[t8]) {
+                mapa[t8] = { tel8: t8, nombre: v.cliente || 'Clienta', compras: 0, total: 0,
+                             puntos: {}, metodos: {}, ultima: null, refs: [] };
+            }
+            const c = mapa[t8];
+            c.compras += 1;
+            c.total += Number(v.total_bruto) || 0;
+            if (v.punto_entrega) c.puntos[v.punto_entrega] = (c.puntos[v.punto_entrega] || 0) + 1;
+            if (v.metodo_pago) c.metodos[v.metodo_pago] = (c.metodos[v.metodo_pago] || 0) + 1;
+            if (v.fecha_compra && (!c.ultima || new Date(v.fecha_compra) > new Date(c.ultima))) c.ultima = v.fecha_compra;
+            if (v.order_reference) c.refs.push(v.order_reference);
+        });
+
+        const masComun = (o) => {
+            let mejor = '', max = 0;
+            Object.keys(o || {}).forEach(k => { if (o[k] > max) { max = o[k]; mejor = k; } });
+            return mejor;
+        };
+        agendaClientas = Object.keys(mapa).map(k => {
+            const c = mapa[k];
+            return { tel8: c.tel8, nombre: c.nombre, compras: c.compras, total: c.total,
+                     punto: masComun(c.puntos), metodo: masComun(c.metodos),
+                     ultima: c.ultima, refs: c.refs };
+        }).sort((a, b) => b.total - a.total);
+
+        renderAgenda();
+    } catch (e) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#c0392b;padding:22px;">❌ ' + agEsc(e.message) + '</td></tr>';
+    }
+}
+
+function renderAgenda() {
+    const q = String(($('ag-buscar') || {}).value || '').toLowerCase().trim();
+    const qNum = q.replace(/\D/g, '');
+    const lista = !q ? agendaClientas : agendaClientas.filter(c =>
+        String(c.nombre).toLowerCase().indexOf(q) >= 0 || (qNum && String(c.tel8).indexOf(qNum) >= 0));
+    const tbody = $('agenda-tbody');
+    if (!tbody) return;
+
+    const compras = agendaClientas.reduce((s, c) => s + c.compras, 0);
+    const vendido = agendaClientas.reduce((s, c) => s + c.total, 0);
+    if ($('ag-clientas')) $('ag-clientas').textContent = agendaClientas.length;
+    if ($('ag-compras')) $('ag-compras').textContent = compras;
+    if ($('ag-vendido')) $('ag-vendido').textContent = agMoney(vendido);
+    if ($('ag-ticket')) $('ag-ticket').textContent = agMoney(compras ? vendido / compras : 0);
+
+    if (!lista.length) {
+        tbody.innerHTML = agendaClientas.length
+            ? '<tr><td colspan="8" style="text-align:center;color:#999;padding:22px;">🔍 No encontré ninguna clienta con eso</td></tr>'
+            : '<tr><td colspan="8" style="text-align:center;color:#999;padding:22px;">Todavía no hay ventas registradas ✅<br><span style="font-size:.85rem;">Acá van a aparecer solas cuando se registren ventas ✅</span></td></tr>';
+        return;
+    }
+    tbody.innerHTML = lista.map(c => {
+        const wa = c.tel8 ? '503' + c.tel8 : '';
+        return '<tr>'
+            + '<td><strong>' + agEsc(c.nombre) + '</strong>' + (c.compras >= 3 ? ' ⭐' : '') + '</td>'
+            + '<td>' + agEsc(c.tel8 || '—') + '</td>'
+            + '<td>' + c.compras + '</td>'
+            + '<td><strong>' + agMoney(c.total) + '</strong></td>'
+            + '<td>' + agFecha(c.ultima) + '</td>'
+            + '<td>' + agEsc(c.punto || '—') + '</td>'
+            + '<td>' + agEsc(c.metodo || '—') + '</td>'
+            + '<td style="white-space:nowrap;">'
+            + '<button class="admin-btn admin-btn--ghost" style="padding:5px 9px;font-size:.72rem;width:auto;" onclick="verClienta(\'' + agEsc(c.tel8) + '\')">Ver historial</button>'
+            + (wa ? ' <a class="admin-btn admin-btn--ghost" style="padding:5px 9px;font-size:.72rem;width:auto;text-decoration:none;" target="_blank" href="https://wa.me/' + wa + '?text=' + encodeURIComponent('¡Hola ' + c.nombre + '! 😊 Te escribo de BARATUSS 💛') + '">💬</a>' : '')
+            + '</td></tr>';
+    }).join('');
+}
+
+function verClienta(tel8) {
+    const c = agendaClientas.find(x => x.tel8 === tel8);
+    const caja = $('agenda-detalle');
+    if (!c || !caja) return;
+    const filas = (c.refs || []).map(r => {
+        const p = agendaPedidos[r] || {};
+        let items = '—';
+        if (Array.isArray(p.items)) {
+            items = p.items.map(i => (i.qty || i.cantidad || 1) + '× ' + (i.name || i.nombre || i.product || '')).join(' · ');
+        } else if (p.items) { items = String(p.items); }
+        return '<tr><td>' + agFecha(p.created_at) + '</td><td>' + agEsc(items) + '</td>'
+            + '<td>' + agEsc(p.delivery_point || c.punto || '—') + '</td>'
+            + '<td>' + agMoney(p.total) + '</td>'
+            + '<td>' + agEsc(p.status || '') + (p.payment_status ? ' · ' + agEsc(p.payment_status) : '') + '</td></tr>';
+    }).join('');
+    caja.style.display = '';
+    caja.innerHTML = '<div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.07);">'
+        + '<h2 style="margin:0 0 6px;font-size:1.15rem;">📇 ' + agEsc(c.nombre) + '</h2>'
+        + '<p style="color:#666;margin:0 0 14px;">Teléfono <strong>' + agEsc(c.tel8) + '</strong> · '
+        + c.compras + ' compra' + (c.compras === 1 ? '' : 's') + ' · Total <strong>' + agMoney(c.total) + '</strong>'
+        + (c.punto ? ' · Suele retirar en <strong>' + agEsc(c.punto) + '</strong>' : '') + '</p>'
+        + '<div class="admin-table-wrap"><table class="admin-table"><thead><tr>'
+        + '<th>Fecha</th><th>Qué se llevó</th><th>Punto</th><th>Total</th><th>Estado</th></tr></thead><tbody>'
+        + (filas || '<tr><td colspan="5" style="color:#999;padding:14px;">Sin detalle del pedido</td></tr>')
+        + '</tbody></table></div>'
+        + '<button class="admin-btn admin-btn--ghost" style="margin-top:14px;width:auto;" onclick="document.getElementById(\'agenda-detalle\').style.display=\'none\'">Cerrar</button>'
+        + '</div>';
+    caja.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 
 // ===== INVENTORY =====
 async function loadInventory() {
