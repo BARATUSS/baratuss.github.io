@@ -53,6 +53,103 @@ function finalPrice(price) {
     return Math.ceil(raw * 20) / 20;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// 🔑 ENTRAR CON UN CÓDIGO AL CORREO (23-sep-2026) — sin contraseñas ✅
+// Cindy lo pidió para poder entrar con sus dos correos (el personal
+// y el oficial del negocio). Sirve para cualquier cuenta ADMIN ✅
+// ══════════════════════════════════════════════════════════════════
+async function entrarConSesion(token, user) {
+    const profResp = await fetch(SUPABASE_URL + '/rest/v1/profiles?select=is_admin,name,email&id=eq.' + user.id, {
+        headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + token }
+    });
+    const profiles = await profResp.json();
+    const profile = profiles && profiles[0];
+    if (!profile || !profile.is_admin) {
+        $('admin-login-error').textContent = '❌ Esta cuenta no tiene permisos de administradora';
+        return false;
+    }
+    session = { token, user, profile };
+    localStorage.setItem('baratuss_admin_session', JSON.stringify(session));
+    enterDashboard();
+    return true;
+}
+
+async function pedirCodigo() {
+    const email = ($('admin-email').value || '').trim();
+    if (!email) { $('admin-login-error').textContent = '✍️ Escribí tu correo arriba primero'; return; }
+    $('admin-login-error').textContent = '';
+    $('admin-otp-box').style.display = '';
+    $('admin-otp-aviso').textContent = '⏳ Mandando el código a ' + email + '...';
+    try {
+        const r = await fetch(SUPABASE_URL + '/auth/v1/otp', {
+            method: 'POST',
+            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: email, create_user: false,
+                options: { email_redirect_to: 'https://baratuss.github.io/admin.html' }
+            })
+        });
+        if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            $('admin-otp-aviso').textContent = '❌ ' + (d.msg || d.error_description || 'No se pudo mandar el código');
+            return;
+        }
+        $('admin-otp-aviso').textContent = '📬 ¡Listo! Revisá ' + email + ' y escribí el código en el cuadrito de arriba ✅';
+        try { $('admin-otp-code').focus(); } catch (e) { }
+    } catch (e) {
+        $('admin-otp-aviso').textContent = '❌ ' + e.message;
+    }
+}
+
+async function verificarCodigo() {
+    const email = ($('admin-email').value || '').trim();
+    const code = ($('admin-otp-code').value || '').trim();
+    if (!code) { $('admin-otp-aviso').textContent = '✍️ Escribí el código que te llegó al correo'; return; }
+    $('admin-otp-aviso').textContent = '⏳ Entrando...';
+    try {
+        const r = await fetch(SUPABASE_URL + '/auth/v1/verify', {
+            method: 'POST',
+            headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'email', email: email, token: code })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.access_token) {
+            $('admin-otp-aviso').textContent = '❌ ' + (d.msg || d.error_description || 'Código incorrecto o vencido');
+            return;
+        }
+        const ok = await entrarConSesion(d.access_token, d.user);
+        if (ok) $('admin-otp-aviso').textContent = '';
+    } catch (e) {
+        $('admin-otp-aviso').textContent = '❌ ' + e.message;
+    }
+}
+
+// Si el enlace del correo vuelve con los datos en la dirección, entra solo ✅
+(async function entrarPorEnlace() {
+    try {
+        const h = window.location.hash || '';
+        if (h.indexOf('access_token=') < 0) return;
+        const p = new URLSearchParams(h.substring(1));
+        const token = p.get('access_token');
+        if (!token) return;
+        const ur = await fetch(SUPABASE_URL + '/auth/v1/user', {
+            headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + token }
+        });
+        if (!ur.ok) return;
+        const user = await ur.json();
+        await entrarConSesion(token, user);
+        history.replaceState(null, '', window.location.pathname);
+    } catch (e) { }
+})();
+
+// Botones del ingreso con código ✅
+try {
+    const _b1 = $('admin-otp-btn'); if (_b1) _b1.addEventListener('click', pedirCodigo);
+    const _b2 = $('admin-otp-verify'); if (_b2) _b2.addEventListener('click', verificarCodigo);
+    const _c1 = $('admin-otp-code');
+    if (_c1) _c1.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); verificarCodigo(); } });
+} catch (e) { }
+
 // ===== LOGIN FORM =====
 $('admin-login-form').addEventListener('submit', async (e) => {
     e.preventDefault();

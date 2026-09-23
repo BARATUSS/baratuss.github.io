@@ -22,6 +22,22 @@
             <input type="password" id="admin-password" placeholder="Contraseña" required>
             <button type="submit" class="admin-btn admin-btn--primary">Ingresar</button>
             <p class="admin-login__error" id="admin-login-error"></p>
+
+            <!-- 🔑 ENTRAR CON CÓDIGO AL CORREO (23-sep-2026) — sin contraseñas ✅
+                 Sirve para cualquier correo administrador (ej: baratusses@gmail.com) -->
+            <button type="button" id="admin-otp-btn"
+                    style="width:100%;margin-top:6px;padding:12px;border-radius:100px;border:1.5px solid #ff9686;background:#fff;color:#d4574a;font-weight:600;cursor:pointer;">
+                🔑 Entrar con un código a mi correo
+            </button>
+            <div id="admin-otp-box" style="display:none;margin-top:12px;">
+                <input type="text" id="admin-otp-code" placeholder="Escribí el código que te llegó"
+                       maxlength="10" style="width:100%;padding:12px 16px;border-radius:100px;border:1px solid #e5e5e5;margin-bottom:8px;text-align:center;font-size:1rem;letter-spacing:2px;">
+                <button type="button" id="admin-otp-verify"
+                        style="width:100%;padding:12px;border-radius:100px;border:0;background:#ff9686;color:#fff;font-weight:700;cursor:pointer;">
+                    Entrar
+                </button>
+            </div>
+            <p id="admin-otp-aviso" style="margin:8px 0 0;font-size:.8rem;color:#7a5a55;line-height:1.45;"></p>
             <a href="index.html" class="admin-login__back">← Volver a la tienda</a>
         </form>
     </div>
@@ -595,6 +611,6 @@
 <div class="admin-toast" id="admin-toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="admin.js?v=20260923agenda2Punto"></script>
+<script src="admin.js?v=20260923entrarcodigoPunto"></script>
 </body>
 </html>
