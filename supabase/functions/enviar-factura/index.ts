@@ -366,10 +366,13 @@ async function enviarCorreo(accessToken: string, destinatario: string, asunto: s
 }
 
 async function pendientes() {
-  const q = 'orders?select=reference,customer_name,customer_phone,customer_email,factura_tipo,factura_nombre,factura_nit,factura_nrc,factura_giro,factura_direccion,total,items,delivery_point,created_at'
+  // ⚠️ REGLA DE CINDY (23-sep-2026): la factura SOLO se manda si el pedido ya está ENTREGADO.
+  const q = 'orders?select=reference,customer_name,customer_phone,customer_email,factura_tipo,factura_nombre,factura_nit,factura_nrc,factura_giro,factura_direccion,total,items,delivery_point,created_at,status'
     // ⚠️ PLAN 2 (19-sep-2026): la factura sale SOLO cuando la compra está PAGADA.
     // Tarjeta → al aprobarse el pago · Efectivo → cuando se marca ENTREGADO.
     + '&factura_por_correo=eq.true&factura_enviada_en=is.null&factura_tipo=neq.ninguna&customer_email=not.is.null'
+    // ⚠️ REGLA DE CINDY (23-sep-2026): solo pedidos ENTREGADOS (el cliente ya recibió su compra ✅)
+    + '&status=eq.entregado'
     + '&payment_status=in.(pagado,aprobado)&order=created_at.asc&limit=20';
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, {
     headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
