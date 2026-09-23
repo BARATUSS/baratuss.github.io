@@ -385,7 +385,12 @@ serve(async (req) => {
                       } catch (eNS) { console.log('error noshow opcion', String(eNS)); }
                       await responderWhatsApp(t8, opNS === '3'
                         ? '¡Listo! 🙌 Cindy te escribe en un ratito 💛'
-                        : '¡Recibido! 🙌 Ya lo estoy coordinando — te confirmo en un ratito 💛');
+                        : (opNS === '1'
+                          // CASO 1 (22-sep-2026): al reprogramar se le confirma con prioridad ⭐
+                          ? '¡Listo! ✅ Te lo guardamos con *prioridad* ⭐ para la próxima entrega.\n\n'
+                            + 'Te aviso por acá el *día y el punto* exactos 💛\n'
+                            + '_(Si querés cambiarlo de punto, decime y lo vemos 🙂)_'
+                          : '¡Recibido! 🙌 Ya lo estoy coordinando — te confirmo en un ratito 💛'));
                       await avisarTelegram('🚫 Cliente eligió la opción *' + opNS + '* en el caso NO-SHOW #' + caso.id);
                       continue;
                     }
