@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260922fotos">
+    <link rel="stylesheet" href="styles.css?v=20260923carrusel">
 </head>
 <body>
 
@@ -72,6 +72,9 @@
 
 <!-- ========== HERO ========== -->
 <section class="hero" id="hero">
+    <!-- 🎠 Carrusel de imágenes detrás del logo (23-sep-2026)
+         Las fotos se configuran en scripts.js → HERO_IMAGENES -->
+    <div class="hero__carrusel" id="hero-carrusel" aria-hidden="true"></div>
     <div class="container">
         <div class="hero__content">
             <span class="hero__tag">Nueva colección</span>
@@ -756,6 +759,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260922fotos"></script>
+<script src="scripts.js?v=20260923carrusel"></script>
 </body>
 </html>

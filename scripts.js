@@ -480,6 +480,47 @@ function reintentarFoto(caja) {
     img.src = img.src.split('?')[0] + '?r=' + Date.now();
 }
 
+// ════════════════════════════════════════════════════════════════════
+// 🎠 CARRUSEL DE IMÁGENES DE LA PORTADA (23-sep-2026)
+// Fotos que van pasando solas, detrás del logo grande y del texto.
+// 👉 PARA CAMBIARLAS: reemplazá esta lista por las fotos que mande Cindy
+//    (pueden ser las direcciones de la tienda o archivos en assets/)
+// ════════════════════════════════════════════════════════════════════
+const HERO_IMAGENES = [
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/prod-1788403286968-wntxq6.jpg',
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/prod-1788403186440-x9tlgm.jpg',
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/prod-1788403099842-xm9lvn.jpg',
+];
+const HERO_SEGUNDOS = 7;   // cada cuántos segundos cambia la foto
+
+function iniciarCarruselHero() {
+    const caja = document.getElementById('hero-carrusel');
+    if (!caja || !HERO_IMAGENES.length) return;
+    HERO_IMAGENES.forEach((url, i) => {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = '';
+        if (i === 0) img.classList.add('activa');
+        caja.appendChild(img);
+    });
+    const imgs = caja.querySelectorAll('img');
+    if (imgs.length < 2) return;
+    let i = 0, t = null;
+    const pasar = () => {
+        imgs[i].classList.remove('activa');
+        i = (i + 1) % imgs.length;
+        imgs[i].classList.add('activa');
+    };
+    const arrancar = () => { if (!t) t = setInterval(pasar, HERO_SEGUNDOS * 1000); };
+    const parar = () => { if (t) { clearInterval(t); t = null; } };
+    // Si la clienta pidió menos movimiento en su celular, no se mueve
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) arrancar();
+    // Y si sale de la pestaña, se pausa (no gasta datos ni batería)
+    document.addEventListener('visibilitychange', () => document.hidden ? parar() : arrancar());
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarCarruselHero);
+else iniciarCarruselHero();
+
 // ===== GALERÍA DE FOTOS =====
 function switchProductPhoto(id, idx, el) {
     const product = products.find(p => p.id === id);
