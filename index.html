@@ -467,6 +467,25 @@
                         📧 Te avisamos por correo: confirmación, día de entrega y recordatorios.
                     </small>
                 </div>
+
+                <!-- 📝 ¿CÓMO NOS CONOCISTE? (23-sep-2026) — 100% OPCIONAL ✅
+                     Se guarda en el pedido y sirve para las estadísticas de la Agenda ✅ -->
+                <div class="form-group">
+                    <label style="font-size:.88rem;">
+                        ¿Cómo nos conociste? <span style="color:#b3a5a2;font-weight:400;">(opcional)</span>
+                    </label>
+                    <select id="checkout-como-conocio" onchange="mostrarConocioDetalle()">
+                        <option value="">Prefiero no decir</option>
+                        <option value="redes">Redes sociales (Instagram, TikTok, Facebook)</option>
+                        <option value="amiga">Una amiga me la recomendó</option>
+                        <option value="otro">Otra forma</option>
+                    </select>
+                    <input type="text" id="checkout-conocio-detalle" placeholder="¿Nos contás cómo nos encontraste?"
+                           style="display:none;margin-top:8px;" maxlength="120">
+                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">
+                        💛 Nos ayuda a llegar a más personas. No es obligatorio.
+                    </small>
+                </div>
             </div>
         </div>
 

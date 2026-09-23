@@ -200,7 +200,7 @@ async function cargarAgenda() {
     try {
         const res = await Promise.all([
             api('GET', 'ventas?select=order_reference,cliente,telefono,punto_entrega,metodo_pago,total_bruto,utilidad_neta,fecha_compra&order=fecha_compra.desc&limit=3000'),
-            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items&order=created_at.desc&limit=3000')
+            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items,como_nos_conocio,conocio_detalle&order=created_at.desc&limit=3000')
         ]);
         const ventas = Array.isArray(res[0]) ? res[0] : [];
         const pedidos = Array.isArray(res[1]) ? res[1] : [];
@@ -230,11 +230,24 @@ async function cargarAgenda() {
             Object.keys(o || {}).forEach(k => { if (o[k] > max) { max = o[k]; mejor = k; } });
             return mejor;
         };
+        // "¿Cómo nos conoció?" = la respuesta más reciente que dejó (si la dejó ✅)
+        const conocido = {};
+        pedidos.forEach(p => {
+            const t8 = agTel8(p.customer_phone);
+            if (t8 && p.como_nos_conocio && !conocido[t8]) {
+                conocido[t8] = { como: p.como_nos_conocio, detalle: p.conocio_detalle || '' };
+            }
+        });
+        const ETIQUETA_CONOCIO = { redes: 'Redes sociales', amiga: 'Una amiga se la recomendó', otro: 'Otra forma' };
+
         agendaClientas = Object.keys(mapa).map(k => {
             const c = mapa[k];
+            const co = conocido[k] || {};
             return { tel8: c.tel8, nombre: c.nombre, compras: c.compras, total: c.total,
                      punto: masComun(c.puntos), metodo: masComun(c.metodos),
-                     ultima: c.ultima, refs: c.refs };
+                     ultima: c.ultima, refs: c.refs,
+                     conocio: co.como ? (ETIQUETA_CONOCIO[co.como] || co.como) : '',
+                     conocioDetalle: co.detalle || '' };
         }).sort((a, b) => b.total - a.total);
 
         renderAgenda();
@@ -302,6 +315,8 @@ function verClienta(tel8) {
         + '<p style="color:#666;margin:0 0 14px;">Teléfono <strong>' + agEsc(c.tel8) + '</strong> · '
         + c.compras + ' compra' + (c.compras === 1 ? '' : 's') + ' · Total <strong>' + agMoney(c.total) + '</strong>'
         + (c.punto ? ' · Suele retirar en <strong>' + agEsc(c.punto) + '</strong>' : '') + '</p>'
+        + (c.conocio ? '<p style="color:#666;margin:0 0 14px;">📝 Nos conoció por: <strong>' + agEsc(c.conocio) + '</strong>'
+            + (c.conocioDetalle ? ' <span style="color:#999;">(' + agEsc(c.conocioDetalle) + ')</span>' : '') + '</p>' : '')
         + '<div class="admin-table-wrap"><table class="admin-table"><thead><tr>'
         + '<th>Fecha</th><th>Qué se llevó</th><th>Punto</th><th>Total</th><th>Estado</th></tr></thead><tbody>'
         + (filas || '<tr><td colspan="5" style="color:#999;padding:14px;">Sin detalle del pedido</td></tr>')

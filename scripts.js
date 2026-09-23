@@ -19,6 +19,17 @@ function getSupabase() {
     return null;
 }
 
+// 📝 ¿CÓMO NOS CONOCISTE? (23-sep-2026)
+// Pregunta OPCIONAL del checkout. Si elige "Otra forma", se abre la cajita para escribir.
+function mostrarConocioDetalle() {
+    const sel = document.getElementById('checkout-como-conocio');
+    const caja = document.getElementById('checkout-conocio-detalle');
+    if (!sel || !caja) return;
+    const mostrar = sel.value === 'otro';
+    caja.style.display = mostrar ? '' : 'none';
+    if (!mostrar) caja.value = '';
+}
+
 // ===== PRICING (IVA 13% + comisión Wompi 3.50% + $0.25) =====
 const PRICE_FACTOR = 1.16955;  // 1.13 × 1.035 (IVA 13% + comisión Wompi 3.50%)
 const PRICE_FEE = 0.25;
@@ -1953,6 +1964,10 @@ async function cashCheckout() {
                             telefono: phone,
                             correo: fac.datos.customer_email || datos.correo || null,
                             usa_whatsapp: datos.preferido === 'whatsapp'
+                        },
+                        conocio: {
+                            como: (document.getElementById('checkout-como-conocio') || {}).value || null,
+                            detalle: (document.getElementById('checkout-conocio-detalle') || {}).value || null
                         },
                         entrega: { tipo: 'retiro-punto', punto: punto },
                         cupon: (cuponAplicado && cuponAplicado.codigo) || null,
