@@ -1094,8 +1094,21 @@ function renderDespachos() {
             ? '<a class="admin-btn admin-btn--ghost" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;text-decoration:none;" '
               + 'title="Llamar al cliente" href="tel:+' + tel + '">📞</a>'
             : '';
-        // 🚫 NO VINO (plan 3): registra el caso, avisa al cliente y aplica las 48 h
         const cerrado = ['entregado', 'cancelado', 'vencido', 'no-retirado'].includes(estado);
+        // 📍 CASO 2 (22-sep-2026): cambiar el punto de entrega
+        //  · si el paquete NO ha salido → "📍 Punto" (se cambia y se avisa a la clienta)
+        //  · si YA salió → "📣 No vayas" (se le avisa para que no vaya y se pasa a la próxima salida)
+        const refFila = String(d.order_reference || '');
+        const destinoFila = String(d.destino || '').replace(/'/g, '');
+        const btnPunto = cerrado ? ''
+            : (estado === 'salio'
+                ? '<button class="admin-btn admin-btn--danger" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+                  + 'title="El paquete ya salió: avisale a la clienta que no vaya y se pasa a la próxima salida" '
+                  + 'onclick="avisarNoVayas(\'' + refFila + '\')">📣 No vayas</button>'
+                : '<button class="admin-btn admin-btn--ghost" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+                  + 'title="La clienta pidió otro punto de entrega: se cambia y se le avisa por WhatsApp" '
+                  + 'onclick="cambiarPunto(\'' + refFila + '\', \'' + destinoFila + '\')">📍 Punto</button>');
+        // 🚫 NO VINO (plan 3): registra el caso, avisa al cliente y aplica las 48 h
         const btnNoShow = !cerrado
             ? '<button class="admin-btn admin-btn--danger" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
               + 'title="El cliente no llegó a retirar: se le manda el menú de opciones y tiene 48 h para responder" '
@@ -1111,7 +1124,7 @@ function renderDespachos() {
             '<td>' + fmtEntrega(d.metodo_entrega) + '</td>' +
             '<td style="max-width:180px;">' + (d.destino || '—') + '</td>' +
             '<td><span class="log-estado log-estado--' + estado + '">' + ESTADOS_LABEL[estado] + '</span></td>' +
-            '<td>' + accion + btnEntregar + btnNoShow + btnEnojo + btnLlamar + '</td>' +
+            '<td>' + accion + btnEntregar + btnPunto + btnNoShow + btnEnojo + btnLlamar + '</td>' +
         '</tr>';
     }).join('');
 }
@@ -1192,6 +1205,106 @@ async function ejecutarAjuste(ref, items, overlay) {
 // 🚫 NO VINO (plan 3 · 19-sep-2026): el cliente no llegó a retirar.
 // Se registra el caso, se le manda el menú (reprogramar / cancelar / hablar con Cindy)
 // y tiene 48 h para responder. Si no responde: el stock vuelve solo.
+// ============================================================
+// 📍 CASO 2 (22-sep-2026) — CAMBIAR EL PUNTO DE ENTREGA
+// ============================================================
+// Puntos de entrega con su día y horario (se muestran al cambiar el punto)
+const PUNTOS_ENTREGA = [
+    { val: 'Plaza Merliot',   destino: 'Jue — Plaza Merliot (17:00-19:00)' },
+    { val: 'Metrocentro',     destino: 'Sáb — Metrocentro (10:00-12:00)' },
+    { val: 'Casa Matriz',     destino: 'Coordinar — Casa Matriz Santa Tecla' },
+    { val: 'Paseo El Carmen', destino: 'Coordinar — Paseo El Carmen' },
+    { val: 'C.C. La Skina',   destino: 'Coordinar — C.C. La Skina' },
+    { val: 'Santa Tecla',     destino: 'Coordinar — Santa Tecla (personal)' },
+    { val: 'Domicilio',       destino: 'Domicilio (motorista) — $2.50' },
+];
+function destinoPara(punto) {
+    const p = PUNTOS_ENTREGA.find(x => x.val === punto);
+    return p ? p.destino : punto;
+}
+function cambiarPunto(ref, destinoActual) {
+    if (!ref) return;
+    let ov = document.getElementById('punto-modal');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'punto-modal';
+        ov.className = 'admin-modal-overlay';
+        ov.style.display = 'none';
+        ov.innerHTML = '<div class="admin-modal" style="width:460px;">'
+            + '<div class="admin-modal__header"><h3>📍 Cambiar punto de entrega</h3>'
+            + '<button class="admin-modal__close" onclick="document.getElementById(\'punto-modal\').style.display=\'none\'"><i class="fas fa-times"></i></button></div>'
+            + '<div style="padding:18px 22px;">'
+            + '<p style="margin:0 0 12px;color:#666;font-size:.85rem;">Pedido <strong id="punto-ref"></strong><br>'
+            + 'Punto actual: <strong id="punto-actual"></strong></p>'
+            + '<label style="font-size:.78rem;color:#666;">Nuevo punto</label>'
+            + '<select id="punto-nuevo" style="width:100%;padding:10px;margin:6px 0 14px;border:1px solid #ddd;border-radius:8px;font-size:.9rem;">'
+            + PUNTOS_ENTREGA.map(p => '<option value="' + p.val + '">' + p.val + ' · ' + p.destino + '</option>').join('')
+            + '</select>'
+            + '<label style="font-size:.78rem;color:#666;">Motivo (opcional)</label>'
+            + '<input id="punto-motivo" placeholder="Ej: la clienta pidió otro punto" style="width:100%;padding:10px;margin:6px 0 16px;border:1px solid #ddd;border-radius:8px;font-size:.9rem;">'
+            + '<button class="admin-btn" style="width:100%;" onclick="confirmarCambioPunto()">✅ Cambiar y avisar a la clienta</button>'
+            + '<p style="font-size:.72rem;color:#999;margin:10px 0 0;">Se le avisa por WhatsApp y queda registrado. '
+            + 'Si el paquete <strong>ya salió</strong>, el sistema te avisa para que no vaya.</p>'
+            + '</div></div>';
+        document.body.appendChild(ov);
+    }
+    document.getElementById('punto-ref').textContent = ref;
+    document.getElementById('punto-actual').textContent = destinoActual || '—';
+    document.getElementById('punto-motivo').value = '';
+    ov.dataset.ref = ref;
+    ov.style.display = 'flex';
+}
+async function confirmarCambioPunto() {
+    const ov = document.getElementById('punto-modal');
+    const ref = ov.dataset.ref;
+    const punto = document.getElementById('punto-nuevo').value;
+    const motivo = (document.getElementById('punto-motivo').value || '').trim();
+    if (!punto) { showToast('Elegí el punto nuevo'); return; }
+    ov.style.display = 'none';
+    showToast('📍 Cambiando el punto...');
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/contingencia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY,
+                       'Authorization': 'Bearer ' + ((session && session.token) || ANON_KEY) },
+            body: JSON.stringify({ accion: 'cambiar_punto', reference: ref, nuevo_punto: punto,
+                                   nuevo_destino: destinoPara(punto), motivo: motivo })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) {
+            if (d.motivo === 'ya_salio') {
+                alert('⚠️ El paquete YA SALIÓ a entrega.\n\nAvisale a la clienta que no vaya: usá el botón "📣 No vayas".');
+            }
+            throw new Error(d.error || ('HTTP ' + r.status));
+        }
+        showToast('✅ Punto cambiado a ' + d.destino + ' · se le avisó a la clienta');
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+    loadDespachos();
+}
+// 📣 El paquete ya salió: avisarle a la clienta que NO vaya
+async function avisarNoVayas(ref) {
+    if (!ref) return;
+    if (!confirm('¿Avisarle a la clienta del pedido ' + ref + ' que NO vaya al punto?\n\n'
+        + 'Se le manda un WhatsApp avisándole que el paquete ya salió y que se pasa a la próxima salida.')) return;
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/contingencia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY,
+                       'Authorization': 'Bearer ' + ((session && session.token) || ANON_KEY) },
+            body: JSON.stringify({ accion: 'cambiar_punto', reference: ref, solo_avisar: true,
+                                   motivo: 'el paquete ya había salido' })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) throw new Error(d.error || ('HTTP ' + r.status));
+        showToast('📣 Aviso enviado · se pasa a la próxima salida');
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+    loadDespachos();
+}
+
 async function marcarNoVino(ref) {
     if (!ref) return;
     if (!confirm('¿El cliente NO vino a retirar el pedido ' + ref + '?\n\n'

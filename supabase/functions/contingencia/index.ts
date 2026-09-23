@@ -160,6 +160,42 @@ async function crearCupon(opts: {
   return { codigo, pct: n.pct, tope: n.tope, referencia: opts.referencia ?? null };
 }
 
+// ========================================================================
+// AUTORIZACIÓN (22-sep-2026) — para acciones que cambian pedidos
+// Se valida que quien llama sea un ADMINISTRADOR logueado (profiles.is_admin).
+// ========================================================================
+async function esAdmin(req: Request): Promise<boolean> {
+  try {
+    const auth = String(req.headers.get('Authorization') || '').trim();
+    const key = String(req.headers.get('apikey') || '').trim();
+    // (sin expresiones raras: se quita el prefijo "Bearer " a mano)
+    const tok = (auth.slice(0, 7).toLowerCase() === 'bearer ' ? auth.slice(7) : auth).trim() || key;
+    if (!tok) return false;
+    if (SERVICE_KEY && tok === SERVICE_KEY) return true;   // llamadas internas del sistema
+    // ¿Es la CLAVE DE SERVICIO? (puede venir en formato viejo JWT o en el nuevo de 64 caracteres)
+    // Se comprueba de verdad: solo la clave de servicio puede listar usuarios del sistema.
+    try {
+      const ra = await fetch(SUPABASE_URL + '/auth/v1/admin/users?per_page=1', {
+        headers: { apikey: tok, Authorization: 'Bearer ' + tok },
+      });
+      if (ra.ok) return true;
+    } catch (_e) { /* sigue con la validación de administrador */ }
+    // 1) ¿Es un token de sesión válido?
+    const ru = await fetch(SUPABASE_URL + '/auth/v1/user', {
+      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + tok },
+    });
+    if (!ru.ok) return false;
+    const u = await ru.json().catch(() => null);
+    if (!u || !u.id) return false;
+    // 2) ¿Es administrador?
+    const rp = await fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + u.id + '&select=is_admin&limit=1', {
+      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
+    });
+    const filas = await rp.json().catch(() => []);
+    return Array.isArray(filas) && filas.length > 0 && filas[0].is_admin === true;
+  } catch (_e) { return false; }
+}
+
 async function datosPedido(ref: string) {
   const { data } = await supabase.from('orders')
     .select('reference, items, total, delivery_fee, delivery_point, customer_name, customer_phone, customer_email, payment_status, payment_method, status')
@@ -563,6 +599,102 @@ Deno.serve(async (req) => {
       const wamid = await enviarTexto(CINDY_WA, texto, 'MENU-NIVEL');
       await registrarSaliente(wamid, CINDY_WA, texto, i.order_reference || '');
       return json({ ok: true, menu_enviado: !!wamid });
+    }
+
+    // =====================================================================
+    // 📍 CASO 2 (22-sep-2026): CAMBIO DE PUNTO DE ENTREGA
+    // Reglas de Cindy: 2 h en puntos fijos · 24 h general · si la compra es
+    // 1 día antes ya no aplica · EXCEPCIÓN: si el paquete todavía no salió,
+    // se acepta igual ✅
+    // =====================================================================
+    if (accion === 'cambiar_punto') {
+      if (!(await esAdmin(req))) return json({ ok: false, error: 'no_autorizado' }, 401);
+
+      const ref = String(b.reference || '').trim();
+      const nuevoPunto = String(b.nuevo_punto || '').trim();
+      const nuevoDestino = String(b.nuevo_destino || '').trim();   // ej: "Jue — Plaza Merliot (17:00-19:00)"
+      const motivo = String(b.motivo || '').trim();
+      const soloAvisar = b.solo_avisar === true;                   // "el paquete ya salió": avisar que no vaya
+      if (!ref || (!nuevoPunto && !soloAvisar)) return json({ ok: false, error: 'faltan datos' }, 400);
+
+      const o = await datosPedido(ref);
+      if (!o) return json({ ok: false, error: 'pedido no encontrado' }, 404);
+      const estadoPedido = String(o.status || '');
+      if (['entregado', 'cancelado'].includes(estadoPedido)) {
+        return json({ ok: false, error: 'El pedido ya está ' + estadoPedido + ': no se puede cambiar el punto' }, 400);
+      }
+
+      const { data: ds } = await supabase.from('despachos')
+        .select('id, estado_logistico, destino, notas')
+        .eq('order_reference', ref);
+      const filas = Array.isArray(ds) ? ds : [];
+      const YA_SALIO = ['salio', 'entregado', 'no-show', 'no-retirado', 'reembolsado'];
+      const yaSalio = filas.some((d) => YA_SALIO.includes(String(d.estado_logistico || '')));
+
+      const nombre = primerNombre(o.customer_name);
+
+      // 👉 El paquete ya salió: se avisa a la clienta para que NO vaya y se pasa a la próxima salida
+      if (yaSalio && !soloAvisar) {
+        return json({
+          ok: false, motivo: 'ya_salio',
+          error: 'El paquete ya salió a entrega. Avisale YA a la clienta para que no vaya '
+            + '(podés usar el botón "Avisar: no vayas" y se pasa a la próxima salida).',
+          destino_actual: filas[0]?.destino || '',
+        }, 409);
+      }
+      if (yaSalio && soloAvisar) {
+        const texto = '¡Hola ' + nombre + '! 😊 Te aviso algo importante: el paquete *ya salió* '
+          + 'para *' + (filas[0]?.destino || o.delivery_point || 'el punto') + '* 📦\n\n'
+          + 'Si ya no te queda cómodo, *no vayas* 🙏 — decime a qué punto querés que te lo pase '
+          + 'y lo mandamos en la próxima salida ✅';
+        await enviarTexto(o.customer_phone, texto, 'CAMBIO-PUNTO-AVISO');
+        const incAviso = await guardarIncidencia({
+          order_reference: ref, customer_name: o.customer_name, customer_phone: o.customer_phone,
+          tipo: 'cambio_punto', motivo: motivo || 'pidió cambio y ya había salido',
+          detalle: 'AVISO "no vayas" enviado · destino actual: ' + (filas[0]?.destino || '—'),
+          estado: 'resuelto', opciones_probadas: JSON.stringify(['aviso no vayas']),
+        });
+        await avisarTelegram('📍 AVISO "NO VAYAS" · ' + ref
+          + '\nCliente: ' + (o.customer_name || '—')
+          + '\n(Avisado por el panel · se pasa a la próxima salida)');
+        return json({ ok: true, aviso_enviado: true, incidencia: incAviso });
+      }
+
+      // ✅ El paquete NO ha salido: se cambia el punto
+      const destinoFinal = nuevoDestino || nuevoPunto;
+      const notaNueva = ((filas[0]?.notas ? String(filas[0].notas) + ' | ' : '')
+        + '📍 Cambio de punto a ' + destinoFinal + (motivo ? ' (' + motivo + ')' : '')).slice(-900);
+
+      const { error: e1 } = await supabase.from('despachos')
+        .update({ destino: destinoFinal, notas: notaNueva, updated_at: new Date().toISOString() })
+        .eq('order_reference', ref);
+      if (e1) return json({ ok: false, error: 'despachos: ' + e1.message }, 500);
+
+      const { error: e2 } = await supabase.from('orders')
+        .update({ delivery_point: nuevoPunto || destinoFinal, updated_at: new Date().toISOString() })
+        .eq('reference', ref);
+      if (e2) return json({ ok: false, error: 'orders: ' + e2.message }, 500);
+
+      const textoCli = '¡Hola ' + nombre + '! 😊 Ya te cambié el punto de entrega ✅\n\n'
+        + '📍 Ahora te esperamos en: *' + destinoFinal + '*\n\n'
+        + 'Te aviso por acá antes de la entrega 💛';
+      await enviarTexto(o.customer_phone, textoCli, 'CAMBIO-PUNTO');
+
+      const incId = await guardarIncidencia({
+        order_reference: ref, customer_name: o.customer_name, customer_phone: o.customer_phone,
+        tipo: 'cambio_punto', motivo: motivo || 'la clienta pidió otro punto',
+        detalle: 'De ' + (o.delivery_point || '—') + ' → ' + destinoFinal
+          + (yaSalio ? ' (el paquete NO había salido ✅)' : ''),
+        estado: 'resuelto', opciones_probadas: JSON.stringify({ nuevoPunto, nuevoDestino }),
+      });
+
+      await avisarTelegram('📍 CAMBIO DE PUNTO · ' + ref
+        + '\nDe: ' + (o.delivery_point || '—')
+        + '\nA: ' + destinoFinal
+        + '\nCliente: ' + (o.customer_name || '—')
+        + (motivo ? '\nMotivo: ' + motivo : ''));
+
+      return json({ ok: true, destino: destinoFinal, incidencia: incId, puntiado: nuevoPunto });
     }
 
     return json({ ok: false, error: 'accion_desconocida', accion }, 400);
