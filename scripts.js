@@ -30,6 +30,30 @@ function mostrarConocioDetalle() {
     if (!mostrar) caja.value = '';
 }
 
+// 🎁 CÓDIGO DE AMIGA (23-sep-2026) — programa de referidos
+function codigoAmigaValor() {
+    const el = document.getElementById('checkout-codigo-amiga');
+    return el ? String(el.value || '').trim().toUpperCase() : '';
+}
+function revisarCodigoAmiga() {
+    const aviso = document.getElementById('checkout-codigo-aviso');
+    const code = codigoAmigaValor();
+    if (!aviso) return;
+    if (!code) { aviso.style.display = 'none'; aviso.textContent = ''; return; }
+    aviso.style.display = '';
+    aviso.style.color = '#2f7a4d';
+    aviso.textContent = '🎁 ¡Genial! Se aplica 10% de descuento (hasta $5) al confirmar ✅';
+}
+// La sesión de la cuenta (obligatoria para usar el código ✅)
+async function sesionDeCuenta() {
+    try {
+        const c = getSupabase();
+        if (!c) return null;
+        const { data } = await c.auth.getSession();
+        return (data && data.session && data.session.access_token) || null;
+    } catch (e) { return null; }
+}
+
 // ===== PRICING (IVA 13% + comisión Wompi 3.50% + $0.25) =====
 const PRICE_FACTOR = 1.16955;  // 1.13 × 1.035 (IVA 13% + comisión Wompi 3.50%)
 const PRICE_FEE = 0.25;
@@ -541,30 +565,81 @@ const HERO_IMAGENES = [
 ];
 const HERO_SEGUNDOS = 7;   // cada cuántos segundos cambia la foto
 
+// 🎬 Video que arranca el carrusel (23-sep-2026) — se ve primero y después siguen las fotos.
+// Sin audio (así los navegadores lo dejan arrancar solo ✅). Para quitarlo: dejalo en '' ✅
+const HERO_VIDEO = 'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-video.mp4';
+const HERO_VIDEO_MAX = 9;  // segundos máximos del video (por si no avisa que terminó)
+
 function iniciarCarruselHero() {
     const caja = document.getElementById('hero-carrusel');
-    if (!caja || !HERO_IMAGENES.length) return;
-    HERO_IMAGENES.forEach((url, i) => {
+    if (!caja) return;
+
+    // 1) Preparo TODAS las fotos
+    HERO_IMAGENES.forEach((url) => {
         const img = document.createElement('img');
         img.src = url;
         img.alt = '';
-        if (i === 0) img.classList.add('activa');
         caja.appendChild(img);
     });
     const imgs = caja.querySelectorAll('img');
-    if (imgs.length < 2) return;
+    if (!imgs.length) return;
+
     let i = 0, t = null;
+    const menosMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const parar = () => { if (t) { clearInterval(t); t = null; } };
     const pasar = () => {
         imgs[i].classList.remove('activa');
         i = (i + 1) % imgs.length;
         imgs[i].classList.add('activa');
     };
-    const arrancar = () => { if (!t) t = setInterval(pasar, HERO_SEGUNDOS * 1000); };
-    const parar = () => { if (t) { clearInterval(t); t = null; } };
-    // Si la clienta pidió menos movimiento en su celular, no se mueve
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) arrancar();
-    // Y si sale de la pestaña, se pausa (no gasta datos ni batería)
-    document.addEventListener('visibilitychange', () => document.hidden ? parar() : arrancar());
+    const arrancar = () => { if (!t && imgs.length > 1) t = setInterval(pasar, HERO_SEGUNDOS * 1000); };
+
+    // 2) Las fotos empiezan (después del video, o de una si no hay video)
+    let empezaron = false;
+    const empezarFotos = () => {
+        if (empezaron) return;
+        empezaron = true;
+        imgs[0].classList.add('activa');
+        if (!menosMovimiento) arrancar();
+        // Si sale de la pestaña, se pausa (no gasta datos ni batería)
+        document.addEventListener('visibilitychange', () => document.hidden ? parar() : arrancar());
+    };
+
+    // 3) 🎬 El video va primero
+    if (HERO_VIDEO && !menosMovimiento) {
+        const vid = document.createElement('video');
+        vid.src = HERO_VIDEO;
+        vid.muted = true;
+        vid.defaultMuted = true;
+        vid.playsInline = true;
+        vid.setAttribute('muted', '');
+        vid.setAttribute('playsinline', '');
+        vid.preload = 'auto';
+        vid.style.opacity = '0';
+        caja.insertBefore(vid, caja.firstChild);
+
+        let yaPaso = false;
+        const pasarALasFotos = () => {
+            if (yaPaso) return;
+            yaPaso = true;
+            vid.classList.remove('activa');
+            empezarFotos();
+        };
+        vid.addEventListener('loadeddata', () => vid.classList.add('activa'));
+        vid.addEventListener('ended', pasarALasFotos);
+        vid.addEventListener('error', pasarALasFotos);
+        const arranque = vid.play();
+        if (arranque && arranque.then) {
+            arranque.then(() => {
+                vid.classList.add('activa');
+                setTimeout(pasarALasFotos, HERO_VIDEO_MAX * 1000);
+            }).catch(pasarALasFotos);   // si el navegador no lo deja arrancar solo → directo a las fotos
+        } else {
+            setTimeout(pasarALasFotos, HERO_VIDEO_MAX * 1000);
+        }
+    } else {
+        empezarFotos();
+    }
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarCarruselHero);
 else iniciarCarruselHero();
@@ -1969,6 +2044,8 @@ async function cashCheckout() {
                             como: (document.getElementById('checkout-como-conocio') || {}).value || null,
                             detalle: (document.getElementById('checkout-conocio-detalle') || {}).value || null
                         },
+                        referido: { codigo: codigoAmigaValor() || null },
+                        sesion_token: await sesionDeCuenta(),
                         entrega: { tipo: 'retiro-punto', punto: punto },
                         cupon: (cuponAplicado && cuponAplicado.codigo) || null,
                         factura: {

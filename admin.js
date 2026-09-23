@@ -200,10 +200,19 @@ async function cargarAgenda() {
     try {
         const res = await Promise.all([
             api('GET', 'ventas?select=order_reference,cliente,telefono,punto_entrega,metodo_pago,total_bruto,utilidad_neta,fecha_compra&order=fecha_compra.desc&limit=3000'),
-            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items,como_nos_conocio,conocio_detalle&order=created_at.desc&limit=3000')
+            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items,como_nos_conocio,conocio_detalle&order=created_at.desc&limit=3000'),
+            api('GET', 'profiles?select=id,name,email,phone,codigo_referido')
         ]);
         const ventas = Array.isArray(res[0]) ? res[0] : [];
         const pedidos = Array.isArray(res[1]) ? res[1] : [];
+        const cuentas = Array.isArray(res[2]) ? res[2] : [];
+        // 🎁 El código de referido sale de la CUENTA de la clienta (solo tienen cuenta ✅)
+        const codigos = {};
+        cuentas.forEach(c => {
+            const t8 = agTel8(c.phone);
+            if (t8 && c.codigo_referido) codigos[t8] = c.codigo_referido;
+            if (c.email && c.codigo_referido) codigos[String(c.email).toLowerCase()] = c.codigo_referido;
+        });
 
         agendaPedidos = {};
         pedidos.forEach(p => { agendaPedidos[p.reference] = p; });
@@ -247,7 +256,8 @@ async function cargarAgenda() {
                      punto: masComun(c.puntos), metodo: masComun(c.metodos),
                      ultima: c.ultima, refs: c.refs,
                      conocio: co.como ? (ETIQUETA_CONOCIO[co.como] || co.como) : '',
-                     conocioDetalle: co.detalle || '' };
+                     conocioDetalle: co.detalle || '',
+                     codigo: codigos[c.tel8] || '' };
         }).sort((a, b) => b.total - a.total);
 
         renderAgenda();
@@ -315,6 +325,7 @@ function verClienta(tel8) {
         + '<p style="color:#666;margin:0 0 14px;">Teléfono <strong>' + agEsc(c.tel8) + '</strong> · '
         + c.compras + ' compra' + (c.compras === 1 ? '' : 's') + ' · Total <strong>' + agMoney(c.total) + '</strong>'
         + (c.punto ? ' · Suele retirar en <strong>' + agEsc(c.punto) + '</strong>' : '') + '</p>'
+        + (c.codigo ? '<p style="color:#666;margin:0 0 14px;">🎁 Su código para recomendar: <strong style="letter-spacing:1px;">' + agEsc(c.codigo) + '</strong> <span style="color:#999;">(10% para la amiga)</span></p>' : '')
         + (c.conocio ? '<p style="color:#666;margin:0 0 14px;">📝 Nos conoció por: <strong>' + agEsc(c.conocio) + '</strong>'
             + (c.conocioDetalle ? ' <span style="color:#999;">(' + agEsc(c.conocioDetalle) + ')</span>' : '') + '</p>' : '')
         + '<div class="admin-table-wrap"><table class="admin-table"><thead><tr>'
