@@ -487,9 +487,8 @@ function reintentarFoto(caja) {
 //    (pueden ser las direcciones de la tienda o archivos en assets/)
 // ════════════════════════════════════════════════════════════════════
 const HERO_IMAGENES = [
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/prod-1788403286968-wntxq6.jpg',
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/prod-1788403186440-x9tlgm.jpg',
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/prod-1788403099842-xm9lvn.jpg',
+    // 📸 Foto elegida por Cindy (23-sep-2026). Para sumar más, se agregan acá abajo ✅
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-1.jpg',
 ];
 const HERO_SEGUNDOS = 7;   // cada cuántos segundos cambia la foto
 
