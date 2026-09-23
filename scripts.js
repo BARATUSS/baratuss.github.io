@@ -567,7 +567,7 @@ const HERO_SEGUNDOS = 7;   // cada cuántos segundos cambia la foto
 
 // 🎬 Video que arranca el carrusel (23-sep-2026) — se ve primero y después siguen las fotos.
 // Sin audio (así los navegadores lo dejan arrancar solo ✅). Para quitarlo: dejalo en '' ✅
-const HERO_VIDEO = 'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-video.mp4';
+const HERO_VIDEO = '';   // (23-sep-2026) Cindy prefirió la portada solo con fotos: se ve más limpio ✅
 const HERO_VIDEO_MAX = 9;  // segundos máximos del video (por si no avisa que terminó)
 
 function iniciarCarruselHero() {

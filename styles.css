@@ -124,6 +124,21 @@ ul { list-style: none; }
 }
 .hero__carrusel img.activa { opacity: 1; }
 /* 🎬 Video que arranca el carrusel (23-sep-2026) */
+/* 🎬 Video de la marca en el cuadro del carrito (23-sep-2026) */
+.cart-video {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    overflow: hidden; background: #f6f1ef; flex-shrink: 0;
+}
+.cart-video video {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    opacity: .92;
+}
+.cart-video__texto {
+    position: absolute; left: 14px; bottom: 10px;
+    color: #fff; font-size: .78rem; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    text-shadow: 0 1px 6px rgba(0,0,0,.35);
+}
 .hero__carrusel video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; opacity: 0;
