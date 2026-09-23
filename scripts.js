@@ -491,6 +491,7 @@ const HERO_IMAGENES = [
     // Para sumar más, se agregan acá abajo ✅ (van pasando en este orden)
     'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-1.jpg',
     'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/categoria-accesorios.jpg',
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-3.jpg',
 ];
 const HERO_SEGUNDOS = 7;   // cada cuántos segundos cambia la foto
 
