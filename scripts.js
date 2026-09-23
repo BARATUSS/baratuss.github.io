@@ -1124,8 +1124,19 @@ function mostrarResumenCompra() {
 }
 
 // ===== CART SIDEBAR =====
-function openCart() { cartSidebar.classList.add('open'); cartOverlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
-function closeCart() { cartSidebar.classList.remove('open'); cartOverlay.classList.remove('open'); document.body.style.overflow = ''; }
+function openCart() { cartSidebar.classList.add('open'); cartOverlay.classList.add('open'); document.body.style.overflow = 'hidden'; videoCarrito('play'); }
+// 🎬 El video del carrito arranca al abrirlo y se pausa al cerrarlo (así no gasta datos ✅)
+function videoCarrito(accion) {
+    const v = document.getElementById('cart-video-el');
+    if (!v) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    try {
+        if (accion === 'play') { v.muted = true; v.play().catch(() => {}); }
+        else { v.pause(); }
+    } catch (e) { /* nada: si falla, no pasa nada ✅ */ }
+}
+
+function closeCart() { cartSidebar.classList.remove('open'); cartOverlay.classList.remove('open'); document.body.style.overflow = ''; videoCarrito('pause'); }
 document.getElementById('cart-btn').addEventListener('click', openCart);
 document.getElementById('cart-close').addEventListener('click', closeCart);
 cartOverlay.addEventListener('click', closeCart);
