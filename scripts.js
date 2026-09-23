@@ -523,9 +523,10 @@ const HERO_IMAGENES = [
     // 📸 Fotos elegidas por Cindy (23-sep-2026) — imágenes libres de derechos.
     // Van pasando EN ESTE ORDEN, cada 7 segundos ✅
     'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-1.jpg',            // 1) chica con bolsas de compras
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-2.jpg',            // 2) rutina de skincare (espejo)
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/categoria-accesorios.jpg', // 3) manos con anillos
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-3.jpg',            // 4) chicas con parches de skincare
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-4.jpg',            // 2) labios rojos con brochita (maquillaje)
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-2.jpg',            // 3) rutina de skincare (espejo)
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/categoria-accesorios.jpg', // 4) manos con anillos
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-3.jpg',            // 5) chicas con parches de skincare
 ];
 const HERO_SEGUNDOS = 7;   // cada cuántos segundos cambia la foto
 
