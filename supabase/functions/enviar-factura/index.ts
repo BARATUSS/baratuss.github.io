@@ -232,8 +232,57 @@ async function cuerpoCorreo(o: Record<string, any>) {
       Gracias por tu compra. Te dejamos tu <strong>${esCCF ? 'comprobante de crédito fiscal' : 'factura de consumidor final'}</strong>.</p>
       ${await documentoHTML(o)}
       <p style="font-size:12px;color:#888;margin-top:18px;">Cualquier consulta, escribinos al <strong>+503 6285 2631</strong>.<br>BARATUSS · San Salvador, El Salvador</p>
+      <p style="font-size:11px;color:#aaa;margin-top:10px;">¿Este correo te llegó a la carpeta de spam? Marcalo como <strong>"No es spam"</strong> una sola vez y los próximos comprobantes te van a llegar directo a la bandeja.</p>
     </div>
   </div>`;
+}
+
+// Versión en TEXTO SIMPLE del comprobante.
+// Los filtros de spam castigan los correos que sólo traen HTML + imagen: un correo "normal"
+// siempre lleva su versión de texto. Sin esto, las facturas caen en spam (probado 2026-09-23).
+function textoPlano(o: Record<string, any>) {
+  const total = Number(o.total || 0);
+  const gravada = total / (1 + IVA);
+  const iva = total - gravada;
+  const esCCF = o.factura_tipo === 'ccf';
+  const f = new Date(o.created_at || Date.now());
+  const correlativo = (EMISOR.simulacion ? 'SIM-' : '') + (esCCF ? 'CCF' : 'CF') + '-' + String(o.reference || '').slice(-6);
+  const lineas = (o.items || []).map((it: any) =>
+    `  ${it.qty || 1} x ${it.name}${it.size ? ' (talla ' + it.size + ')' : ''} ... $${((it.price || 0) * (it.qty || 1)).toFixed(2)}`);
+
+  return [
+    `${esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL'}`,
+    `${EMISOR.nombre} — ${EMISOR.razonSocial}`,
+    `NIT: ${EMISOR.nit} · NRC: ${EMISOR.nrc}`,
+    `Dirección: ${EMISOR.direccion} · Tel: ${EMISOR.telefono}`,
+    `Correo: ${EMISOR.correo}`,
+    '',
+    `N°: ${correlativo}`,
+    `Fecha de emisión: ${f.toLocaleDateString('es-SV')} ${f.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' })}`,
+    `Condición de pago: contado`,
+    `Referencia: ${o.reference || '—'}`,
+    '',
+    'DATOS DEL COMPRADOR',
+    `  Nombre: ${o.factura_nombre || o.customer_name || 'Consumidor final'}`,
+    esCCF ? `  NIT: ${o.factura_nit || '—'} · NRC: ${o.factura_nrc || '—'}` : '',
+    esCCF ? `  Giro: ${o.factura_giro || '—'}` : '',
+    esCCF ? `  Dirección: ${o.factura_direccion || '—'}` : '',
+    `  Teléfono: ${o.customer_phone || '—'} · Entrega: ${o.delivery_point || '—'}`,
+    '',
+    'DETALLE',
+    ...lineas,
+    '',
+    `Ventas gravadas: $${gravada.toFixed(2)}`,
+    `IVA 13% (incluido): $${iva.toFixed(2)}`,
+    `TOTAL: $${total.toFixed(2)}`,
+    '',
+    EMISOR.simulacion
+      ? 'Documento de PRUEBA del sistema de facturación: no tiene valor fiscal mientras el emisor no cuente con NRC y la autorización de DTE del Ministerio de Hacienda.'
+      : 'El IVA (13%) ya está incluido en los precios.',
+    '',
+    'BARATUSS · San Salvador, El Salvador · +503 6285 2631',
+    '¿Este correo te llegó a spam? Marcalo como "No es spam" y los próximos te llegan a la bandeja.',
+  ].filter((l) => l !== '').join('\r\n');
 }
 
 // Envuelve en base64 y corta las líneas (los clientes de correo lo esperan así)
@@ -249,46 +298,62 @@ function envolverBase64(contenido: Uint8Array | string) {
   return s.replace(/.{1,76}/g, (m) => m + '\r\n');
 }
 
-async function enviarCorreo(accessToken: string, destinatario: string, asunto: string, html: string, qr: Uint8Array | null) {
+async function enviarCorreo(accessToken: string, destinatario: string, asunto: string, html: string, texto: string, qr: Uint8Array | null) {
+  // Cabeceras completas: sin Message-ID ni Date, los filtros sospechan (probado: caía en spam).
   const cabeceras = [
     `From: ${REMITENTE}`,
     `To: ${destinatario}`,
+    `Reply-To: ${EMISOR.correo}`,
     `Subject: =?UTF-8?B?${b64(asunto)}?=`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: <${Date.now()}.${Math.random().toString(36).slice(2, 10)}@baratuss>`,
     'MIME-Version: 1.0',
   ];
-  let mime: string;
+  // Estructura estándar de un correo con imagen:
+  //   multipart/related
+  //     ├── multipart/alternative  → versión TEXTO + versión HTML
+  //     └── imagen del QR (por referencia)
+  const limRel = '==BARATUSS-REL==';
+  const limAlt = '==BARATUSS-ALT==';
+  const parteTexto = [
+    `--${limAlt}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    envolverBase64(b64(texto)),
+  ];
+  const parteHtml = [
+    `--${limAlt}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    envolverBase64(b64(html)),
+    `--${limAlt}--`,
+    '',
+  ];
+  const trozos = [
+    ...cabeceras,
+    `Content-Type: multipart/related; boundary="${limRel}"`,
+    '',
+    `--${limRel}`,
+    `Content-Type: multipart/alternative; boundary="${limAlt}"`,
+    '',
+    ...parteTexto,
+    ...parteHtml,
+  ];
   if (qr) {
-    // multipart/related: el QR va como imagen incrustada (los clientes de correo no muestran SVG
-    // ni imágenes embebidas en base64 dentro del HTML, pero sí las adjuntas por referencia)
-    const lim = '==BARATUSS-QR==';
-    mime = [
-      ...cabeceras,
-      `Content-Type: multipart/related; boundary="${lim}"`,
-      '',
-      `--${lim}`,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      envolverBase64(b64(html)),
-      `--${lim}`,
+    trozos.push(
+      `--${limRel}`,
       'Content-Type: image/png; name="qr-documento.png"',
       'Content-Transfer-Encoding: base64',
       `Content-ID: <${CID_QR}>`,
       'Content-Disposition: inline; filename="qr-documento.png"',
       '',
       envolverBase64(qr),
-      `--${lim}--`,
-      '',
-    ].join('\r\n');
-  } else {
-    mime = [
-      ...cabeceras,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      b64(html),
-    ].join('\r\n');
+    );
   }
+  trozos.push(`--${limRel}--`, '');
+  const mime = trozos.join('\r\n');
 
   const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
@@ -343,7 +408,7 @@ Deno.serve(async (req) => {
       try {
         const esCCF = o.factura_tipo === 'ccf';
         const asunto = `Tu ${esCCF ? 'comprobante de crédito fiscal' : 'factura'} de BARATUSS · #${o.reference}`;
-        const envio = await enviarCorreo(token, o.customer_email, asunto, await cuerpoCorreo(o), _qrPng);
+        const envio = await enviarCorreo(token, o.customer_email, asunto, await cuerpoCorreo(o), textoPlano(o), _qrPng);
         await marcarEnviada(o.reference);
         resultados.push({ referencia: o.reference, para: o.customer_email, gmail_id: envio.id, ok: true });
       } catch (e) {
