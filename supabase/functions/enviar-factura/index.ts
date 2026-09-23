@@ -371,8 +371,10 @@ async function pendientes() {
     // ⚠️ PLAN 2 (19-sep-2026): la factura sale SOLO cuando la compra está PAGADA.
     // Tarjeta → al aprobarse el pago · Efectivo → cuando se marca ENTREGADO.
     + '&factura_por_correo=eq.true&factura_enviada_en=is.null&factura_tipo=neq.ninguna&customer_email=not.is.null'
-    // ⚠️ REGLA DE CINDY (23-sep-2026): solo pedidos ENTREGADOS (el cliente ya recibió su compra ✅)
-    + '&status=eq.entregado'
+    // ⚠️ REGLA DE CINDY (23-sep-2026) sobre CUÁNDO se manda la factura:
+    //    💳 Tarjeta  → apenas se confirma el pago (la plata ya cayó ✅) → o sea, en cuanto entra la compra
+    //    💵 Efectivo → SOLO cuando el pedido está ENTREGADO (la plata cae al entregar ✅)
+    + '&or=(and(payment_method.eq.tarjeta,payment_status.eq.pagado),status.eq.entregado)'
     + '&payment_status=in.(pagado,aprobado)&order=created_at.asc&limit=20';
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, {
     headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
