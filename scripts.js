@@ -488,10 +488,11 @@ function reintentarFoto(caja) {
 // ════════════════════════════════════════════════════════════════════
 const HERO_IMAGENES = [
     // 📸 Fotos elegidas por Cindy (23-sep-2026) — imágenes libres de derechos.
-    // Para sumar más, se agregan acá abajo ✅ (van pasando en este orden)
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-1.jpg',
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/categoria-accesorios.jpg',
-    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-3.jpg',
+    // Van pasando EN ESTE ORDEN, cada 7 segundos ✅
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-1.jpg',            // 1) chica con bolsas de compras
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-2.jpg',            // 2) rutina de skincare (espejo)
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/categoria-accesorios.jpg', // 3) manos con anillos
+    'https://lizybztwnlrlvsrmgnug.supabase.co/storage/v1/object/public/productos/portada/hero-3.jpg',            // 4) chicas con parches de skincare
 ];
 const HERO_SEGUNDOS = 7;   // cada cuántos segundos cambia la foto
 
