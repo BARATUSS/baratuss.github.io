@@ -125,14 +125,14 @@ ul { list-style: none; }
 .hero__carrusel img.activa { opacity: 1; }
 .hero__carrusel::after {
     content: ''; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,.88) 0%,
-                rgba(255,255,255,.78) 45%, rgba(255,255,255,.94) 100%);
+    background: linear-gradient(180deg, rgba(255,255,255,.80) 0%,
+                rgba(255,255,255,.64) 45%, rgba(255,255,255,.88) 100%);
 }
 .hero .container { position: relative; z-index: 1; }
 @media (max-width: 768px) {
     .hero__carrusel::after {
-        background: linear-gradient(180deg, rgba(255,255,255,.90) 0%,
-                    rgba(255,255,255,.82) 50%, rgba(255,255,255,.95) 100%);
+        background: linear-gradient(180deg, rgba(255,255,255,.84) 0%,
+                    rgba(255,255,255,.72) 50%, rgba(255,255,255,.91) 100%);
     }
 }
 .hero__content { max-width: 540px; }
