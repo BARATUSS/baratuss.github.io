@@ -52,6 +52,15 @@ serve(async (req) => {
 
   // ===== VENDER (descuento definitivo, atomico) =====
   if (ruta === 'vender') {
+    // 🔒 CERRADO (21-sep-2026): este endpoint ya NO se usa desde la tienda (con Nivel B el
+    // pedido lo crea la función crear-pedido, que aparta el stock en la misma operación).
+    // Se deja cerrado para que nadie de afuera pueda modificar el inventario.
+    // Para reabrirlo: pedir la clave interna en la cabecera 'x-baratuss-key'.
+    const clave = req.headers.get('x-baratuss-key') || '';
+    const claveOk = clave && clave === (Deno.env.get('FACTURA_KEY') || '___sin_clave___');
+    if (!claveOk) {
+      return json({ ok: false, error: 'cerrado', detalle: 'Este endpoint ya no está en uso. Los pedidos se crean desde la tienda.' }, 403);
+    }
     const items = Array.isArray(body.items) ? body.items : [];
     const token = String(body.token || '');
     if (!items.length) return json({ ok: false, error: 'faltan_datos' });
