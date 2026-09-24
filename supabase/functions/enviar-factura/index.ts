@@ -366,19 +366,19 @@ async function enviarCorreo(accessToken: string, destinatario: string, asunto: s
 }
 
 async function pendientes() {
-  // ⚠️ REGLA DE CINDY (23-sep-2026): la factura SOLO se manda si el pedido ya está ENTREGADO.
+  // ⚠️ REGLA DE CINDY (23-sep-2026) sobre CUÁNDO se manda la factura:
+  //    💳 Tarjeta  → SOLO cuando el pago YA CAYÓ (payment_status = 'pagado'/'aprobado')
+  //    💵 Efectivo → SOLO cuando el pedido se marca ENTREGADO (status = 'entregado')
+  //    NUNCA antes. Esta condición es la ÚNICA fuente de verdad del envío.
   const q = 'orders?select=reference,customer_name,customer_phone,customer_email,factura_tipo,factura_nombre,factura_nit,factura_nrc,factura_giro,factura_direccion,total,items,delivery_point,created_at,status'
-    // ⚠️ PLAN 2 (19-sep-2026): la factura sale SOLO cuando la compra está PAGADA.
-    // Tarjeta → al aprobarse el pago · Efectivo → cuando se marca ENTREGADO.
+    // Pedida por correo + no enviada aún + con tipo y correo reales
     + '&factura_por_correo=eq.true&factura_enviada_en=is.null&factura_tipo=neq.ninguna&customer_email=not.is.null'
-    // ⚠️ REGLA DE CINDY (23-sep-2026) sobre CUÁNDO se manda la factura:
-    //    💳 Tarjeta  → apenas se confirma el pago (la plata ya cayó ✅) → o sea, en cuanto entra la compra
-    //    💵 Efectivo → SOLO cuando el pedido está ENTREGADO (la plata cae al entregar ✅)
-    // 🔧 24-sep-2026: la rama tarjeta usaba payment_status=eq.pagado, pero el webhook de Wompi
-    //    graba 'aprobado' (no 'pagado') → las facturas de tarjeta NUNCA salían al aprobarse el pago.
-    //    Ahora la rama tarjeta se apoya en el filtro general payment_status=in.(pagado,aprobado).
-    + '&or=(payment_method.eq.tarjeta,status.eq.entregado)'
-    + '&payment_status=in.(pagado,aprobado)&order=created_at.asc&limit=20';
+    // 🔐 24-sep-2026 (corregido): la rama tarjeta exige pago caído (in.(pagado,aprobado), el webhook
+    //    de Wompi graba 'aprobado') y la rama efectivo exige ENTREGADO. Cada rama con su condición
+    //    completa, sin filtrar el estado de pago por fuera (antes un `payment_status=in.(...)` suelto
+    //    exigía 'pagado' también a la rama efectivo-entregado y podía dejar facturas sin mandar).
+    + '&or=(and(payment_method.eq.tarjeta,payment_status.in.(pagado,aprobado)),status.eq.entregado)'
+    + '&order=created_at.asc&limit=20';
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, {
     headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
   });
