@@ -21,6 +21,22 @@ async function getWompiToken() {
   return d.access_token;
 }
 
+// Averigua de quién es una sesión (para el programa de referidos).
+// Se pregunta a la API de autenticación: así el id que llega NO se puede falsificar.
+async function usuarioDeToken(token: string): Promise<string> {
+  if (!token) return '';
+  try {
+    const r = await fetch((Deno.env.get('SUPABASE_URL') || '') + '/auth/v1/user', {
+      headers: { apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', Authorization: 'Bearer ' + token },
+    });
+    if (!r.ok) return '';
+    const u = (await r.json().catch(() => null)) as Record<string, unknown> | null;
+    return u && u.id ? String(u.id) : '';
+  } catch (_e) {
+    return '';
+  }
+}
+
 // ===== FASE 1 ENTREGAS: alta unificada de despachos =====
 // Único punto de creación (webhook aprobado + efectivo vía /create-despachos).
 // IDEMPOTENTE: si ya existen despachos para la orden, no duplica (Wompi reintenta ante timeout).
@@ -112,7 +128,7 @@ serve(async (req) => {
       // el monto se calcula acá, en el servidor, igual que en crear-pedido.
       const { items, userId, deliveryType, deliveryPoint, customerName, customerPhone, token: tokenCliente,
               facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo,
-              contactoPreferido, cuponCodigo } = await req.json();
+              contactoPreferido, codigo, sesionToken, cuponCodigo } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
       // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): el teléfono debe estar VERIFICADO
@@ -191,41 +207,69 @@ serve(async (req) => {
       }
       const envio = tipoEntrega === 'retiro-c807' ? C807_FEE : 0;
 
-      // ===== CUPÓN (2026-09-18): se valida y se aplica EN EL SERVIDOR =====
-      // Nunca se confía en el descuento que manda el navegador: se recalcula desde los precios
-      // REALES de la base (antes se usaba it.price del carrito, que también era manipulable).
-      // Reglas: solo producto (el envío no lleva descuento), un solo uso, con tope.
+      // ===== CÓDIGO ÚNICO (cupón o referido): el SERVIDOR clasifica =====
+      // Primero valida como CUPÓN (validar_cupon); si responde `no_existe`, lo prueba
+      // como CÓDIGO DE AMIGA (profiles.codigo_referido). Nunca se confía en el descuento
+      // del navegador: se recalcula desde los precios REALES de la base.
       let descuentoCupon = 0;
+      let descuentoReferido = 0;
       let cuponAplicado: string | null = null;
-      if (cuponCodigo) {
+      let referidoAplicado: string | null = null;
+      const codigoUnico = String(codigo || cuponCodigo || '').trim().toUpperCase();
+      if (codigoUnico) {
+        // 1) ¿Es un cupón?
         const { data: val } = await supabase.rpc('validar_cupon', {
-          p_codigo: String(cuponCodigo),
+          p_codigo: codigoUnico,
           p_telefono: customerPhone || null,
           p_subtotal: subtotalProductos,
         });
-        if (!val?.ok) {
-          const msg = val?.motivo === 'vencido' ? 'Ese cupón ya venció'
-            : val?.motivo === 'ya_usado' ? 'Ese cupón ya fue usado'
-            : val?.motivo === 'no_corresponde' ? 'Ese cupón es de otro cliente'
+        const esCupon = !!(val && val.ok === true);
+        const cuponConError = !!(val && val.ok === false && String(val.motivo || '') !== 'no_existe');
+        if (esCupon) {
+          descuentoCupon = Number(val.descuento || 0);
+          cuponAplicado = String(val.codigo || codigoUnico).toUpperCase();
+          if (descuentoCupon > subtotalProductos) descuentoCupon = subtotalProductos;  // nunca menos que $0
+        } else if (cuponConError) {
+          const msg = val.motivo === 'vencido' ? 'Ese cupón ya venció'
+            : val.motivo === 'ya_usado' ? 'Ese cupón ya fue usado'
+            : val.motivo === 'no_corresponde' ? 'Ese cupón es de otro cliente'
+            : val.motivo === 'inactivo' ? 'Ese cupón ya no está activo'
             : 'Ese cupón no es válido';
-          return new Response(JSON.stringify({ error: msg }), { status: 400, headers: corsHeaders });
+          return new Response(JSON.stringify({ error: msg, motivo: val.motivo }), { status: 400, headers: corsHeaders });
+        } else {
+          // no_existe → probar como CÓDIGO DE AMIGA (referido)
+          const userId = await usuarioDeToken(String(sesionToken || '').trim());
+          if (!userId) {
+            return new Response(JSON.stringify({ error: 'Para usar el código de una amiga necesitás entrar a tu cuenta (o crearte una) 💛', motivo: 'requiere_cuenta' }), { status: 409, headers: corsHeaders });
+          }
+          const { data: duenio } = await supabase.from('profiles').select('id, name').eq('codigo_referido', codigoUnico).maybeSingle();
+          if (!duenio) {
+            return new Response(JSON.stringify({ error: 'Ese código no existe, revisalo 🔍', motivo: 'codigo_invalido' }), { status: 409, headers: corsHeaders });
+          }
+          if (String(duenio.id) === String(userId)) {
+            return new Response(JSON.stringify({ error: 'No podés usar tu propio código 😊', motivo: 'codigo_propio' }), { status: 409, headers: corsHeaders });
+          }
+          const { count: previos } = await supabase.from('orders').select('id', { count: 'exact', head: true })
+            .or(`user_id.eq.${userId},customer_phone.eq.${telVerif || customerPhone}`);
+          if ((previos || 0) > 0) {
+            return new Response(JSON.stringify({ error: 'El descuento por referido es solo para la primera compra 💛', motivo: 'no_es_primera_compra' }), { status: 409, headers: corsHeaders });
+          }
+          referidoAplicado = codigoUnico;
+          descuentoReferido = money(Math.min(subtotalProductos * 0.10, 5));
         }
-        descuentoCupon = Number(val.descuento || 0);
-        cuponAplicado = String(val.codigo || cuponCodigo).toUpperCase();
-        if (descuentoCupon > subtotalProductos) descuentoCupon = subtotalProductos;  // nunca menos que $0
       }
 
       // 🎁 10% DE BIENVENIDA (24-sep-2026): solo en la 1ª compra de un teléfono
-      // VERIFICADO y sin cupón (no se acumula; regla de Cindy: un solo descuento).
+      // VERIFICADO y sin cupón ni referido (no se acumula; regla de Cindy: un solo descuento).
       let bienvenidaAplicada = false;
       let bienvenidaDescuento = 0;
-      if (descuentoCupon === 0 && telVerificadoW && !(await bienvenidaYaUsada(telVerif))) {
+      if (descuentoCupon === 0 && descuentoReferido === 0 && telVerificadoW && !(await bienvenidaYaUsada(telVerif))) {
         bienvenidaAplicada = true;
         bienvenidaDescuento = money(Math.min(subtotalProductos * 0.10, 5));
       }
 
       // ===== TOTAL (calculado acá, jamás con el `total` del navegador) =====
-      const totalFinal = money(Math.max(0, subtotalProductos + envio - descuentoCupon - bienvenidaDescuento));
+      const totalFinal = money(Math.max(0, subtotalProductos + envio - descuentoCupon - descuentoReferido - bienvenidaDescuento));
       if (totalFinal <= 0) {
         return new Response(JSON.stringify({ error: 'El total del pedido no puede ser $0' }), { status: 400, headers: corsHeaders });
       }
@@ -257,6 +301,7 @@ serve(async (req) => {
       await supabase.from('orders').insert({
         user_id: userId || null, items: itemsServidor, total: totalFinal, reference: ref,
         cupon_codigo: cuponAplicado, cupon_descuento: descuentoCupon || null,
+        referido_por_codigo: referidoAplicado, referido_descuento: descuentoReferido > 0 ? descuentoReferido : null,
         status: 'pendiente', payment_status: 'pendiente',
         transaction_id: payData.idTransaccion || null,
         delivery_type: tipoEntrega,

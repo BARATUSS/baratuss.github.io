@@ -15,6 +15,47 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="styles.css?v=20260923carritovideo">
+    <style id="checkout-steps-css">
+    /* ===== Checkout progresivo en 5 pasos (24-sep-2026) ===== */
+    .checkout-help { text-align:right; margin:0 0 8px; }
+    .checkout-help a { font-size:.8rem; color:#8a6b66; text-decoration:underline; }
+    .checkout-progress { display:flex; gap:6px; margin:0 0 14px; }
+    .checkout-progress__step { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; }
+    .checkout-progress__dot { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#f0eceb; color:#a08a86; font-size:.75rem; font-weight:700; border:1.5px solid #e0d8d6; }
+    .checkout-progress__label { font-size:.62rem; color:#a08a86; text-align:center; line-height:1.2; }
+    .checkout-progress__step--active .checkout-progress__dot { background:#ff9686; border-color:#ff9686; color:#fff; }
+    .checkout-progress__step--active .checkout-progress__label { color:#b9453a; font-weight:700; }
+    .checkout-progress__step--done .checkout-progress__dot { background:#1a7f4b; border-color:#1a7f4b; color:#fff; }
+    .checkout-progress__step--done .checkout-progress__label { color:#1a7f4b; }
+    .checkout-step { border:1.5px solid #eee; border-radius:14px; margin-bottom:10px; overflow:hidden; background:#fff; }
+    .checkout-step__head { width:100%; display:flex; align-items:center; gap:10px; padding:12px 14px; background:#fff; border:none; cursor:pointer; text-align:left; }
+    .checkout-step__num { width:24px; height:24px; border-radius:50%; background:#f0eceb; color:#a08a86; display:inline-flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:700; flex-shrink:0; }
+    .checkout-step__titulo { font-weight:700; font-size:.92rem; color:#3a3230; flex-shrink:0; }
+    .checkout-step__resumen { flex:1; font-size:.78rem; color:#1a7f4b; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .checkout-step__estado { font-size:.72rem; color:#a08a86; flex-shrink:0; }
+    .checkout-step__body { display:none; padding:4px 14px 16px; border-top:1.5px solid #f5f1f0; }
+    .checkout-step--active .checkout-step__body { display:block; }
+    .checkout-step--active { border-color:#ffd9d2; }
+    .checkout-step--active .checkout-step__num { background:#ff9686; color:#fff; }
+    .checkout-step--done { border-color:#e0f0e6; }
+    .checkout-step--done .checkout-step__num { background:#1a7f4b; color:#fff; }
+    .checkout-step--done .checkout-step__estado { color:#1a7f4b; font-weight:700; }
+    .checkout-step__intro { font-weight:600; font-size:.92rem; color:#3a3230; margin-bottom:12px; }
+    .checkout-step__intro small { display:block; font-weight:400; font-size:.78rem; color:#8a6b66; margin-top:3px; line-height:1.45; }
+    .checkout-step__continue { margin-top:14px; }
+    .checkout-details { margin-top:12px; padding:10px 12px; border:1px solid #eee; border-radius:10px; }
+    .checkout-details summary { cursor:pointer; font-size:.85rem; color:#8a6b66; }
+    .checkout-details select, .checkout-details input[type="text"] { margin-top:8px; width:100%; }
+    .checkout-resumen-final { background:#faf7f6; border:1.5px solid #f0e9e7; border-radius:12px; padding:12px; font-size:.82rem; color:#4a403d; }
+    .checkout-resumen-final__row { display:flex; justify-content:space-between; margin-bottom:6px; gap:10px; }
+    .checkout-resumen-final__row:last-child { margin-bottom:0; }
+    .checkout-resumen-final__label { color:#8a6b66; flex-shrink:0; }
+    .checkout-resumen-final__valor { text-align:right; }
+    .ticket__comprobante { text-align:center; font-size:.78rem; color:#1a7f4b; font-weight:700; margin-bottom:4px; }
+    .ticket__qr { text-align:center; margin:14px 0 6px; }
+    .ticket__qr svg { background:#fff; padding:6px; border:1px solid #eee; border-radius:8px; }
+    .ticket__qr small { display:block; margin-top:6px; font-size:.72rem; color:#8a6b66; }
+    </style>
 </head>
 <body>
 
@@ -298,155 +339,156 @@
     </div>
 </div>
 
-<!-- ========== CHECKOUT MODAL (método de pago) ========== -->
+<!-- ========== CHECKOUT MODAL (checkout progresivo · 5 pasos colapsables) ========== -->
 <div class="modal-overlay" id="checkout-overlay" style="display:none;"></div>
 <div class="modal" id="checkout-modal" style="display:none;">
     <div class="modal__header">
-        <h3>¿Cómo querés pagar?</h3>
+        <h3>Finalizá tu compra</h3>
         <button class="modal__close" id="checkout-close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal__body">
+
         <!-- Resumen de lo que se está comprando: foto, talla, precio y total -->
         <div id="checkout-resumen" class="checkout-resumen" style="display:none;"></div>
+
         <!-- Reserva de 5 minutos (el primero que llega gana) -->
-        <div id="reserva-aviso" style="display:none; background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:14px;">
+        <div id="reserva-aviso" style="display:none; background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:14px;">
             ⏳ Te reservamos estos productos por <b><span id="reserva-timer">5:00</span></b> — completá tu compra antes de que expire.
         </div>
-        <!-- PLAN 2 (19-sep-2026): aviso de pago adelantado (solo si es reincidente) -->
-        <div id="pago-adelantado-aviso" style="display:none;background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:.84rem;color:#8a5a1f;line-height:1.5;">
-            💳 <b>Esta compra va con pago adelantado (tarjeta)</b><br>
-            Como tuvimos un par de entregas que no se retiraron, te pedimos completar el pago al hacer el pedido 💛
-        </div>
-        <!-- Aviso aprobado de las 48 h -->
-        <div style="background:#f7f7ff;border:1.5px solid #e3e3f7;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:.8rem;color:#5b5b7a;line-height:1.5;">
-            ⏳ Si elegís tarjeta y el pago no se completa, te guardamos el pedido <b>48 h</b>. Te escribimos una vez para
-            ayudarte y, pasado ese tiempo, el producto vuelve a la tienda.
-        </div>
-        <div class="checkout-options">
-            <label class="checkout-option">
-                <input type="radio" name="pay-method" value="tarjeta" checked>
-                <div class="checkout-option__box">
-                    <span class="checkout-option__icon">💳</span>
-                    <div>
-                        <strong>Tarjeta (Wompi)</strong>
-                        <small>Crédito, débito o puntos Agrícola. Pago seguro online.</small>
-                    </div>
-                </div>
-            </label>
-            <label class="checkout-option">
-                <input type="radio" name="pay-method" value="efectivo">
-                <div class="checkout-option__box">
-                    <span class="checkout-option__icon">💵</span>
-                    <div>
-                        <strong>Efectivo</strong>
-                        <small>Pagás al retirar en los puntos de BARATUSS ✅ <em style="color:#a08a86;">(no aplica para envíos por agencia — esos van con tarjeta)</em></small>
-                    </div>
-                </div>
-            </label>
+
+        <!-- ¿Necesitas ayuda? (discreto, NO es un paso) → WhatsApp personal de Cindy -->
+        <div class="checkout-help" id="checkout-help">
+            <a href="https://wa.me/50376626575?text=Hola%20Cindy%2C%20necesito%20ayuda%20con%20mi%20compra%20en%20BARATUSS%20%F0%9F%92%9B" target="_blank" rel="noopener">¿Necesitas ayuda? 💬</a>
         </div>
 
-        <div id="checkout-delivery" style="display:block;">
-            <h4 class="checkout-subtitle">¿Dónde retirás tu pedido?</h4>
-            <div class="checkout-options">
-                <label class="checkout-option">
-                    <input type="radio" name="delivery-method" value="punto" checked>
-                    <div class="checkout-option__box">
-                        <span class="checkout-option__icon">🏪</span>
-                        <div>
-                            <strong>Retiro en punto BARATUSS</strong>
-                            <small>Sin costo — elegí el punto más cercano</small>
+        <!-- Barra de progreso de los 5 pasos -->
+        <div class="checkout-progress" id="checkout-progress"></div>
+
+        <!-- ================= PASO 1 · 📦 ENTREGA ================= -->
+        <section class="checkout-step" id="step-entrega" data-paso="0">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(0)">
+                <span class="checkout-step__num">1</span>
+                <span class="checkout-step__titulo">📦 Entrega</span>
+                <span class="checkout-step__resumen"></span>
+                <span class="checkout-step__estado">Elegir</span>
+            </button>
+            <div class="checkout-step__body">
+                <div class="checkout-options">
+                    <label class="checkout-option">
+                        <input type="radio" name="delivery-method" value="punto" checked>
+                        <div class="checkout-option__box">
+                            <span class="checkout-option__icon">🏪</span>
+                            <div>
+                                <strong>Retiro en punto BARATUSS</strong>
+                                <small>Sin costo — elegí el punto más cercano</small>
+                            </div>
                         </div>
-                    </div>
-                </label>
-                <label class="checkout-option">
-                    <input type="radio" name="delivery-method" value="c807" id="delivery-c807">
-                    <div class="checkout-option__box">
-                        <span class="checkout-option__icon">📦</span>
-                        <div>
-                            <strong>Retiro en agencia C807</strong>
-                            <small>+$1.00 — te llaman cuando llegue tu pedido</small>
+                    </label>
+                    <label class="checkout-option">
+                        <input type="radio" name="delivery-method" value="c807" id="delivery-c807">
+                        <div class="checkout-option__box">
+                            <span class="checkout-option__icon">📦</span>
+                            <div>
+                                <strong>Retiro en agencia C807</strong>
+                                <small>+$1.00 — te llaman cuando llegue tu pedido</small>
+                            </div>
                         </div>
-                    </div>
-                </label>
-            </div>
-
-            <!-- Selector de punto BARATUSS (ventanas reales: Mié/Sáb, entrega gratis con Cindy) -->
-            <div class="form-group" id="checkout-point-group" style="margin-top:12px;">
-                <label for="checkout-point">Elegí día y punto de entrega (gratis):</label>
-                <!-- Tarjetas dinámicas de día/punto. El <select> de abajo queda OCULTO como fuente de
-                     datos (misma lógica de siempre: cashCheckout/wompiCheckout leen su .value). -->
-                <div id="puntos-cards" class="puntos-cards"></div>
-                <select id="checkout-point" onchange="showPointWhatsApp()" style="display:none;">
-                    <optgroup label="📅 Miércoles — entrega con Cindy">
-                        <option value="Mié — Metrocentro (08:00-12:00)">Metrocentro San Salvador · 08:00–12:00</option>
-                        <option value="Mié — Plaza Merliot (14:00-17:00)">Plaza Merliot · 14:00–17:00</option>
-                        <option value="Mié — C.C. La Skina (14:00-17:00)">C.C. La Skina · 14:00–17:00</option>
-                        <option value="Mié — C.C. Santa Rosa (14:00-17:00)">C.C. Santa Rosa · 14:00–17:00</option>
-                    </optgroup>
-                    <optgroup label="📅 Sábado — entrega con Cindy">
-                        <option value="Sáb — Metrocentro (08:00-10:00)">Metrocentro San Salvador · 08:00–10:00</option>
-                        <option value="Sáb — Plaza Merliot (12:00-14:00)">Plaza Merliot · 12:00–14:00</option>
-                    </optgroup>
-                </select>
-                <small style="opacity:.7;display:block;margin-top:6px;">
-                    🚗 Entrega gratis con Cindy — solo en los días/puntos indicados.
-                    ¿Necesitás otro punto u horario? Coordinamos por WhatsApp.
-                </small>
-                <!-- Aviso WhatsApp para entrega personal con Cindy -->
-                <div id="checkout-whatsapp-box" style="display:none;margin-top:12px;padding:12px 14px;background:#e8f7ee;border:1.5px solid #25D366;border-radius:12px;">
-                    <div style="font-size:.85rem;color:#1a7a3f;font-weight:600;margin-bottom:8px;">
-                        📲 Entrega coordinada con Cindy
-                    </div>
-                    <div style="font-size:.8rem;color:#333;margin-bottom:10px;">
-                        Cindy te confirmará la entrega por WhatsApp. Si necesitás otro punto u horario, escribinos.
-                    </div>
-                    <a href="https://wa.me/50362852631?text=Hola%20BARATUSS%2C%20quiero%20coordinar%20mi%20entrega" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25D366;color:#fff;padding:10px 18px;border-radius:100px;text-decoration:none;font-weight:700;font-size:.85rem;">
-                        💬 Escribinos por WhatsApp
-                    </a>
+                    </label>
                 </div>
-            </div>
 
-            <!-- Selector de agencia C807 -->
-            <div class="form-group" id="checkout-c807-group" style="display:none;margin-top:12px;">
-                <label for="checkout-c807-point">Elegí la agencia C807 más cercana:</label>
-                <select id="checkout-c807-point" onchange="showC807Address()">
-                    <optgroup label="🏙️ San Salvador / La Libertad">
-                        <option data-maps="https://www.google.com/maps/place/Centro+Comercial+Metrogaler%C3%ADas/@13.7070223,-89.2100921,17z" value="Agencia C807 — Metrogalerías (San Salvador)" data-address="Centro Comercial Metrogalerías, Local No 3-2A, Calle Los Sisimiles, San Salvador">Metrogalerías (San Salvador)</option>
-                        <option data-maps="https://www.google.com/maps/dir/13.6929516,-89.2181818/C807+Xpress+centro+comercial+las+terrazas" value="Agencia C807 — Las Terrazas, Centro SS" data-address="4ta Calle Poniente, 2do nivel Local 21, Centro de San Salvador">Las Terrazas, Centro de San Salvador</option>
-                        <option data-maps="https://www.google.com/maps/search/Mercado+de+Pulgas/@13.71191023104259,-89.2069760510,17z" value="Agencia C807 — Las Pulgas (Blvd Los Héroes)" data-address="Centro Comercial Las Pulgas, Locales 205-206, Blvd. Los Héroes (frente a Repuestos Omar), San Salvador">Las Pulgas (Blvd. Los Héroes)</option>
-                        <option data-maps="https://goo.gl/maps/VpQ8U51LxzDC9Bg77" value="Agencia C807 — Santa Tecla" data-address="Entre 4ta Calle Oriente y Av. Eduardo Zablah Touche, Santa Tecla">Santa Tecla</option>
-                        <option data-maps="https://maps.app.goo.gl/ZQtsi3DY6wLvMVGD9" value="Agencia C807 — HUB Plan de La Laguna (Ant. Cuscatlán)" data-address="Calle Circunvalación, Polígono D, Lote 7, Zona Industrial Plan de la Laguna, Antiguo Cuscatlán">HUB Plan de La Laguna (Antiguo Cuscatlán)</option>
-                        <option data-maps="https://maps.app.goo.gl/kCMvd8CQFqKCbZPv9" value="Agencia C807 — HUB San Blas" data-address="Plaza Los Alpes Local 6, carretera El Litoral, San Blas, La Libertad">HUB San Blas</option>
-                        <option data-maps="https://goo.gl/maps/buEwSDH8XfQqa5sy7" value="Agencia C807 — C.C. Paseo Venecia" data-address="Local PAD5 dentro del estacionamiento de Paseo Venecia (a la par de Maxi Despensa), San Salvador">C.C. Paseo Venecia</option>
-                        <option data-maps="https://maps.app.goo.gl/uRMFyhbWb6Lu1jjGA" value="Agencia C807 — HUB Plaza Amanecer (Soyapango)" data-address="Gasolinera Puma Morazán, Km 6½ Blvd. Ejército Nacional, contiguo a Soyapango, Terminal Plaza Amanecer">HUB Plaza Amanecer (Soyapango)</option>
-                    </optgroup>
-                    <optgroup label="🇸🇻 Otros departamentos">
-                        <option data-maps="https://goo.gl/maps/uPu43YYVn3q1s1Gh9" value="Agencia C807 — HUB Santa Ana" data-address="Barrio Nuevo, 10a Av. Sur, entre 27 y 29 Calle Poniente N. 105, Santa Ana">HUB Santa Ana</option>
-                        <option data-maps="https://goo.gl/maps/To2HtQFk2TTK4CFK9" value="Agencia C807 — HUB Sonsonate" data-address="Av. Las Palmeras, salida a San Salvador (frente al nuevo Banco Agrícola), Sonsonate">HUB Sonsonate</option>
-                        <option data-maps="https://maps.app.goo.gl/JDcxbi3Zp5BNNksW6" value="Agencia C807 — HUB Ahuachapán" data-address="Paraje Joya de Pacaya, Cantón El Barro de Los Ausoles, Lotes 2, 3 y 13, Ahuachapán">HUB Ahuachapán</option>
-                        <option data-maps="https://maps.app.goo.gl/nF9GX4yNC1J6nYzt9" value="Agencia C807 — HUB Chalatenango" data-address="Parcelación Hacienda El Coyolito, Cantón Quitasol, Chalatenango">HUB Chalatenango</option>
-                        <option data-maps="https://maps.app.goo.gl/7NEzA6xG28wRP5Bx9" value="Agencia C807 — HUB Cojutepeque" data-address="8va Av. Norte y Carretera Panamericana No. 16, Barrio Santa Lucía, Cojutepeque, Cuscatlán">HUB Cojutepeque</option>
-                        <option data-maps="https://maps.app.goo.gl/Mu4ueJKXCbVxWwVL8" value="Agencia C807 — HUB San Vicente" data-address="Barrio San José y Calvario, 3a Calle Poniente 24, San Vicente">HUB San Vicente</option>
-                        <option data-maps="https://goo.gl/maps/DW1cKp8SEq2ZMPkC8" value="Agencia C807 — HUB La Paz" data-address="Lotificación Valle Dorado, Lote 1 Polígono 14, El Rosario, La Paz">HUB La Paz</option>
-                        <option data-maps="https://www.google.com/maps/place/C807+Xpress+Agencia+San+Miguel/@13.4924639,-88.1720146,17z" value="Agencia C807 — HUB San Miguel" data-address="Colonia Granillo, Calle Candelaria #4, entre 8 y 10 Av. Norte, San Miguel">HUB San Miguel</option>
-                        <option data-maps="https://maps.app.goo.gl/bry2kCneppshfibW9" value="Agencia C807 — HUB Usulután" data-address="5ta Calle Oriente y 8 Av. Sur #46, Barrio El Calvario, Usulután">HUB Usulután</option>
-                        <option data-maps="https://goo.gl/maps/d8vd5BseTkXUfJFn8" value="Agencia C807 — HUB La Unión" data-address="Calle Circunvalación, Ex Hotel Centro Americano Local 30, La Unión">HUB La Unión</option>
-                    </optgroup>
-                </select>
-                <div class="c807-address" id="checkout-c807-address" style="display:none;margin-top:8px;padding:10px 14px;background:#f5f5f5;border-left:3px solid #ff9686;border-radius:8px;font-size:.85rem;">
-                    📍 <strong id="c807-address-name"></strong><br>
-                    <span id="c807-address-text"></span><br>
-                    <a id="c807-address-maps" href="#" target="_blank" rel="noopener" style="display:none;margin-top:8px;background:#ff9686;color:#fff;padding:6px 14px;border-radius:100px;text-decoration:none;font-weight:600;font-size:.8rem;">
-                        📍 Ver en Google Maps
-                    </a>
+                <!-- Selector de punto BARATUSS (ventanas reales: Mié/Sáb, entrega gratis con Cindy) -->
+                <div class="form-group" id="checkout-point-group" style="margin-top:12px;">
+                    <label for="checkout-point">Elegí día y punto de entrega (gratis):</label>
+                    <!-- Tarjetas dinámicas de día/punto. El <select> de abajo queda OCULTO como fuente de
+                         datos (misma lógica de siempre: cashCheckout/wompiCheckout leen su .value). -->
+                    <div id="puntos-cards" class="puntos-cards"></div>
+                    <select id="checkout-point" onchange="showPointWhatsApp()" style="display:none;">
+                        <optgroup label="📅 Miércoles — entrega con Cindy">
+                            <option value="Mié — Metrocentro (08:00-12:00)">Metrocentro San Salvador · 08:00–12:00</option>
+                            <option value="Mié — Plaza Merliot (14:00-17:00)">Plaza Merliot · 14:00–17:00</option>
+                            <option value="Mié — C.C. La Skina (14:00-17:00)">C.C. La Skina · 14:00–17:00</option>
+                            <option value="Mié — C.C. Santa Rosa (14:00-17:00)">C.C. Santa Rosa · 14:00–17:00</option>
+                        </optgroup>
+                        <optgroup label="📅 Sábado — entrega con Cindy">
+                            <option value="Sáb — Metrocentro (08:00-10:00)">Metrocentro San Salvador · 08:00–10:00</option>
+                            <option value="Sáb — Plaza Merliot (12:00-14:00)">Plaza Merliot · 12:00–14:00</option>
+                        </optgroup>
+                    </select>
+                    <small style="opacity:.7;display:block;margin-top:6px;">
+                        🚗 Entrega gratis con Cindy — solo en los días/puntos indicados.
+                        ¿Necesitás otro punto u horario? Coordinamos por WhatsApp.
+                    </small>
+                    <!-- Aviso WhatsApp para entrega personal con Cindy -->
+                    <div id="checkout-whatsapp-box" style="display:none;margin-top:12px;padding:12px 14px;background:#e8f7ee;border:1.5px solid #25D366;border-radius:12px;">
+                        <div style="font-size:.85rem;color:#1a7a3f;font-weight:600;margin-bottom:8px;">
+                            📲 Entrega coordinada con Cindy
+                        </div>
+                        <div style="font-size:.8rem;color:#333;margin-bottom:10px;">
+                            Cindy te confirmará la entrega por WhatsApp. Si necesitás otro punto u horario, escribinos.
+                        </div>
+                        <a href="https://wa.me/50376626575?text=Hola%20Cindy%2C%20quiero%20coordinar%20mi%20entrega" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25D366;color:#fff;padding:10px 18px;border-radius:100px;text-decoration:none;font-weight:700;font-size:.85rem;">
+                            💬 Escribinos por WhatsApp
+                        </a>
+                    </div>
                 </div>
-                <small style="opacity:.7;display:block;margin-top:6px;">
-                    📦 Te llamarán al teléfono cuando tu pedido esté en la agencia.
-                    <a href="https://c807xpress.com/sv/agencias/" target="_blank" rel="noopener">Ver horarios de agencias</a>
-                </small>
-            </div>
 
-            <div id="checkout-customer-fields">
+                <!-- Selector de agencia C807 -->
+                <div class="form-group" id="checkout-c807-group" style="display:none;margin-top:12px;">
+                    <label for="checkout-c807-point">Elegí la agencia C807 más cercana:</label>
+                    <select id="checkout-c807-point" onchange="showC807Address()">
+                        <optgroup label="🏙️ San Salvador / La Libertad">
+                            <option data-maps="https://www.google.com/maps/place/Centro+Comercial+Metrogaler%C3%ADas/@13.7070223,-89.2100921,17z" value="Agencia C807 — Metrogalerías (San Salvador)" data-address="Centro Comercial Metrogalerías, Local No 3-2A, Calle Los Sisimiles, San Salvador">Metrogalerías (San Salvador)</option>
+                            <option data-maps="https://www.google.com/maps/dir/13.6929516,-89.2181818/C807+Xpress+centro+comercial+las+terrazas" value="Agencia C807 — Las Terrazas, Centro SS" data-address="4ta Calle Poniente, 2do nivel Local 21, Centro de San Salvador">Las Terrazas, Centro de San Salvador</option>
+                            <option data-maps="https://www.google.com/maps/search/Mercado+de+Pulgas/@13.71191023104259,-89.2069760510,17z" value="Agencia C807 — Las Pulgas (Blvd Los Héroes)" data-address="Centro Comercial Las Pulgas, Locales 205-206, Blvd. Los Héroes (frente a Repuestos Omar), San Salvador">Las Pulgas (Blvd. Los Héroes)</option>
+                            <option data-maps="https://goo.gl/maps/VpQ8U51LxzDC9Bg77" value="Agencia C807 — Santa Tecla" data-address="Entre 4ta Calle Oriente y Av. Eduardo Zablah Touche, Santa Tecla">Santa Tecla</option>
+                            <option data-maps="https://maps.app.goo.gl/ZQtsi3DY6wLvMVGD9" value="Agencia C807 — HUB Plan de La Laguna (Ant. Cuscatlán)" data-address="Calle Circunvalación, Polígono D, Lote 7, Zona Industrial Plan de la Laguna, Antiguo Cuscatlán">HUB Plan de La Laguna (Antiguo Cuscatlán)</option>
+                            <option data-maps="https://maps.app.goo.gl/kCMvd8CQFqKCbZPv9" value="Agencia C807 — HUB San Blas" data-address="Plaza Los Alpes Local 6, carretera El Litoral, San Blas, La Libertad">HUB San Blas</option>
+                            <option data-maps="https://goo.gl/maps/buEwSDH8XfQqa5sy7" value="Agencia C807 — C.C. Paseo Venecia" data-address="Local PAD5 dentro del estacionamiento de Paseo Venecia (a la par de Maxi Despensa), San Salvador">C.C. Paseo Venecia</option>
+                            <option data-maps="https://maps.app.goo.gl/uRMFyhbWb6Lu1jjGA" value="Agencia C807 — HUB Plaza Amanecer (Soyapango)" data-address="Gasolinera Puma Morazán, Km 6½ Blvd. Ejército Nacional, contiguo a Soyapango, Terminal Plaza Amanecer">HUB Plaza Amanecer (Soyapango)</option>
+                        </optgroup>
+                        <optgroup label="🇸🇻 Otros departamentos">
+                            <option data-maps="https://goo.gl/maps/uPu43YYVn3q1s1Gh9" value="Agencia C807 — HUB Santa Ana" data-address="Barrio Nuevo, 10a Av. Sur, entre 27 y 29 Calle Poniente N. 105, Santa Ana">HUB Santa Ana</option>
+                            <option data-maps="https://goo.gl/maps/To2HtQFk2TTK4CFK9" value="Agencia C807 — HUB Sonsonate" data-address="Av. Las Palmeras, salida a San Salvador (frente al nuevo Banco Agrícola), Sonsonate">HUB Sonsonate</option>
+                            <option data-maps="https://maps.app.goo.gl/JDcxbi3Zp5BNNksW6" value="Agencia C807 — HUB Ahuachapán" data-address="Paraje Joya de Pacaya, Cantón El Barro de Los Ausoles, Lotes 2, 3 y 13, Ahuachapán">HUB Ahuachapán</option>
+                            <option data-maps="https://maps.app.goo.gl/nF9GX4yNC1J6nYzt9" value="Agencia C807 — HUB Chalatenango" data-address="Parcelación Hacienda El Coyolito, Cantón Quitasol, Chalatenango">HUB Chalatenango</option>
+                            <option data-maps="https://maps.app.goo.gl/7NEzA6xG28wRP5Bx9" value="Agencia C807 — HUB Cojutepeque" data-address="8va Av. Norte y Carretera Panamericana No. 16, Barrio Santa Lucía, Cojutepeque, Cuscatlán">HUB Cojutepeque</option>
+                            <option data-maps="https://maps.app.goo.gl/Mu4ueJKXCbVxWwVL8" value="Agencia C807 — HUB San Vicente" data-address="Barrio San José y Calvario, 3a Calle Poniente 24, San Vicente">HUB San Vicente</option>
+                            <option data-maps="https://goo.gl/maps/DW1cKp8SEq2ZMPkC8" value="Agencia C807 — HUB La Paz" data-address="Lotificación Valle Dorado, Lote 1 Polígono 14, El Rosario, La Paz">HUB La Paz</option>
+                            <option data-maps="https://www.google.com/maps/place/C807+Xpress+Agencia+San+Miguel/@13.4924639,-88.1720146,17z" value="Agencia C807 — HUB San Miguel" data-address="Colonia Granillo, Calle Candelaria #4, entre 8 y 10 Av. Norte, San Miguel">HUB San Miguel</option>
+                            <option data-maps="https://maps.app.goo.gl/bry2kCneppshfibW9" value="Agencia C807 — HUB Usulután" data-address="5ta Calle Oriente y 8 Av. Sur #46, Barrio El Calvario, Usulután">HUB Usulután</option>
+                            <option data-maps="https://goo.gl/maps/d8vd5BseTkXUfJFn8" value="Agencia C807 — HUB La Unión" data-address="Calle Circunvalación, Ex Hotel Centro Americano Local 30, La Unión">HUB La Unión</option>
+                        </optgroup>
+                    </select>
+                    <div class="c807-address" id="checkout-c807-address" style="display:none;margin-top:8px;padding:10px 14px;background:#f5f5f5;border-left:3px solid #ff9686;border-radius:8px;font-size:.85rem;">
+                        📍 <strong id="c807-address-name"></strong><br>
+                        <span id="c807-address-text"></span><br>
+                        <a id="c807-address-maps" href="#" target="_blank" rel="noopener" style="display:none;margin-top:8px;background:#ff9686;color:#fff;padding:6px 14px;border-radius:100px;text-decoration:none;font-weight:600;font-size:.8rem;">
+                            📍 Ver en Google Maps
+                        </a>
+                    </div>
+                    <small style="opacity:.7;display:block;margin-top:6px;">
+                        📦 Te llamarán al teléfono cuando tu pedido esté en la agencia.
+                        <a href="https://c807xpress.com/sv/agencias/" target="_blank" rel="noopener">Ver horarios de agencias</a>
+                    </small>
+                </div>
+
+                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="0">Continuar →</button>
+            </div>
+        </section>
+
+        <!-- ================= PASO 2 · 💌 CONTACTO (verificación adentro) ================= -->
+        <section class="checkout-step" id="step-contacto" data-paso="1">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(1)">
+                <span class="checkout-step__num">2</span>
+                <span class="checkout-step__titulo">💌 Contacto</span>
+                <span class="checkout-step__resumen"></span>
+                <span class="checkout-step__estado">Completar</span>
+            </button>
+            <div class="checkout-step__body">
+                <div class="checkout-step__intro">
+                    ¿Dónde podemos contactarte?
+                    <small>💗 Te avisamos el día de tu entrega y te mandamos tu comprobante por WhatsApp.</small>
+                </div>
                 <div class="form-group">
                     <label>Tu nombre</label>
                     <input type="text" id="checkout-name" placeholder="Nombre completo" required>
@@ -459,32 +501,38 @@
                         🔒 Usamos tu WhatsApp <b>solo</b> para coordinar tu pedido (nunca para publicidad).
                     </small>
                 </div>
-                <!-- PLAN 2 (19-sep-2026): si el cliente no usa WhatsApp, se le pide el correo -->
-                <div class="form-group">
-                    <label style="font-size:.88rem;">¿Usás WhatsApp?</label>
-                    <div style="display:flex;gap:16px;font-size:.92rem;">
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                            <input type="radio" name="usa-wa" value="si" checked style="width:auto;"> Sí 👍
-                        </label>
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                            <input type="radio" name="usa-wa" value="no" style="width:auto;"> No
-                        </label>
+
+                <!-- 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): confirmar WhatsApp ANTES de pagar -->
+                <div id="checkout-verificacion" style="display:none;margin-top:14px;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+                    <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:6px;">Confirmemos tu WhatsApp 📱</div>
+                    <div id="verif-msg" style="font-size:.8rem;margin-bottom:10px;color:#5a4a47;line-height:1.5;">
+                        💗 Antes de pagar, confirmá tu WhatsApp: te mandamos un código de 6 números. 🔒
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:10px;">
+                        <input id="verif-codigo" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+                               placeholder="• • • • • •"
+                               style="flex:1;padding:12px;border:1.5px solid #ffd9d2;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:6px;">
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" id="verif-enviar"
+                                style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#25D366;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
+                            Enviarme el código 💬
+                        </button>
+                        <button type="button" id="verif-confirmar"
+                                style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
+                            Confirmar ✅
+                        </button>
+                    </div>
+                    <div style="margin-top:10px;font-size:.78rem;line-height:1.5;">
+                        🤔 ¿No tenés WhatsApp o necesitás ayuda?
+                        <a href="https://wa.me/50376626575" target="_blank" rel="noopener"
+                           style="color:#25D366;font-weight:700;text-decoration:underline;">Escribirle a Cindy 💬</a>
                     </div>
                 </div>
-                <div class="form-group" id="wa-correo-grupo" style="display:none;">
-                    <label>Tu correo electrónico</label>
-                    <input type="email" id="checkout-email-wa" placeholder="tucorreo@ejemplo.com" autocomplete="email">
-                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">
-                        📧 Te avisamos por correo: confirmación, día de entrega y recordatorios.
-                    </small>
-                </div>
 
-                <!-- 📝 ¿CÓMO NOS CONOCISTE? (23-sep-2026) — 100% OPCIONAL ✅
-                     Se guarda en el pedido y sirve para las estadísticas de la Agenda ✅ -->
-                <div class="form-group">
-                    <label style="font-size:.88rem;">
-                        ¿Cómo nos conociste? <span style="color:#b3a5a2;font-weight:400;">(opcional)</span>
-                    </label>
+                <!-- 📝 ¿CÓMO NOS CONOCISTE? (opcional y discreto) -->
+                <details class="checkout-details">
+                    <summary>¿Cómo nos conociste? <span style="color:#b3a5a2;font-weight:400;">(opcional)</span></summary>
                     <select id="checkout-como-conocio" onchange="mostrarConocioDetalle()">
                         <option value="">Prefiero no decir</option>
                         <option value="redes">Redes sociales (Instagram, TikTok, Facebook)</option>
@@ -496,123 +544,159 @@
                     <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">
                         💛 Nos ayuda a llegar a más personas. No es obligatorio.
                     </small>
-                </div>
+                </details>
 
-                <!-- 🎁 CÓDIGO DE AMIGA (23-sep-2026) — programa de referidos -->
-                <div class="form-group">
-                    <label style="font-size:.88rem;">
-                        ¿Tenés un código de una amiga? <span style="color:#b3a5a2;font-weight:400;">(opcional)</span>
+                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="1">Continuar →</button>
+            </div>
+        </section>
+
+        <!-- ================= PASO 3 · 🎟️ CUPÓN (opcional) ================= -->
+        <section class="checkout-step" id="step-cupon" data-paso="2">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(2)">
+                <span class="checkout-step__num">3</span>
+                <span class="checkout-step__titulo">🎟️ Cupón</span>
+                <span class="checkout-step__resumen"></span>
+                <span class="checkout-step__estado">Opcional</span>
+            </button>
+            <div class="checkout-step__body">
+                <div id="cupon-box" style="margin:0 0 10px;padding:12px 14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+                    <label for="cupon-codigo" style="display:block;font-size:.82rem;font-weight:600;color:#b9453a;margin-bottom:6px;">
+                        🎟️ ¿Tenés un cupón? <span style="font-weight:400;color:#b3a5a2;">(opcional)</span>
                     </label>
-                    <input type="text" id="checkout-codigo-amiga" placeholder="Ej: MARIA10" maxlength="12"
-                           style="text-transform:uppercase;" oninput="revisarCodigoAmiga()">
-                    <small id="checkout-codigo-aviso" style="display:none;margin-top:6px;font-size:.78rem;"></small>
-                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">
-                        🎁 Te da <b>10% de descuento</b> en productos (hasta $5) y tu amiga gana un premio 💛<br>
-                        ⚠️ Solo en tu <b>primera compra</b> y con tu <b>cuenta</b> de la tienda.
-                    </small>
-                </div>
-            </div>
-
-            <!-- 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): confirmar WhatsApp ANTES de pagar -->
-            <div id="checkout-verificacion" style="display:none;margin-top:14px;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
-                <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:6px;">Confirmemos tu WhatsApp 📱</div>
-                <div id="verif-msg" style="font-size:.8rem;margin-bottom:10px;color:#5a4a47;line-height:1.5;">
-                    💗 Antes de pagar, confirmá tu WhatsApp: te mandamos un código de 6 números. 🔒
-                </div>
-                <div style="display:flex;gap:8px;margin-bottom:10px;">
-                    <input id="verif-codigo" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
-                           placeholder="• • • • • •"
-                           style="flex:1;padding:12px;border:1.5px solid #ffd9d2;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:6px;">
-                </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button type="button" id="verif-enviar"
-                            style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#25D366;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
-                        Enviarme el código 💬
-                    </button>
-                    <button type="button" id="verif-confirmar"
-                            style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
-                        Confirmar ✅
-                    </button>
-                </div>
-                <div style="margin-top:10px;font-size:.78rem;line-height:1.5;">
-                    🤔 ¿No tenés WhatsApp o necesitás ayuda?
-                    <a href="https://wa.me/50376626575" target="_blank" rel="noopener"
-                       style="color:#25D366;font-weight:700;text-decoration:underline;">Escribirle a Cindy 💬</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== DOCUMENTO TRIBUTARIO — el CLIENTE decide (opcional) ===== -->
-        <div id="checkout-factura" style="margin-top:16px;">
-            <h4 class="checkout-subtitle">¿Querés tu comprobante? <small style="font-weight:400;opacity:.7;">(opcional)</small></h4>
-            <div class="checkout-options">
-                <label class="checkout-option">
-                    <input type="radio" name="factura-tipo" value="ninguna" checked>
-                    <div class="checkout-option__box">
-                        <span class="checkout-option__icon">🙂</span>
-                        <div><strong>No necesito comprobante</strong><small>Compra rápida, sin datos extra</small></div>
+                    <div style="display:flex;gap:8px;">
+                        <input id="cupon-codigo" type="text" placeholder="Escribí tu código"
+                               autocomplete="off" autocapitalize="characters"
+                               style="flex:1;padding:10px 12px;border:1.5px solid #ffd9d2;border-radius:10px;font-size:.85rem;text-transform:uppercase;">
+                        <button type="button" id="cupon-aplicar"
+                                style="padding:10px 16px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;">
+                            Aplicar
+                        </button>
                     </div>
-                </label>
-                <label class="checkout-option">
-                    <input type="radio" name="factura-tipo" value="consumidor">
-                    <div class="checkout-option__box">
-                        <span class="checkout-option__icon">🧾</span>
-                        <div><strong>Factura de consumidor final</strong><small>Solo tu nombre · se puede enviar por correo</small></div>
-                    </div>
-                </label>
-                <label class="checkout-option">
-                    <input type="radio" name="factura-tipo" value="ccf">
-                    <div class="checkout-option__box">
-                        <span class="checkout-option__icon">🏢</span>
-                        <div><strong>Comprobante de crédito fiscal</strong><small>Para empresas: NIT, NRC, giro y dirección</small></div>
-                    </div>
-                </label>
-            </div>
-
-            <div id="factura-datos" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--gray-200);border-radius:12px;background:#fbfbfb;">
-                <div id="factura-ccf-campos" style="display:none;">
-                    <div class="form-group"><label>Nombre o razón social</label><input type="text" id="factura-nombre" placeholder="Como está en tu registro"></div>
-                    <div class="form-group" style="margin-bottom:10px;"><label>NIT</label><input type="text" id="factura-nit" placeholder="0000-000000-000-0" inputmode="numeric"></div>
-                    <div class="form-group" style="margin-bottom:10px;"><label>NRC</label><input type="text" id="factura-nrc" placeholder="00000-0" inputmode="numeric"></div>
-                    <div class="form-group" style="margin-bottom:10px;"><label>Giro o actividad económica</label><input type="text" id="factura-giro" placeholder="Ej: comercio al por menor de ropa"></div>
-                    <div class="form-group" style="margin-bottom:10px;"><label>Dirección</label><input type="text" id="factura-direccion" placeholder="Departamento, municipio y dirección"></div>
+                    <div id="cupon-msg" style="font-size:.78rem;margin-top:7px;display:none;"></div>
                 </div>
-                <label style="display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:600;cursor:pointer;">
-                    <input type="checkbox" id="factura-por-correo" checked style="width:auto;"> 📧 Enviármelo por correo electrónico
-                </label>
-                <div class="form-group" id="factura-correo-grupo" style="margin-top:10px;margin-bottom:0;">
-                    <label>Correo electrónico</label>
-                    <input type="email" id="checkout-email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+                <div style="text-align:right;margin-bottom:4px;">
+                    <a href="#" id="cupon-omitir" style="font-size:.8rem;color:#8a6b66;text-decoration:underline;">Omitir →</a>
                 </div>
+                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="2">Continuar →</button>
             </div>
-        </div>
+        </section>
 
-        <!-- ===== CUPÓN (plan contingencias v1.2 · Etapa 3) ===== -->
-        <div id="cupon-box" style="margin:14px 0;padding:12px 14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
-            <label for="cupon-codigo" style="display:block;font-size:.82rem;font-weight:600;color:#b9453a;margin-bottom:6px;">
-                🎟️ ¿Tenés un cupón?
-            </label>
-            <div style="display:flex;gap:8px;">
-                <input id="cupon-codigo" type="text" placeholder="Escribí tu código"
-                       autocomplete="off" autocapitalize="characters"
-                       style="flex:1;padding:10px 12px;border:1.5px solid #ffd9d2;border-radius:10px;font-size:.85rem;text-transform:uppercase;">
-                <button type="button" id="cupon-aplicar"
-                        style="padding:10px 16px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;">
-                    Aplicar
-                </button>
+        <!-- ================= PASO 4 · 💳 PAGO ================= -->
+        <section class="checkout-step" id="step-pago" data-paso="3">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(3)">
+                <span class="checkout-step__num">4</span>
+                <span class="checkout-step__titulo">💳 Pago</span>
+                <span class="checkout-step__resumen"></span>
+                <span class="checkout-step__estado">Elegir</span>
+            </button>
+            <div class="checkout-step__body">
+                <!-- PLAN 2 (19-sep-2026): aviso de pago adelantado (solo si es reincidente) -->
+                <div id="pago-adelantado-aviso" style="display:none;background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:.84rem;color:#8a5a1f;line-height:1.5;">
+                    💳 <b>Esta compra va con pago adelantado (tarjeta)</b><br>
+                    Como tuvimos un par de entregas que no se retiraron, te pedimos completar el pago al hacer el pedido 💛
+                </div>
+                <div class="checkout-options">
+                    <label class="checkout-option">
+                        <input type="radio" name="pay-method" value="tarjeta" checked>
+                        <div class="checkout-option__box">
+                            <span class="checkout-option__icon">💳</span>
+                            <div>
+                                <strong>Tarjeta (Wompi)</strong>
+                                <small>Crédito, débito o puntos Agrícola. Pago seguro online.</small>
+                            </div>
+                        </div>
+                    </label>
+                    <label class="checkout-option">
+                        <input type="radio" name="pay-method" value="efectivo">
+                        <div class="checkout-option__box">
+                            <span class="checkout-option__icon">💵</span>
+                            <div>
+                                <strong>Efectivo</strong>
+                                <small>Pagás al retirar en los puntos de BARATUSS ✅ <em style="color:#a08a86;">(no aplica para envíos por agencia — esos van con tarjeta)</em></small>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+                <!-- Aviso aprobado de las 48 h -->
+                <div style="background:#f7f7ff;border:1.5px solid #e3e3f7;border-radius:12px;padding:11px 13px;margin-top:12px;font-size:.8rem;color:#5b5b7a;line-height:1.5;">
+                    ⏳ Si elegís tarjeta y el pago no se completa, te guardamos el pedido <b>48 h</b>. Te escribimos una vez para
+                    ayudarte y, pasado ese tiempo, el producto vuelve a la tienda.
+                </div>
+
+                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="3">Continuar →</button>
             </div>
-            <div id="cupon-msg" style="font-size:.78rem;margin-top:7px;display:none;"></div>
-        </div>
+        </section>
 
-        <div class="cart-total" style="margin:16px 0;">
-            <span>Total a pagar</span>
-            <span id="checkout-total">$0.00</span>
-            <span id="checkout-breakdown"></span>
-        </div>
-        <button class="btn btn--primary btn--full" id="checkout-confirm">Confirmar pedido</button>
-        <p style="font-size:.72rem;color:var(--gray-400);text-align:center;margin-top:10px;line-height:1.5;">
-            Al confirmar aceptás nuestra <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--accent-dark);text-decoration:underline;">Política de Privacidad</a> 🔒 y las <a href="terminos.html" target="_blank" rel="noopener" style="color:var(--accent-dark);text-decoration:underline;">Condiciones del Servicio</a> 📜
-        </p>
+        <!-- ================= PASO 5 · 🛍️ CONFIRMAR ================= -->
+        <section class="checkout-step" id="step-confirmar" data-paso="4">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(4)">
+                <span class="checkout-step__num">5</span>
+                <span class="checkout-step__titulo">🛍️ Confirmar</span>
+                <span class="checkout-step__resumen"></span>
+                <span class="checkout-step__estado">Revisar</span>
+            </button>
+            <div class="checkout-step__body">
+                <!-- Resumen compacto (se arma en JS) -->
+                <div id="checkout-resumen-final" class="checkout-resumen-final"></div>
+
+                <!-- ===== DOCUMENTO TRIBUTARIO — el CLIENTE decide (opcional, discreto) ===== -->
+                <details class="checkout-details" style="margin-top:12px;">
+                    <summary>🧾 ¿Necesitás factura/CCF? <span style="color:#b3a5a2;font-weight:400;">(opcional)</span></summary>
+                    <div id="checkout-factura" style="margin-top:10px;">
+                        <div class="checkout-options">
+                            <label class="checkout-option">
+                                <input type="radio" name="factura-tipo" value="ninguna" checked>
+                                <div class="checkout-option__box">
+                                    <span class="checkout-option__icon">🙂</span>
+                                    <div><strong>No necesito comprobante</strong><small>Compra rápida, sin datos extra</small></div>
+                                </div>
+                            </label>
+                            <label class="checkout-option">
+                                <input type="radio" name="factura-tipo" value="consumidor">
+                                <div class="checkout-option__box">
+                                    <span class="checkout-option__icon">🧾</span>
+                                    <div><strong>Factura de consumidor final</strong><small>Solo tu nombre · se puede enviar por correo</small></div>
+                                </div>
+                            </label>
+                            <label class="checkout-option">
+                                <input type="radio" name="factura-tipo" value="ccf">
+                                <div class="checkout-option__box">
+                                    <span class="checkout-option__icon">🏢</span>
+                                    <div><strong>Comprobante de crédito fiscal</strong><small>Para empresas: NIT, NRC, giro y dirección</small></div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div id="factura-datos" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--gray-200);border-radius:12px;background:#fbfbfb;">
+                            <div id="factura-ccf-campos" style="display:none;">
+                                <div class="form-group"><label>Nombre o razón social</label><input type="text" id="factura-nombre" placeholder="Como está en tu registro"></div>
+                                <div class="form-group" style="margin-bottom:10px;"><label>NIT</label><input type="text" id="factura-nit" placeholder="0000-000000-000-0" inputmode="numeric"></div>
+                                <div class="form-group" style="margin-bottom:10px;"><label>NRC</label><input type="text" id="factura-nrc" placeholder="00000-0" inputmode="numeric"></div>
+                                <div class="form-group" style="margin-bottom:10px;"><label>Giro o actividad económica</label><input type="text" id="factura-giro" placeholder="Ej: comercio al por menor de ropa"></div>
+                                <div class="form-group" style="margin-bottom:10px;"><label>Dirección</label><input type="text" id="factura-direccion" placeholder="Departamento, municipio y dirección"></div>
+                            </div>
+                            <label style="display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:600;cursor:pointer;">
+                                <input type="checkbox" id="factura-por-correo" checked style="width:auto;"> 📧 Enviármelo por correo electrónico
+                            </label>
+                            <div class="form-group" id="factura-correo-grupo" style="margin-top:10px;margin-bottom:0;">
+                                <label>Correo electrónico</label>
+                                <input type="email" id="checkout-email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="cart-total" style="margin:16px 0;">
+                    <span>Total a pagar</span>
+                    <span id="checkout-total">$0.00</span>
+                    <span id="checkout-breakdown"></span>
+                </div>
+                <button class="btn btn--primary btn--full" id="checkout-confirm">🛍️ Confirmar pedido</button>
+                <p style="font-size:.72rem;color:var(--gray-400);text-align:center;margin-top:10px;line-height:1.5;">
+                    Al confirmar aceptás nuestra <a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--accent-dark);text-decoration:underline;">Política de Privacidad</a> 🔒 y las <a href="terminos.html" target="_blank" rel="noopener" style="color:var(--accent-dark);text-decoration:underline;">Condiciones del Servicio</a> 📜
+                </p>
+            </div>
+        </section>
     </div>
 </div>
 
@@ -813,6 +897,10 @@
                 <span>💰 TOTAL PAGADO</span>
                 <span id="ticket-total">$0.00</span>
             </div>
+            <!-- COMPROBANTE + QR (efectivo): recibo interno de verificación -->
+            <div class="ticket__comprobante" id="ticket-comprobante" style="display:none;">🧾 Comprobante de compra — mostralo al retirar</div>
+            <div class="ticket__qr" id="ticket-qr" style="display:none;"></div>
+            <div id="ticket-pago" style="text-align:center;font-size:.78rem;color:#4a403d;margin:8px 0 0;display:none;"></div>
             <div class="ticket__footer">¡Te esperamos! 📲 Te contactaremos para coordinar la entrega.</div>
         </div>
         <div id="ticket-factura" style="margin-top:12px;"></div>
@@ -840,6 +928,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260924verif"></script>
+<script src="scripts.js?v=20260925checkout"></script>
 </body>
 </html>

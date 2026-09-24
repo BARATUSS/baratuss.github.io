@@ -33,21 +33,7 @@ function mostrarConocioDetalle() {
     if (!mostrar) caja.value = '';
 }
 
-// 🎁 CÓDIGO DE AMIGA (23-sep-2026) — programa de referidos
-function codigoAmigaValor() {
-    const el = document.getElementById('checkout-codigo-amiga');
-    return el ? String(el.value || '').trim().toUpperCase() : '';
-}
-function revisarCodigoAmiga() {
-    const aviso = document.getElementById('checkout-codigo-aviso');
-    const code = codigoAmigaValor();
-    if (!aviso) return;
-    if (!code) { aviso.style.display = 'none'; aviso.textContent = ''; return; }
-    aviso.style.display = '';
-    aviso.style.color = '#2f7a4d';
-    aviso.textContent = '🎁 ¡Genial! Se aplica 10% de descuento (hasta $5) al confirmar ✅';
-}
-// La sesión de la cuenta (obligatoria para usar el código ✅)
+// La sesión de la cuenta (obligatoria para usar el código de amiga/referido ✅)
 async function sesionDeCuenta() {
     try {
         const c = getSupabase();
@@ -1617,18 +1603,22 @@ function iniciarTimerReserva(segundos) {
     }, 1000);
 }
 
-// ===== CUPÓN (plan contingencias v1.2 · Etapa 3) =====
-let cuponAplicado = null;   // { codigo, valor, tope } — lo llena la validación del servidor
+// ===== CÓDIGO ÚNICO (cupón o referido) — clasificación EN SERVIDOR =====
+// Un solo input para todo. El navegador solo cotiza; el servidor decide si es
+// cupón (validar_cupon) o código de amiga (profiles.codigo_referido) y recalcula.
+let codigoAplicado = null;   // { codigo, tipo, valor, tope } — lo llena la cotización del servidor
 
 // Descuento SOLO sobre productos (el envío nunca lleva descuento), con tope
-function descuentoCupon(baseTotal) {
-    if (!cuponAplicado || !baseTotal) return 0;
-    const bruto = Number(baseTotal) * Number(cuponAplicado.valor || 0) / 100;
-    const tope = (cuponAplicado.tope === null || cuponAplicado.tope === undefined) ? 1e9 : Number(cuponAplicado.tope);
+function descuentoCodigo(baseTotal) {
+    if (!codigoAplicado || !baseTotal) return 0;
+    const bruto = Number(baseTotal) * Number(codigoAplicado.valor || 0) / 100;
+    const tope = (codigoAplicado.tope === null || codigoAplicado.tope === undefined) ? 1e9 : Number(codigoAplicado.tope);
     return Math.round(Math.min(bruto, tope) * 100) / 100;
 }
 
-async function aplicarCupon() {
+// Cotiza el código con el backend y, si aplica, lo deja listo (NO descuenta del
+// stock ni crea pedido: eso pasa al confirmar, en el servidor).
+async function aplicarCodigo() {
     const inp = $('cupon-codigo');
     const msg = $('cupon-msg');
     if (!inp || !msg) return;
@@ -1636,7 +1626,7 @@ async function aplicarCupon() {
     msg.style.display = '';
     if (!codigo) {
         msg.style.color = '#b9453a';
-        msg.textContent = 'Escribí el código de tu cupón 🙂';
+        msg.textContent = 'Escribí el código de tu cupón o de tu amiga 🙂';
         return;
     }
     msg.style.color = '#8a5b52';
@@ -1657,31 +1647,33 @@ async function aplicarCupon() {
         });
         const d = await r.json().catch(() => ({}));
         if (!d || !d.ok) {
-            cuponAplicado = null;
+            codigoAplicado = null;
             msg.style.color = '#b9453a';
-            msg.textContent = '❌ ' + (d && (d.mensaje || d.error) ? (d.mensaje || d.error) : 'Ese cupón no es válido');
+            msg.textContent = '❌ ' + (d && (d.mensaje || d.error) ? (d.mensaje || d.error) : 'Ese código no es válido');
             updateCheckoutUI();
             return;
         }
-        cuponAplicado = {
+        codigoAplicado = {
             codigo: d.codigo || codigo,
+            tipo: d.tipo || 'cupon',
             valor: Number(d.valor || 0),
             tope: (d.tope === null || d.tope === undefined) ? null : Number(d.tope)
         };
-        const desc = descuentoCupon(getCartTotal());
+        const desc = descuentoCodigo(getCartTotal());
         msg.style.color = '#1a7f4b';
-        msg.textContent = '✅ Cupón aplicado: ' + cuponAplicado.valor + '% de descuento (−$' + desc.toFixed(2) + ')';
+        const etiqueta = codigoAplicado.tipo === 'referido' ? 'Código de amiga' : 'Cupón';
+        msg.textContent = '✅ ' + etiqueta + ' aplicado: ' + codigoAplicado.valor + '% de descuento (−$' + desc.toFixed(2) + ')';
         updateCheckoutUI();
     } catch (e) {
-        cuponAplicado = null;
+        codigoAplicado = null;
         msg.style.color = '#b9453a';
-        msg.textContent = '❌ No pudimos verificar el cupón. Probá de nuevo.';
+        msg.textContent = '❌ No pudimos verificar el código. Probá de nuevo.';
         updateCheckoutUI();
     }
 }
 
-function quitarCupon() {
-    cuponAplicado = null;
+function quitarCodigo() {
+    codigoAplicado = null;
     const msg = $('cupon-msg');
     if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
     const inp = $('cupon-codigo');
@@ -1692,9 +1684,9 @@ function quitarCupon() {
 function initCuponUI() {
     const btn = $('cupon-aplicar');
     const inp = $('cupon-codigo');
-    if (btn) btn.addEventListener('click', aplicarCupon);
+    if (btn) btn.addEventListener('click', aplicarCodigo);
     if (inp) {
-        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarCupon(); } });
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarCodigo(); } });
         inp.addEventListener('input', () => { inp.value = inp.value.toUpperCase(); });
     }
 }
@@ -1717,18 +1709,8 @@ function normalizarTelefono(v) {
     return (t.length === 11 && t.startsWith('503')) ? t : '';
 }
 
-function usaWhatsApp() {
-    const r = document.querySelector('input[name="usa-wa"]:checked');
-    return !r || r.value !== 'no';
-}
-
-function correoCliente() {
-    const wa = $('checkout-email-wa');
-    const fac = $('checkout-email');
-    return ((wa && wa.value.trim()) || (fac && fac.value.trim()) || '');
-}
-
-// Valida nombre + teléfono (+ correo si no usa WhatsApp) ANTES de crear el pedido
+// Valida nombre + teléfono ANTES de crear el pedido. El correo solo se usa para
+// el documento tributario (datosFactura), así que acá no se pide.
 function validarDatosCompra() {
     const nombre = $('checkout-name').value.trim();
     const tel = normalizarTelefono($('checkout-phone').value);
@@ -1738,14 +1720,8 @@ function validarDatosCompra() {
         mostrarAvisoTel('❌ Ese número no parece correcto — escribilo así: 7000-0000', false);
         return null;
     }
-    if (!usaWhatsApp() && !correoCliente()) {
-        const g = $('wa-correo-grupo');
-        if (g) g.style.display = '';
-        showToast('📧 Como no usás WhatsApp, dejanos tu correo para avisarte');
-        return null;
-    }
     mostrarAvisoTel('✅ Te escribiremos al ' + tel.slice(3, 7) + '-' + tel.slice(7), true);
-    return { nombre, tel, correo: correoCliente() || null, preferido: usaWhatsApp() ? 'whatsapp' : 'correo' };
+    return { nombre, tel, preferido: 'whatsapp' };
 }
 
 function mostrarAvisoTel(msg, ok) {
@@ -1901,6 +1877,162 @@ async function garantizarTelefonoVerificado() {
     return false;
 }
 
+// ===== CHECKOUT PROGRESIVO (24-sep-2026) · 5 pasos colapsables =====
+const CHECKOUT_PASOS = [
+    { id: 'step-entrega',   icono: '📦', titulo: 'Entrega' },
+    { id: 'step-contacto',  icono: '💌', titulo: 'Contacto' },
+    { id: 'step-cupon',     icono: '🎟️', titulo: 'Cupón' },
+    { id: 'step-pago',      icono: '💳', titulo: 'Pago' },
+    { id: 'step-confirmar', icono: '🛍️', titulo: 'Confirmar' },
+];
+let checkoutPasoActual = 0;
+let checkoutCompletados = {};
+let checkoutResumenes = {};
+
+function renderCheckoutProgress() {
+    const cont = $('checkout-progress');
+    if (!cont) return;
+    cont.innerHTML = CHECKOUT_PASOS.map((p, i) => {
+        const hecho = !!checkoutCompletados[p.id];
+        const activo = i === checkoutPasoActual;
+        const cls = activo ? 'checkout-progress__step--active' : (hecho ? 'checkout-progress__step--done' : '');
+        return `<div class="checkout-progress__step ${cls}" onclick="editarPaso(${i})">
+            <span class="checkout-progress__dot">${hecho ? '✓' : (i + 1)}</span>
+            <span class="checkout-progress__label">${p.icono} ${p.titulo}</span>
+        </div>`;
+    }).join('');
+}
+
+function refrescarPasos() {
+    CHECKOUT_PASOS.forEach((p, i) => {
+        const sec = $(p.id);
+        if (!sec) return;
+        const activo = i === checkoutPasoActual;
+        const hecho = !!checkoutCompletados[p.id];
+        sec.classList.toggle('checkout-step--active', activo);
+        sec.classList.toggle('checkout-step--done', !activo && hecho);
+        const resumen = sec.querySelector('.checkout-step__resumen');
+        const estado = sec.querySelector('.checkout-step__estado');
+        if (resumen) resumen.textContent = (hecho && checkoutResumenes[p.id]) ? checkoutResumenes[p.id] : '';
+        if (estado) estado.textContent = activo ? 'Abierto' : (hecho ? '✓ Listo' : (p.id === 'step-cupon' ? 'Opcional' : (i === 0 ? 'Elegir' : 'Completar')));
+    });
+    renderCheckoutProgress();
+}
+
+function irAPaso(i) {
+    checkoutPasoActual = i;
+    refrescarPasos();
+    const sec = $(CHECKOUT_PASOS[i] && CHECKOUT_PASOS[i].id);
+    if (sec) setTimeout(() => sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+}
+
+// Tocar el chip/paso lo reabre (solo el actual o uno ya completado)
+function editarPaso(i) {
+    if (checkoutCompletados[CHECKOUT_PASOS[i].id] || i <= checkoutPasoActual) irAPaso(i);
+}
+
+function marcarCompletado(i, resumen) {
+    checkoutCompletados[CHECKOUT_PASOS[i].id] = true;
+    if (resumen) checkoutResumenes[CHECKOUT_PASOS[i].id] = resumen;
+    refrescarPasos();
+}
+
+function iniciarCheckoutPasos() {
+    checkoutPasoActual = 0;
+    checkoutCompletados = {};
+    checkoutResumenes = {};
+    CHECKOUT_PASOS.forEach((p) => {
+        const sec = $(p.id);
+        if (sec) {
+            sec.classList.remove('checkout-step--active', 'checkout-step--done');
+            const resumen = sec.querySelector('.checkout-step__resumen');
+            if (resumen) resumen.textContent = '';
+        }
+    });
+    irAPaso(0);
+    premarcarContacto();   // cliente recurrente verificado → salta contacto
+}
+
+async function premarcarContacto() {
+    const tel = normalizarTelefono($('checkout-phone').value);
+    const nombre = ($('checkout-name').value || '').trim();
+    if (!tel || !nombre) return;
+    if (await telefonoEstaVerificado(tel)) {
+        marcarCompletado(1, '💌 ' + nombre.split(' ')[0] + ' · ' + tel.slice(3, 7) + '-' + tel.slice(7));
+    }
+}
+
+function continuarPaso(i) {
+    if (i === 0) {
+        // ENTREGA: siempre hay una opción con valor por defecto (punto o C807)
+        const dm = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
+        const punto = dm === 'c807' ? ($('checkout-c807-point')?.value || 'Agencia C807') : ($('checkout-point')?.value || 'Punto BARATUSS');
+        marcarCompletado(0, '📦 ' + (dm === 'c807' ? 'Agencia C807 · ' + punto : punto));
+        irAPaso(1);
+        updateCheckoutUI();   // C807 solo con tarjeta; al elegir efectivo se fuerza punto
+        return;
+    }
+    if (i === 1) {
+        // CONTACTO: validar nombre + teléfono y verificar WhatsApp si hace falta
+        const datos = validarDatosCompra();
+        if (!datos) { irAPaso(1); return; }
+        garantizarTelefonoVerificado().then(ok => {
+            if (ok) {
+                marcarCompletado(1, '💌 ' + datos.nombre.split(' ')[0] + ' · ' + datos.tel.slice(3, 7) + '-' + datos.tel.slice(7));
+                irAPaso(2);
+            } else {
+                irAPaso(1);   // el bloque de verificación queda visible dentro del paso
+            }
+        });
+        return;
+    }
+    if (i === 2) {
+        // CUPÓN: opcional — se aplica/omite sin bloquear
+        marcarCompletado(2, codigoAplicado ? '🎟️ ' + codigoAplicado.codigo : 'Sin cupón');
+        irAPaso(3);
+        updateCheckoutUI();
+        return;
+    }
+    if (i === 3) {
+        // PAGO: método preseleccionado (tarjeta)
+        const pm = document.querySelector('input[name="pay-method"]:checked')?.value || 'tarjeta';
+        marcarCompletado(3, pm === 'tarjeta' ? '💳 Tarjeta (Wompi)' : '💵 Efectivo');
+        irAPaso(4);
+        renderResumenFinal();
+        updateCheckoutUI();
+        return;
+    }
+}
+
+function renderResumenFinal() {
+    const box = $('checkout-resumen-final');
+    if (!box) return;
+    const dm = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
+    const punto = dm === 'c807' ? ($('checkout-c807-point')?.value || 'Agencia C807') : ($('checkout-point')?.value || 'Punto BARATUSS');
+    const pm = document.querySelector('input[name="pay-method"]:checked')?.value || 'tarjeta';
+    const nombre = ($('checkout-name').value || '').trim() || '—';
+    const tel = normalizarTelefono($('checkout-phone').value);
+    const telTxt = tel ? tel.slice(3, 7) + '-' + tel.slice(7) : '—';
+    const baseTotal = getCartTotal();
+    const fee = (pm !== 'efectivo' && dm === 'c807') ? C807_FEE : 0;
+    const desc = descuentoCodigo(baseTotal);
+    const filas = [
+        ['📦 Entrega', dm === 'c807' ? 'Agencia C807' : punto],
+        ['💌 Contacto', nombre + ' · ' + telTxt],
+        ['🎟️ Código', codigoAplicado ? codigoAplicado.codigo + ' (−$' + desc.toFixed(2) + ')' : 'Sin cupón'],
+        ['💳 Pago', pm === 'tarjeta' ? 'Tarjeta (Wompi)' : 'Efectivo'],
+    ];
+    box.innerHTML = filas.map(([l, v]) =>
+        `<div class="checkout-resumen-final__row"><span class="checkout-resumen-final__label">${l}</span><span class="checkout-resumen-final__valor">${v}</span></div>`
+    ).join('');
+}
+
+document.querySelectorAll('.checkout-step__continue').forEach(btn => {
+    btn.addEventListener('click', () => continuarPaso(Number(btn.getAttribute('data-paso'))));
+});
+const _omitirCupon = $('cupon-omitir');
+if (_omitirCupon) _omitirCupon.addEventListener('click', (e) => { e.preventDefault(); continuarPaso(2); });
+
 function openCheckoutModal() {
     // La reserva de 5 minutos se renueva cada vez que abre el checkout
     reservarMiCarrito(cart);
@@ -1912,6 +2044,7 @@ function openCheckoutModal() {
         $('checkout-name').value = p.name || '';
         $('checkout-phone').value = p.phone || '';
     }
+    iniciarCheckoutPasos();   // 5 pasos: arranca en Entrega (pre-marca Contacto si ya está verificado)
     updateCheckoutUI();
     mostrarResumenCompra();
     renderPuntosCards();   // tarjetas de día/punto con la fecha real de la próxima entrega
@@ -1932,8 +2065,6 @@ function closeCheckoutModal() {
 function updateCheckoutUI() {
     const method = document.querySelector('input[name="pay-method"]:checked').value;
     const isCash = method === 'efectivo';
-    // El bloque de entrega siempre visible (retiro en punto o C807)
-    $('checkout-delivery').style.display = '';
     
     const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
     const wantsC807 = deliveryMethod === 'c807';
@@ -1972,7 +2103,7 @@ function updateCheckoutUI() {
     const fee = (!isCash && wantsC807) ? C807_FEE : 0;
     
     const baseTotal = getCartTotal();
-    const descCupon = descuentoCupon(baseTotal);
+    const descCupon = descuentoCodigo(baseTotal);
     const totalConFee = Math.max(0, baseTotal + fee - descCupon);
     $('checkout-total').textContent = '$' + totalConFee.toFixed(2);
     const breakdown = $('checkout-breakdown');
@@ -1980,9 +2111,16 @@ function updateCheckoutUI() {
         breakdown.innerHTML =
             (fee > 0 ? `<small style="opacity:.7;display:block;margin-top:4px;">Retiro C807: +$${fee.toFixed(2)}</small>` : '')
             + (descCupon > 0
-                ? `<small style="display:block;margin-top:4px;color:#1a7f4b;">🎟️ Cupón ${cuponAplicado.codigo}: −$${descCupon.toFixed(2)}`
-                  + ` <a href="#" onclick="quitarCupon();return false;" style="color:#b9453a;">(quitar)</a></small>`
+                ? `<small style="display:block;margin-top:4px;color:#1a7f4b;">🎟️ Código ${codigoAplicado.codigo}: −$${descCupon.toFixed(2)}`
+                  + ` <a href="#" onclick="quitarCodigo();return false;" style="color:#b9453a;">(quitar)</a></small>`
                 : '');
+    }
+    // Si ya completó entrega y cambió el método de pago, refresco el chip del paso 1
+    if (checkoutCompletados['step-entrega']) {
+        const dm2 = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
+        const punto2 = dm2 === 'c807' ? ($('checkout-c807-point')?.value || 'Agencia C807') : ($('checkout-point')?.value || 'Punto BARATUSS');
+        checkoutResumenes['step-entrega'] = '📦 ' + (dm2 === 'c807' ? 'Agencia C807 · ' + punto2 : punto2);
+        refrescarPasos();
     }
 }
 
@@ -2007,7 +2145,7 @@ async function wompiCheckout() {
     const punto = isC807 ? ($('checkout-c807-point').value || 'Agencia C807') : ($('checkout-point').value || 'Punto BARATUSS');
     const fee = isC807 ? C807_FEE : 0;
     const baseTotal = getCartTotal();
-    const descCuponTarjeta = descuentoCupon(baseTotal);
+    const descCuponTarjeta = descuentoCodigo(baseTotal);
     const total = Math.max(0, baseTotal + fee - descCuponTarjeta);
 
     // Documento tributario (opcional, decidido por el cliente): se valida ANTES de cobrar
@@ -2043,10 +2181,11 @@ async function wompiCheckout() {
                 facturaNrc: fac.datos.factura_nrc,
                 facturaGiro: fac.datos.factura_giro,
                 facturaDireccion: fac.datos.factura_direccion,
-                customerEmail: fac.datos.customer_email || datos.correo || null,
+                customerEmail: fac.datos.customer_email || null,
                 facturaPorCorreo: fac.datos.factura_por_correo,
-                // 🎟️ Cupón (el servidor lo valida y recalcula el descuento; nunca se confía en el navegador)
-                cuponCodigo: cuponAplicado ? cuponAplicado.codigo : null
+                // 🎟️ Código único (cupón o referido): el servidor clasifica y recalcula
+                codigo: codigoAplicado ? codigoAplicado.codigo : null,
+                sesionToken: await sesionDeCuenta()
             })
         });
         
@@ -2123,7 +2262,7 @@ async function cashCheckout() {
     
     const items = [...cart];
     const baseTotal = getCartTotal();
-    const descCupon = descuentoCupon(baseTotal);
+    const descCupon = descuentoCodigo(baseTotal);
     // NIVEL B: el total y la referencia definitivos los devuelve el servidor
     let total = Math.max(0, baseTotal + fee - descCupon);
     let ref = '';
@@ -2159,17 +2298,16 @@ async function cashCheckout() {
                         cliente: {
                             nombre: name,
                             telefono: phone,
-                            correo: fac.datos.customer_email || datos.correo || null,
-                            usa_whatsapp: datos.preferido === 'whatsapp'
+                            correo: fac.datos.customer_email || null,
+                            usa_whatsapp: true
                         },
                         conocio: {
                             como: (document.getElementById('checkout-como-conocio') || {}).value || null,
                             detalle: (document.getElementById('checkout-conocio-detalle') || {}).value || null
                         },
-                        referido: { codigo: codigoAmigaValor() || null },
                         sesion_token: await sesionDeCuenta(),
                         entrega: { tipo: 'retiro-punto', punto: punto },
-                        cupon: (cuponAplicado && cuponAplicado.codigo) || null,
+                        codigo: (codigoAplicado && codigoAplicado.codigo) || null,
                         factura: {
                             tipo: facTipo,
                             nombre: fac.datos.factura_nombre,
@@ -2202,9 +2340,9 @@ async function cashCheckout() {
                         cart = cart.filter(i => String(i.id) !== String(creado.producto));
                         saveCart(); updateCartUI(); updateCheckoutUI();
                     }
-                    // Si el cupón ya no sirve, lo saco del checkout
-                    if (cuponAplicado && ['ya_usado', 'no_existe', 'vencido', 'inactivo', 'no_corresponde'].includes(motivo)) {
-                        cuponAplicado = null; updateCheckoutUI();
+                    // Si el código ya no sirve, lo saco del checkout
+                    if (codigoAplicado && ['ya_usado', 'no_existe', 'vencido', 'inactivo', 'no_corresponde'].includes(motivo)) {
+                        codigoAplicado = null; updateCheckoutUI();
                     }
                     return;
                 }
@@ -2291,7 +2429,7 @@ async function cashCheckout() {
         // El stock ya quedó apartado por el servidor en la MISMA operación del pedido (Nivel B)
         
         // Si no está logueado y no hay supabase, igual confirmamos
-        cuponAplicado = null;   // el cupón ya quedó usado: se limpia del checkout
+        codigoAplicado = null;   // el código ya quedó usado: se limpia del checkout
         cart = [];
         saveCart();
         updateCartUI();
@@ -2361,6 +2499,42 @@ function showTicket(data) {
                 + (data.customer_email ? `<small style="display:block;margin-top:6px;text-align:center;color:#888;">📧 También a ${data.customer_email}</small>` : '');
         } else {
             contFac.innerHTML = '';
+        }
+    }
+
+    // 🧾 COMPROBANTE + QR (efectivo): recibo interno para que Cindy/entregadora lo
+    // escaneen al entregar. Lleva referencia + total + punto. NO es factura (la
+    // factura de efectivo la manda enviar-factura recién al ENTREGADO).
+    const qrBox = $('ticket-qr');
+    const compBox = $('ticket-comprobante');
+    const pagoBox = $('ticket-pago');
+    if (qrBox) {
+        if (data.metodo === 'efectivo') {
+            if (compBox) compBox.style.display = '';
+            const qrPayload = JSON.stringify({
+                ref: data.ref,
+                total: Number(data.total || 0),
+                punto: data.punto || ''
+            });
+            qrBox.innerHTML = '';
+            try {
+                const qr = qrcode(0, 'M');   // nivel de corrección M
+                qr.addData(qrPayload);
+                qr.make();
+                qrBox.appendChild(qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }));
+            } catch (e) {
+                qrBox.innerHTML = '';
+            }
+            qrBox.style.display = '';
+            if (pagoBox) {
+                pagoBox.style.display = '';
+                pagoBox.innerHTML = '💵 <b>Pago en efectivo al retirar</b><br>'
+                    + '<small style="color:#8a6b66;">Cindy/entregadora escanea este código al entregar tu pedido.</small>';
+            }
+        } else {
+            qrBox.style.display = 'none';
+            if (compBox) compBox.style.display = 'none';
+            if (pagoBox) { pagoBox.style.display = 'none'; pagoBox.innerHTML = ''; }
         }
     }
 
@@ -2604,14 +2778,6 @@ function cerrarFactura() {
     });
 })();
 
-// ===== PLAN 2: WhatsApp / teléfono / pago adelantado =====
-document.querySelectorAll('input[name="usa-wa"]').forEach(r => {
-    r.addEventListener('change', () => {
-        const g = $('wa-correo-grupo');
-        if (g) g.style.display = usaWhatsApp() ? 'none' : '';
-        if (!usaWhatsApp()) showToast('📧 Dejanos tu correo para avisarte del pedido');
-    });
-});
 const _telInput = $('checkout-phone');
 if (_telInput) {
     _telInput.addEventListener('blur', revisarClienteEnCheckout);

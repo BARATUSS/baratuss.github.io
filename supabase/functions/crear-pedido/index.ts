@@ -189,79 +189,77 @@ Deno.serve(async (req) => {
   }
   subtotal = money(subtotal);
 
-  // ---------------------------------------------------------------- 3) CUPÓN
+  // ------------------------------------------------- 3) CÓDIGO ÚNICO (cupón o referido)
+  // Campo único de descuento: el SERVIDOR clasifica. Primero prueba validar_cupon
+  // (tabla cupones); si responde `no_existe`, lo prueba como CÓDIGO DE AMIGA
+  // (profiles.codigo_referido); si ninguna aplica, devuelve "no es válido".
+  // El 10% de bienvenida sigue siendo automático (no entra por este campo).
   let descuento = 0;
   let cuponCodigo: string | null = null;
-  const cuponPedido = String(b.cupon || (b.cupon_codigo ?? '') || '').trim();
-  if (cuponPedido) {
+  let referidoCodigo: string | null = null;
+  let referidoDescuento = 0;
+
+  const codigoUnico = String(
+    b.codigo ?? b.cupon ?? (b.cupon_codigo ?? '') ?? (((b.referido ?? {}) as Record<string, unknown>).codigo ?? '')
+  ).trim().toUpperCase();
+
+  if (codigoUnico) {
+    // 1) ¿Es un CUPÓN?
     const { data: vc, error: errCupon } = await supabase.rpc('validar_cupon', {
-      p_codigo: cuponPedido,
+      p_codigo: codigoUnico,
       p_telefono: telefono,
       p_subtotal: subtotal,
     });
-    if (errCupon) return json({ ok: false, error: 'No pudimos validar el cupón' }, 500);
+    if (errCupon) return json({ ok: false, error: 'No pudimos validar el código' }, 500);
     const r = vc as Record<string, unknown> | null;
-    if (!r || r.ok === false) {
-      return json({
-        ok: false,
-        error: MOTIVOS_CUPON[String(r?.motivo || '')] || 'Ese cupón no es válido',
-        motivo: r?.motivo ?? 'invalido',
-      }, 409);
-    }
-    descuento = money(Number(r.descuento || 0));
-    cuponCodigo = String(r.codigo || cuponPedido).toUpperCase();
-    if (descuento > subtotal) descuento = subtotal;   // nunca menos que $0
-  }
+    const esCupon = !!(r && r.ok === true);
+    const cuponConError = !!(r && r.ok === false && String(r.motivo || '') !== 'no_existe');
 
-  // ══════════════════════════════════════════════════════════════════════
-  // 🎁 PROGRAMA DE REFERIDOS (23-sep-2026)
-  // Reglas que pidió Cindy:
-  //   · La clienta que USA el código tiene que tener cuenta en la página ✅
-  //   · La amiga que recomendó también (su código sale de su cuenta) ✅
-  //   · 10% sobre los productos, con TOPE de $5 ✅
-  //   · Solo sirve para la PRIMERA compra ✅
-  //   · No se acumula con cupones ✅
-  //   · El premio de la amiga se entrega cuando la compra se ENTREGA ✅
-  //     (de eso se encarga el vigilante de referidos)
-  // ══════════════════════════════════════════════════════════════════════
-  let referidoCodigo: string | null = null;
-  let referidoDescuento = 0;
-  const codeRef = String(((b.referido ?? {}) as Record<string, unknown>).codigo ?? '').trim().toUpperCase();
-
-  if (codeRef && descuento === 0) {
-    // 1) ¿La clienta está con su cuenta abierta? (obligatorio para participar)
-    const userId = await usuarioDeToken(String(b.sesion_token || '').trim());
-    if (!userId) {
+    if (esCupon) {
+      descuento = money(Number(r.descuento || 0));
+      cuponCodigo = String(r.codigo || codigoUnico).toUpperCase();
+      if (descuento > subtotal) descuento = subtotal;   // nunca menos que $0
+    } else if (cuponConError) {
+      // Es un cupón, pero no aplica (vencido / usado / inactivo / de otro cliente)
       return json({
         ok: false,
-        error: 'Para usar el código de una amiga necesitás entrar a tu cuenta (o crearte una) 💛',
-        motivo: 'requiere_cuenta',
+        error: MOTIVOS_CUPON[String(r.motivo || '')] || 'Ese cupón no es válido',
+        motivo: r.motivo,
       }, 409);
+    } else {
+      // no_existe → probar como CÓDIGO DE AMIGA (referido)
+      //   · La clienta que USA el código necesita su cuenta abierta.
+      //   · 10% sobre productos, tope $5, solo PRIMERA compra, no se acumula.
+      const userId = await usuarioDeToken(String(b.sesion_token || '').trim());
+      if (!userId) {
+        return json({
+          ok: false,
+          error: 'Para usar el código de una amiga necesitás entrar a tu cuenta (o crearte una) 💛',
+          motivo: 'requiere_cuenta',
+        }, 409);
+      }
+      const { data: duenio } = await supabase
+        .from('profiles').select('id, name').eq('codigo_referido', codigoUnico).maybeSingle();
+      if (!duenio) {
+        return json({ ok: false, error: 'Ese código no existe, revisalo 🔍', motivo: 'codigo_invalido' }, 409);
+      }
+      if (String(duenio.id) === String(userId)) {
+        return json({ ok: false, error: 'No podés usar tu propio código 😊', motivo: 'codigo_propio' }, 409);
+      }
+      const { count: previos } = await supabase
+        .from('orders').select('id', { count: 'exact', head: true })
+        .or(`user_id.eq.${userId},customer_phone.eq.${telefono}`);
+      if ((previos || 0) > 0) {
+        return json({
+          ok: false,
+          error: 'El descuento por referido es solo para la primera compra 💛',
+          motivo: 'no_es_primera_compra',
+        }, 409);
+      }
+      referidoCodigo = codigoUnico;
+      referidoDescuento = money(Math.min(subtotal * 0.10, 5));
+      descuento = referidoDescuento;
     }
-    // 2) ¿Existe ese código?
-    const { data: duenio } = await supabase
-      .from('profiles').select('id, name').eq('codigo_referido', codeRef).maybeSingle();
-    if (!duenio) {
-      return json({ ok: false, error: 'Ese código no existe, revisalo 🔍', motivo: 'codigo_invalido' }, 409);
-    }
-    if (String(duenio.id) === String(userId)) {
-      return json({ ok: false, error: 'No podés usar tu propio código 😊', motivo: 'codigo_propio' }, 409);
-    }
-    // 3) Tiene que ser su PRIMERA compra (ni con su cuenta ni con su teléfono)
-    const { count: previos } = await supabase
-      .from('orders').select('id', { count: 'exact', head: true })
-      .or(`user_id.eq.${userId},customer_phone.eq.${telefono}`);
-    if ((previos || 0) > 0) {
-      return json({
-        ok: false,
-        error: 'El descuento por referido es solo para la primera compra 💛',
-        motivo: 'no_es_primera_compra',
-      }, 409);
-    }
-    // 4) Se aplica: 10% de los productos, con tope de $5
-    referidoCodigo = codeRef;
-    referidoDescuento = money(Math.min(subtotal * 0.10, 5));
-    descuento = referidoDescuento;
   }
 
   // ══════════════════════════════════════════════════════════════════════
