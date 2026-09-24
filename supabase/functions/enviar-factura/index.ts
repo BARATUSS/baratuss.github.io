@@ -374,7 +374,10 @@ async function pendientes() {
     // ⚠️ REGLA DE CINDY (23-sep-2026) sobre CUÁNDO se manda la factura:
     //    💳 Tarjeta  → apenas se confirma el pago (la plata ya cayó ✅) → o sea, en cuanto entra la compra
     //    💵 Efectivo → SOLO cuando el pedido está ENTREGADO (la plata cae al entregar ✅)
-    + '&or=(and(payment_method.eq.tarjeta,payment_status.eq.pagado),status.eq.entregado)'
+    // 🔧 24-sep-2026: la rama tarjeta usaba payment_status=eq.pagado, pero el webhook de Wompi
+    //    graba 'aprobado' (no 'pagado') → las facturas de tarjeta NUNCA salían al aprobarse el pago.
+    //    Ahora la rama tarjeta se apoya en el filtro general payment_status=in.(pagado,aprobado).
+    + '&or=(payment_method.eq.tarjeta,status.eq.entregado)'
     + '&payment_status=in.(pagado,aprobado)&order=created_at.asc&limit=20';
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, {
     headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
