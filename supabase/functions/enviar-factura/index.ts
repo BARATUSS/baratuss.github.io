@@ -20,6 +20,8 @@ const G_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
 const G_REFRESH = Deno.env.get('GOOGLE_REFRESH_TOKEN') || '';
 const FACTURA_KEY = Deno.env.get('FACTURA_KEY') || '';
 const REMITENTE = Deno.env.get('FACTURA_REMITENTE') || 'BARATUSS <baratusses@gmail.com>';
+const WA_TOKEN = Deno.env.get('META_WA_TOKEN') || '';
+const WA_PHONE_ID = Deno.env.get('META_PHONE_ID') || '';
 
 const IVA = 0.13;
 const EMISOR = {
@@ -365,26 +367,103 @@ async function enviarCorreo(accessToken: string, destinatario: string, asunto: s
   return { id: d.id, threadId: d.threadId };
 }
 
+// ============================================================
+// Envío de la factura por WHATSAPP (TAREA 3 · 24-sep-2026)
+// Primera versión: mensaje con el resumen del comprobante. El PDF/enlace al
+// documento se suma cuando exista generación de PDF (DTE); hoy el comprobante
+// vive como HTML de correo. Mismo patrón de envío que la verificación de tel.
+// ============================================================
+function normalizarTel(tel: string): string {
+  let t = (tel || '').replace(/\D/g, '');
+  if (t.startsWith('0')) t = '503' + t.slice(1);
+  if (t.length === 8) t = '503' + t;
+  return t;
+}
+
+async function ventanaAbierta(tel: string): Promise<boolean> {
+  try {
+    const desde = new Date(Date.now() - 24 * 3600000).toISOString();
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/wa_mensajes?select=id&telefono=eq.${normalizarTel(tel)}&direccion=eq.entrante&creado_en=gte.${encodeURIComponent(desde)}&limit=1`, {
+      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
+    });
+    const d = await r.json();
+    return Array.isArray(d) && d.length > 0;
+  } catch (_e) { return false; }
+}
+
+async function enviarTextoWA(tel: string, texto: string): Promise<string | null> {
+  if (!WA_TOKEN || !WA_PHONE_ID) return null;
+  try {
+    const r = await fetch('https://graph.facebook.com/v21.0/' + WA_PHONE_ID + '/messages', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: normalizarTel(tel), type: 'text', text: { preview_url: false, body: texto } }),
+    });
+    const d = await r.json();
+    return d?.messages?.[0]?.id ? String(d.messages[0].id) : null;
+  } catch (_e) { return null; }
+}
+
+async function registrarSalienteWA(wamid: string, tel: string, ref: string, contenido: string) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/wa_mensajes`, {
+      method: 'POST',
+      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ wa_message_id: wamid, telefono: normalizarTel(tel), direccion: 'saliente', atendido_por: 'enviar-factura', order_reference: ref || null, texto: contenido }),
+    });
+  } catch (_e) { /* no romper el envío por el registro */ }
+}
+
+function resumenWhatsApp(o: Record<string, any>): string {
+  const total = Number(o.total || 0);
+  const esCCF = o.factura_tipo === 'ccf';
+  const f = new Date(o.created_at || Date.now());
+  const fecha = f.toLocaleDateString('es-SV') + ' ' + f.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+  const lineas = (o.items || []).slice(0, 8).map((it: any) =>
+    `  · ${it.qty || 1}× ${it.name}${it.size ? ' (talla ' + it.size + ')' : ''} — $${((it.price || 0) * (it.qty || 1)).toFixed(2)}`).join('\n');
+  const resto = (o.items || []).length > 8 ? '\n  · …' : '';
+  return [
+    '🧾 ' + (esCCF ? 'Comprobante de crédito fiscal' : 'Factura') + ' de BARATUSS 💛',
+    'Pedido: ' + (o.reference || '—'),
+    'Fecha: ' + fecha,
+    '',
+    lineas + resto,
+    '',
+    'Total: $' + total.toFixed(2),
+    'IVA (13%) incluido en los precios.',
+    '',
+    'Gracias por tu compra 💖',
+    'BARATUSS · San Salvador · +503 6285 2631',
+  ].join('\n');
+}
+
+// Filtro común de "cuándo" (regla de Cindy). Cada medio (correo/WhatsApp) suma
+// su propio "quién" (customer_email / customer_phone). Devuelve los pedidos con
+// el campo `factura_medio` ya resuelto para que el bucle principal sepa a dónde.
 async function pendientes() {
   // ⚠️ REGLA DE CINDY (23-sep-2026) sobre CUÁNDO se manda la factura:
   //    💳 Tarjeta  → SOLO cuando el pago YA CAYÓ (payment_status = 'pagado'/'aprobado')
   //    💵 Efectivo → SOLO cuando el pedido se marca ENTREGADO (status = 'entregado')
   //    NUNCA antes. Esta condición es la ÚNICA fuente de verdad del envío.
-  const q = 'orders?select=reference,customer_name,customer_phone,customer_email,factura_tipo,factura_nombre,factura_nit,factura_nrc,factura_giro,factura_direccion,total,items,delivery_point,created_at,status'
-    // Pedida por correo + no enviada aún + con tipo y correo reales
-    + '&factura_por_correo=eq.true&factura_enviada_en=is.null&factura_tipo=neq.ninguna&customer_email=not.is.null'
-    // 🔐 24-sep-2026 (corregido): la rama tarjeta exige pago caído (in.(pagado,aprobado), el webhook
-    //    de Wompi graba 'aprobado') y la rama efectivo exige ENTREGADO. Cada rama con su condición
-    //    completa, sin filtrar el estado de pago por fuera (antes un `payment_status=in.(...)` suelto
-    //    exigía 'pagado' también a la rama efectivo-entregado y podía dejar facturas sin mandar).
+  const sel = 'reference,customer_name,customer_phone,customer_email,factura_tipo,factura_nombre,factura_nit,factura_nrc,factura_giro,factura_direccion,total,items,delivery_point,created_at,status';
+  const cuando = 'factura_enviada_en=is.null&factura_tipo=neq.ninguna'
     + '&or=(and(payment_method.eq.tarjeta,payment_status.in.(pagado,aprobado)),status.eq.entregado)'
     + '&order=created_at.asc&limit=20';
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, {
-    headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
-  });
-  const d = await r.json();
-  if (!Array.isArray(d)) throw new Error('No se pudieron leer los pedidos: ' + JSON.stringify(d).slice(0, 200));
-  return d;
+
+  const leer = async (filtro: string) => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=${sel}&${filtro}&${cuando}`, {
+      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY },
+    });
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  };
+
+  const porCorreo = await leer('factura_por_correo=eq.true&customer_email=not.is.null');
+  const porWhatsApp = await leer('factura_por_whatsapp=eq.true&customer_phone=not.is.null');
+  return [
+    ...porCorreo.map((o: any) => ({ ...o, factura_medio: 'correo' })),
+    ...porWhatsApp.map((o: any) => ({ ...o, factura_medio: 'whatsapp' })),
+  ];
 }
 
 async function marcarEnviada(ref: string) {
@@ -404,23 +483,48 @@ Deno.serve(async (req) => {
     let soloUna: string | null = null;
     try { const b = await req.json(); soloUna = b?.referencia || null; } catch (_e) { /* sin cuerpo */ }
 
-    if (!G_ID || !G_SECRET || !G_REFRESH) return json({ error: 'faltan las credenciales de correo' }, 500);
-
     let lista = await pendientes();
     if (soloUna) lista = lista.filter((o: any) => o.reference === soloUna);
     if (!lista.length) return json({ ok: true, enviadas: 0, detalle: 'no había facturas pendientes' });
 
-    const token = await tokenGmail();
+    if (!G_ID || !G_SECRET || !G_REFRESH) {
+      // Las credenciales de correo sólo son obligatorias si hay facturas POR CORREO;
+      // las de WhatsApp no las necesitan.
+      const hayCorreo = (lista || []).some((o: any) => o.factura_medio === 'correo');
+      if (hayCorreo) return json({ error: 'faltan las credenciales de correo' }, 500);
+    }
+
+    const hayCorreo = (lista || []).some((o: any) => o.factura_medio === 'correo');
+    const token = hayCorreo ? await tokenGmail() : null;
+
     const resultados = [];
     for (const o of lista) {
+      const medio = o.factura_medio === 'whatsapp' ? 'whatsapp' : 'correo';
       try {
-        const esCCF = o.factura_tipo === 'ccf';
-        const asunto = `Tu ${esCCF ? 'comprobante de crédito fiscal' : 'factura'} de BARATUSS · #${o.reference}`;
-        const envio = await enviarCorreo(token, o.customer_email, asunto, await cuerpoCorreo(o), textoPlano(o), _qrPng);
-        await marcarEnviada(o.reference);
-        resultados.push({ referencia: o.reference, para: o.customer_email, gmail_id: envio.id, ok: true });
+        if (medio === 'whatsapp') {
+          const tel = normalizarTel(String(o.customer_phone || ''));
+          if (!tel) { resultados.push({ referencia: o.reference, medio, ok: false, error: 'sin teléfono' }); continue; }
+          // Mismo patrón que la verificación de tel: sin ventana de 24 h el texto
+          // se pierde (re-engagement). No marcamos enviada → se reintenta cuando la
+          // clienta vuelva a escribir (o cuando exista plantilla de factura).
+          if (!(await ventanaAbierta(tel))) {
+            resultados.push({ referencia: o.reference, medio, ok: false, error: 'sin ventana 24h (se reintenta)' });
+            continue;
+          }
+          const wamid = await enviarTextoWA(tel, resumenWhatsApp(o));
+          if (!wamid) { resultados.push({ referencia: o.reference, medio, ok: false, error: 'no se pudo enviar' }); continue; }
+          await registrarSalienteWA(wamid, tel, o.reference, resumenWhatsApp(o));
+          await marcarEnviada(o.reference);
+          resultados.push({ referencia: o.reference, medio, para: tel, ok: true });
+        } else {
+          const esCCF = o.factura_tipo === 'ccf';
+          const asunto = `Tu ${esCCF ? 'comprobante de crédito fiscal' : 'factura'} de BARATUSS · #${o.reference}`;
+          const envio = await enviarCorreo(token!, o.customer_email, asunto, await cuerpoCorreo(o), textoPlano(o), _qrPng);
+          await marcarEnviada(o.reference);
+          resultados.push({ referencia: o.reference, medio, para: o.customer_email, gmail_id: envio.id, ok: true });
+        }
       } catch (e) {
-        resultados.push({ referencia: o.reference, para: o.customer_email, ok: false, error: String(e).slice(0, 200) });
+        resultados.push({ referencia: o.reference, medio, ok: false, error: String(e).slice(0, 200) });
       }
     }
     return json({ ok: true, enviadas: resultados.filter((r) => r.ok).length, resultados });
