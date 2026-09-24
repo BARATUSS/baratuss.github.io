@@ -1825,6 +1825,11 @@ async function enviarCodigoVerificacion() {
             const motivo = d && d.motivo;
             if (motivo === 'sin_whatsapp') {
                 $('verif-msg').textContent = '📵 Ese número no tiene WhatsApp. Escribile a Cindy al 7662-6575 y lo dejamos listo 💗';
+            } else if (motivo === 'abrir_whatsapp') {
+                const link = d && d.wa_link ? d.wa_link : 'https://wa.me/50362852631';
+                $('verif-msg').innerHTML = '💬 Para que el código te llegue, WhatsApp nos pide que <b>vos nos escribas primero</b> (una sola vez). 👇<br>'
+                    + '<a href="' + link + '" target="_blank" rel="noopener" style="display:inline-block;margin:8px 0;padding:10px 16px;background:#25D366;color:#fff;border-radius:10px;font-weight:700;text-decoration:none;">📲 Abrir WhatsApp y mandar "Hola"</a><br>'
+                    + 'Cuando ya lo hayas mandado, volvé acá y tocá <b>Enviarme el código</b> de nuevo 💗';
             } else if (motivo === 'cooldown') {
                 $('verif-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otro código.';
             } else if (motivo === 'limite_envios' || motivo === 'limite_ip') {

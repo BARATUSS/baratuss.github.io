@@ -81,28 +81,38 @@ serve(async (req) => {
       .gte('creado_en', inicioMes.toISOString());
     const sinPlantilla = (plantillasMes || 0) >= TOPE_PLANTILLAS_MES;
 
-    // 6) Generar el código (6 dígitos impredecibles) y guardar SOLO el hash
+    // 6) ¿Hay ventana de 24 h abierta? WhatsApp sólo deja RESPONDER gratis dentro
+    //    de la ventana que abre la clienta al escribir primero. Un código a un
+    //    número que nunca escribió (o que no escribió hace +24 h) se pierde con
+    //    "re-engagement" (#131047) aunque Meta devuelva wamid. Por eso, si no hay
+    //    ventana, le damos el enlace para que abra el chat y nos escriba primero.
+    const abierta = await ventanaAbierta(tel);
+    if (!abierta) {
+      const waLink = 'https://wa.me/50362852631?text=' + encodeURIComponent('Hola BARATUSS 💛 quiero verificar mi número');
+      return json({ ok: false, motivo: 'abrir_whatsapp', wa_link: waLink });
+    }
+
+    // 7) Generar el código (6 dígitos impredecibles) y guardar SOLO el hash
     const codigo = generarCodigo6();
     const hash = await hashCodigo(codigo, tel);
     const expiraEn = new Date(ahora + MINUTOS_VALIDEZ * 60000).toISOString();
 
-    // 7) Elegir canal: ventana abierta → texto libre ($0) · cerrada → plantilla
+    // 8) Enviar por texto libre (la ventana está abierta → llega seguro y es $0).
+    //    La plantilla queda de respaldo para cuando Meta apruebe la de código.
     let canal = '';
     let envio: { wamid: string | null; error: string } = { wamid: null, error: 'sin_canal' };
-    if (await ventanaAbierta(tel)) {
-      const texto = (nombre ? '¡Hola ' + nombre + '! 👋' : '¡Hola! 👋') + ' Soy Cindy de BARATUSS 💛\n\n'
-        + 'Escribí este código en la página para confirmar tu número:\n\n'
-        + codigoFormateado(codigo) + '\n\n'
-        + '⏰ Vale ' + MINUTOS_VALIDEZ + ' minutos. Si no lo pediste, avisame 🙈';
-      envio = await enviarTexto(tel, texto, 'CODIGO-VERIF');
-      if (envio.wamid) { canal = 'whatsapp_texto'; await registrarSaliente(envio.wamid, tel, 'texto-libre', ref, 'código de verificación'); }
-    }
-    if (!envio.wamid && !sinPlantilla) {
+    const texto = (nombre ? '¡Hola ' + nombre + '! 👋' : '¡Hola! 👋') + ' Soy Cindy de BARATUSS 💛\n\n'
+      + 'Escribí este código en la página para confirmar tu número:\n\n'
+      + codigoFormateado(codigo) + '\n\n'
+      + '⏰ Vale ' + MINUTOS_VALIDEZ + ' minutos. Si no lo pediste, avisame 🙈';
+    envio = await enviarTexto(tel, texto, 'CODIGO-VERIF');
+    if (envio.wamid) { canal = 'whatsapp_texto'; await registrarSaliente(envio.wamid, tel, 'texto-libre', ref, 'código de verificación'); }
+    if (!envio.wamid && envio.error !== 'sin_whatsapp' && !sinPlantilla) {
       envio = await enviarPlantilla(tel, PLANTILLA_CODIGO, [codigo], 'CODIGO-VERIF');
       if (envio.wamid) { canal = 'whatsapp_plantilla'; await registrarSaliente(envio.wamid, tel, PLANTILLA_CODIGO, ref); }
     }
 
-    // 8) ¿Se pudo mandar? Si no, no se guarda el código (no sirve de nada un código que no llegó)
+    // 9) ¿Se pudo mandar? Si no, no se guarda el código (no sirve de nada un código que no llegó)
     if (!envio.wamid) {
       if (envio.error === 'sin_whatsapp') return json({ ok: false, motivo: 'sin_whatsapp' });
       return json({ ok: false, motivo: 'sin_canal' });
