@@ -2538,7 +2538,7 @@ function showTicket(data) {
                 const qr = qrcode(0, 'M');   // nivel de corrección M
                 qr.addData(qrPayload);
                 qr.make();
-                qrBox.appendChild(qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }));
+                qrBox.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
             } catch (e) {
                 qrBox.innerHTML = '';
             }
