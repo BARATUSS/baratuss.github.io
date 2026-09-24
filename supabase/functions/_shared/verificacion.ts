@@ -134,6 +134,15 @@ export async function telefonoVerificado(tel: string): Promise<boolean> {
   return !!data;
 }
 
+// ¿Este correo ya está verificado? (invitado que eligió verificar por correo)
+export async function correoVerificado(correo: string): Promise<boolean> {
+  const c = (correo || '').trim().toLowerCase();
+  if (!c) return false;
+  const { data } = await supabase.from('verif_datos')
+    .select('id').eq('tipo', 'correo').eq('dato', c).is('revocado_en', null).maybeSingle();
+  return !!data;
+}
+
 // ¿Ya usó su 10% de bienvenida este teléfono? (PK de bienvenidas = teléfono)
 export async function bienvenidaYaUsada(tel: string): Promise<boolean> {
   const { data } = await supabase.from('bienvenidas').select('dato').eq('dato', tel).maybeSingle();

@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { verificacionActiva, telefonoVerificado, bienvenidaYaUsada, normalizarTel } from '../_shared/verificacion.ts'
+import { verificacionActiva, telefonoVerificado, correoVerificado, bienvenidaYaUsada, normalizarTel } from '../_shared/verificacion.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') || '',
@@ -127,20 +127,22 @@ serve(async (req) => {
       // ⚠️ El `total` (y el `deliveryFee`) que manda el navegador se IGNORAN a propósito:
       // el monto se calcula acá, en el servidor, igual que en crear-pedido.
       const { items, userId, deliveryType, deliveryPoint, customerName, customerPhone, token: tokenCliente,
-              facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo,
+              facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo, facturaPorWhatsapp,
               contactoPreferido, codigo, sesionToken, cuponCodigo } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
-      // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): el teléfono debe estar VERIFICADO
-      // ANTES de crear el enlace de pago (regla de Cindy: verificar ANTES de pagar).
+      // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): hay que verificar AL MENOS un medio
+      // (teléfono/WhatsApp O correo) ANTES de crear el enlace de pago. El 10% de
+      // bienvenida sigue exigiendo teléfono verificado (regla de Cindy).
       const telVerif = normalizarTel(String(customerPhone || ''));
       const telVerificadoW = telVerif ? await telefonoVerificado(telVerif) : false;
+      const correoVerif = String(customerEmail || '').trim() ? await correoVerificado(String(customerEmail || '').trim()) : false;
       if (await verificacionActiva()) {
         if (!telVerif || telVerif.length !== 11) {
           return new Response(JSON.stringify({ error: 'Necesitamos tu teléfono para confirmar el pedido', motivo: 'telefono_requerido' }), { status: 400, headers: corsHeaders });
         }
-        if (!telVerificadoW) {
-          return new Response(JSON.stringify({ error: 'Antes de pagar, confirmá tu WhatsApp 💗 (te mandamos un código de 6 números)', motivo: 'telefono_no_verificado' }), { status: 409, headers: corsHeaders });
+        if (!telVerificadoW && !correoVerif) {
+          return new Response(JSON.stringify({ error: 'Antes de pagar, confirmá tu WhatsApp o tu correo 💗 (te mandamos un código de 6 números)', motivo: 'verificacion_requerida' }), { status: 409, headers: corsHeaders });
         }
       }
 
@@ -325,9 +327,11 @@ serve(async (req) => {
         factura_direccion: facturaDireccion || null,
         customer_email: customerEmail || null,
         factura_por_correo: facturaPorCorreo || false,
+        factura_por_whatsapp: facturaPorWhatsapp || false,
         // 🔐 VERIFICACIÓN (24-sep-2026): deja rastro del estado y del 10% de bienvenida.
         telefono_verificado: telVerificadoW,
-        verificacion_estado: telVerificadoW ? 'verificado' : 'pendiente',
+        correo_verificado: correoVerif,
+        verificacion_estado: (telVerificadoW || correoVerif) ? 'verificado' : 'pendiente',
         bienvenida_aplicada: bienvenidaAplicada,
         descuento_bienvenida: bienvenidaDescuento,
         stock_reservado: true

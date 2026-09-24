@@ -13,7 +13,7 @@
 //   'cotizar'      → calcula y devuelve el desglose SIN crear nada (para mostrar)
 // ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verificacionActiva, telefonoVerificado, bienvenidaYaUsada } from '../_shared/verificacion.ts';
+import { verificacionActiva, telefonoVerificado, correoVerificado, bienvenidaYaUsada } from '../_shared/verificacion.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -114,6 +114,10 @@ Deno.serve(async (req) => {
   const correo = String(cli.correo || '').trim();
   if (!usaWhatsapp && !correo) return json({ ok: false, error: 'Como no usás WhatsApp, necesitamos tu correo electrónico' }, 400);
   if (correo && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(correo)) return json({ ok: false, error: 'El correo no parece válido' }, 400);
+
+  // Invitado que eligió verificar por CORREO (un solo medio): el correo verificado
+  // también desbloquea el pedido, pero el 10% de bienvenida sigue exigiendo TELÉFONO.
+  const correoVerif = correo ? await correoVerificado(correo) : false;
 
   // Token del carrito de la clienta: sirve para reconocer SU reserva de 5 minutos como propia
   const tokenCarrito = String(b.token || '').trim();
@@ -297,13 +301,13 @@ Deno.serve(async (req) => {
   // Si solo querían cotizar (mostrar el desglose), no se crea nada
   if (cotizar) return json({ ok: true, cotizacion: true, ...desglose });
 
-  // 🔐 ENFORZAMIENTO (24-sep-2026): con la verificación activa, un teléfono SIN
-  // verificar NO crea pedido ni aparta stock (regla de Cindy: verificar ANTES de pagar).
-  if (verifActiva && !telVerificado) {
+  // 🔐 ENFORZAMIENTO (24-sep-2026): con la verificación activa, hay que verificar
+  // AL MENOS un medio: el teléfono (WhatsApp) O el correo (invitado que eligió correo).
+  if (verifActiva && !telVerificado && !correoVerif) {
     return json({
       ok: false,
-      error: 'Antes de confirmar tu pedido, confirmá tu WhatsApp 💗 (te mandamos un código de 6 números)',
-      motivo: 'telefono_no_verificado',
+      error: 'Antes de confirmar tu pedido, confirmá tu WhatsApp o tu correo 💗 (te mandamos un código de 6 números)',
+      motivo: 'verificacion_requerida',
     }, 409);
   }
 
@@ -331,9 +335,11 @@ Deno.serve(async (req) => {
     referido_descuento: referidoDescuento > 0 ? referidoDescuento : null,
     factura_tipo: tipoFactura,
     factura_por_correo: !!fac.por_correo,
+    factura_por_whatsapp: !!(fac.por_whatsapp),
     // 🔐 VERIFICACIÓN (24-sep-2026): deja rastro del estado de verificación y del 10%.
     telefono_verificado: telVerificado,
-    verificacion_estado: verifActiva ? (telVerificado ? 'verificado' : 'pendiente') : 'no_requiere',
+    correo_verificado: correoVerif,
+    verificacion_estado: verifActiva ? (telVerificado || correoVerif ? 'verificado' : 'pendiente') : 'no_requiere',
     bienvenida_aplicada: bienvenidaAplicada,
     descuento_bienvenida: bienvenidaAplicada ? descuento : 0,
   };

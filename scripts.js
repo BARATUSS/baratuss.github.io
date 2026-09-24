@@ -11,6 +11,8 @@ const CREAR_PEDIDO_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/cre
 const VERIF_ESTADO_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/verificacion-estado';
 const VERIF_ENVIAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/enviar-codigo-wa';
 const VERIF_CONFIRMAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/verificar-codigo-wa';
+const VERIF_CORREO_ENVIAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/enviar-codigo-correo';
+const VERIF_CORREO_CONFIRMAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/verificar-codigo-correo';
 let supabaseClient = null;
 
 function getSupabase() {
@@ -1255,6 +1257,10 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     await loadWishlist();
     updateAuthUI();
     closeAllModals();
+    if (continuarCheckoutTrasLogin) {
+        continuarCheckoutTrasLogin = false;
+        openCheckoutModal();
+    }
     showToast('¡Bienvenida/o a BARATUSS! 🎉');
     e.target.reset();
 });
@@ -1724,8 +1730,9 @@ function normalizarTelefono(v) {
     return (t.length === 11 && t.startsWith('503')) ? t : '';
 }
 
-// Valida nombre + teléfono ANTES de crear el pedido. El correo solo se usa para
-// el documento tributario (datosFactura), así que acá no se pide.
+// Valida nombre + teléfono ANTES de crear el pedido. Si la clienta eligió verificar
+// por CORREO, valida y devuelve el correo (es su medio de contacto). El correo del
+// documento tributario sigue viviendo en datosFactura.
 function validarDatosCompra() {
     const nombre = $('checkout-name').value.trim();
     const tel = normalizarTelefono($('checkout-phone').value);
@@ -1736,7 +1743,16 @@ function validarDatosCompra() {
         return null;
     }
     mostrarAvisoTel('✅ Te escribiremos al ' + tel.slice(3, 7) + '-' + tel.slice(7), true);
-    return { nombre, tel, preferido: 'whatsapp' };
+    const medio = medioVerificacion();
+    let correo = null;
+    if (medio === 'correo') {
+        correo = ($('checkout-verif-email').value || '').trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) {
+            showToast('📧 Escribí un correo válido para confirmar tu compra');
+            return null;
+        }
+    }
+    return { nombre, tel, preferido: medio, correo };
 }
 
 function mostrarAvisoTel(msg, ok) {
@@ -1883,18 +1899,159 @@ async function confirmarCodigoVerificacion() {
     }
 }
 
-async function garantizarTelefonoVerificado() {
+// ===== MEDIO DE VERIFICACIÓN (24-sep-2026): invitado elige UN solo medio =====
+function medioVerificacion() {
+    const r = document.querySelector('input[name="verif-medio"]:checked');
+    return r && r.value === 'correo' ? 'correo' : 'whatsapp';
+}
+
+function cambiarMedioVerificacion() {
+    const esCorreo = medioVerificacion() === 'correo';
+    const gCorreo = $('checkout-correo-verif-group');
+    const gWa = $('checkout-verificacion');
+    if (gCorreo) gCorreo.style.display = esCorreo ? '' : 'none';
+    if (gWa) gWa.style.display = 'none';
+    if ($('checkout-verificacion-correo')) $('checkout-verificacion-correo').style.display = 'none';
+}
+
+async function correoEstaVerificado(correo) {
+    try {
+        const r = await fetch(VERIF_ESTADO_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ correo: (correo || '').trim().toLowerCase() })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!d || d.interruptor !== 'activo') return true;   // sin verificación → libre
+        return !!(d && d.correo_verificado);
+    } catch (_e) { return true; }   // si no se puede consultar, NO bloquear la venta
+}
+
+async function enviarCodigoCorreo() {
+    const correo = ($('checkout-verif-email').value || '').trim().toLowerCase();
+    if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) {
+        $('verif-correo-msg').textContent = '✏️ Escribí bien tu correo (ej. tu@correo.com)';
+        return;
+    }
+    const btn = $('verif-correo-enviar');
+    btn.disabled = true;
+    $('verif-correo-msg').textContent = '📨 Mandándote el código por correo…';
+    try {
+        const r = await fetch(VERIF_CORREO_ENVIAR_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ correo, nombre: $('checkout-name').value.trim() })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.ok) {
+            $('verif-correo-msg').textContent = '📬 ¡Listo! Te mandamos un código de 6 números a tu correo. Escribilo acá y dale a Confirmar ✅';
+        } else {
+            const motivo = d && d.motivo;
+            if (motivo === 'cooldown') $('verif-correo-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otro código.';
+            else if (motivo === 'limite_envios' || motivo === 'limite_ip') $('verif-correo-msg').textContent = '⏳ Pediste muchos códigos seguidos. Escribile a Cindy 💗';
+            else $('verif-correo-msg').textContent = '😕 No pudimos mandar el código. Probá de nuevo o escribile a Cindy 💗';
+        }
+    } catch (_e) {
+        $('verif-correo-msg').textContent = '😕 Error de conexión. Probá de nuevo 💗';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function confirmarCodigoCorreo() {
+    const correo = ($('checkout-verif-email').value || '').trim().toLowerCase();
+    const codigo = ($('verif-correo-codigo').value || '').replace(/\D/g, '');
+    if (codigo.length !== 6) { showToast('✏️ Escribí los 6 números del código'); return; }
+    if (!correo) { showToast('📧 Escribí primero tu correo'); return; }
+    const btn = $('verif-correo-confirmar');
+    btn.disabled = true;
+    try {
+        const r = await fetch(VERIF_CORREO_CONFIRMAR_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ correo, codigo })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.ok) {
+            $('verif-correo-msg').textContent = '🎉 ¡Tu correo quedó confirmado! Ya podés confirmar tu pedido 💗';
+            $('checkout-verificacion-correo').style.display = 'none';
+            $('verif-correo-codigo').value = '';
+            showToast('✅ ¡Correo confirmado!');
+        } else {
+            const motivo = d && d.motivo;
+            if (motivo === 'incorrecto') $('verif-correo-msg').textContent = '🤔 Ese código no coincide. Probá otra vez 👇 (te quedan ' + (d.intentos_restantes || 0) + ' intentos)';
+            else if (motivo === 'expirado') $('verif-correo-msg').textContent = '⏰ Ese código ya venció. Pedí uno nuevo 💗';
+            else if (motivo === 'demasiados_intentos') $('verif-correo-msg').textContent = '🙈 Probaste muchas veces. Escribile a Cindy 💗';
+            else $('verif-correo-msg').textContent = '😕 No pudimos confirmar el código. Escribile a Cindy 💗';
+            $('verif-correo-codigo').value = '';
+        }
+    } catch (_e) {
+        $('verif-correo-msg').textContent = '😕 Error de conexión. Probá de nuevo 💗';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function garantizarVerificacion() {
+    const medio = medioVerificacion();
+    if (medio === 'correo') {
+        const correo = ($('checkout-verif-email').value || '').trim().toLowerCase();
+        if (!correo) { showToast('📧 Escribí tu correo para confirmar'); return false; }
+        if (await correoEstaVerificado(correo)) return true;
+        $('checkout-verificacion-correo').style.display = '';
+        $('verif-correo-msg').textContent = '💗 Antes de pagar, confirmá tu correo: te mandamos un código de 6 números. 🔒';
+        $('verif-correo-codigo').value = '';
+        reservarCarrito(20);
+        showToast('📧 Confirmá tu correo para seguir 💗');
+        return false;
+    }
+    // WhatsApp (comportamiento original)
     const tel = normalizarTelefono($('checkout-phone').value);
-    if (!tel) return true;   // sin teléfono → lo valida validarDatosCompra (muestra su mensaje)
+    if (!tel) return true;
     if (await telefonoEstaVerificado(tel)) return true;
-    // No verificado → mostrar el bloque, extender la reserva y frenar el pago
     $('checkout-verificacion').style.display = '';
     $('verif-msg').textContent = '💗 Antes de pagar, confirmá tu WhatsApp: te mandamos un código de 6 números. 🔒';
     $('verif-codigo').value = '';
-    // 🔐 Extendemos la reserva a 20 min: la clienta necesita tiempo para el código
     reservarCarrito(20);
     showToast('📱 Confirmá tu WhatsApp para seguir 💗');
     return false;
+}
+
+// ===== PUERTA DE PAGO (24-sep-2026): 3 opciones antes del checkout =====
+let continuarCheckoutTrasLogin = false;
+
+function openPagarGate() {
+    if (cart.length === 0) return;
+    reservarCarrito();   // reserva 5 min mientras decide (mismo patrón que el checkout)
+    closeCart();
+    $('pagar-gate-overlay').style.display = '';
+    $('pagar-gate').style.display = '';
+    document.body.style.overflow = 'hidden';
+}
+
+function closePagarGate() {
+    $('pagar-gate-overlay').style.display = 'none';
+    $('pagar-gate').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function gateIrLogin() {
+    closePagarGate();
+    continuarCheckoutTrasLogin = true;
+    openModal('auth');
+    showLoginForm();
+}
+
+function gateIrRegistro() {
+    closePagarGate();
+    continuarCheckoutTrasLogin = true;
+    openModal('auth');
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('register-form').style.display = '';
+    document.getElementById('reset-form').style.display = 'none';
+    document.getElementById('auth-title').textContent = 'Crear cuenta';
+}
+
+function gateIrInvitado() {
+    closePagarGate();
+    openCheckoutModal();
 }
 
 // ===== CHECKOUT PROGRESIVO (24-sep-2026) · 5 pasos colapsables =====
@@ -1996,7 +2153,7 @@ function continuarPaso(i) {
         // CONTACTO: validar nombre + teléfono y verificar WhatsApp si hace falta
         const datos = validarDatosCompra();
         if (!datos) { irAPaso(1); return; }
-        garantizarTelefonoVerificado().then(ok => {
+        garantizarVerificacion().then(ok => {
             if (ok) {
                 marcarCompletado(1, '💌 ' + datos.nombre.split(' ')[0] + ' · ' + datos.tel.slice(3, 7) + '-' + datos.tel.slice(7));
                 irAPaso(2);
@@ -2075,8 +2232,12 @@ function openCheckoutModal() {
     reservarCarrito(); // NUEVO: reserva los productos por 5 min (el primero que llega gana)
     $('checkout-overlay').style.display = '';
     $('checkout-modal').style.display = '';
-    // 🔐 Reset del bloque de verificación (se muestra solo si hace falta)
+    // 🔐 Reset de los bloques de verificación (se muestran solo si hace falta)
     if ($('checkout-verificacion')) $('checkout-verificacion').style.display = 'none';
+    if ($('checkout-verificacion-correo')) $('checkout-verificacion-correo').style.display = 'none';
+    if ($('checkout-correo-verif-group')) $('checkout-correo-verif-group').style.display = 'none';
+    const medioRadio = document.querySelector('input[name="verif-medio"][value="whatsapp"]');
+    if (medioRadio) medioRadio.checked = true;
 }
 
 function closeCheckoutModal() {
@@ -2203,8 +2364,9 @@ async function wompiCheckout() {
                 facturaNrc: fac.datos.factura_nrc,
                 facturaGiro: fac.datos.factura_giro,
                 facturaDireccion: fac.datos.factura_direccion,
-                customerEmail: fac.datos.customer_email || null,
-                facturaPorCorreo: fac.datos.factura_por_correo,
+                customerEmail: datos.correo || fac.datos.customer_email || null,
+                facturaPorCorreo: datos.preferido === 'correo' ? true : fac.datos.factura_por_correo,
+                facturaPorWhatsapp: datos.preferido === 'whatsapp',
                 // 🎟️ Código único (cupón o referido): el servidor clasifica y recalcula
                 codigo: codigoEnviado(),
                 sesionToken: await sesionDeCuenta()
@@ -2320,8 +2482,8 @@ async function cashCheckout() {
                         cliente: {
                             nombre: name,
                             telefono: phone,
-                            correo: fac.datos.customer_email || null,
-                            usa_whatsapp: true
+                            correo: datos.correo || fac.datos.customer_email || null,
+                            usa_whatsapp: datos.preferido === 'whatsapp'
                         },
                         conocio: {
                             como: (document.getElementById('checkout-como-conocio') || {}).value || null,
@@ -2337,7 +2499,8 @@ async function cashCheckout() {
                             nrc: fac.datos.factura_nrc,
                             giro: fac.datos.factura_giro,
                             direccion: fac.datos.factura_direccion,
-                            por_correo: !!fac.datos.factura_por_correo
+                            por_correo: datos.preferido === 'correo' ? true : !!fac.datos.factura_por_correo,
+                            por_whatsapp: datos.preferido === 'whatsapp'
                         },
                         metodo: 'efectivo',
                         token: sessionToken(),
@@ -2807,11 +2970,16 @@ if (_telInput) {
 }
 
 // ===== BOTÓN PRINCIPAL DE CHECKOUT =====
-$('checkout-btn').addEventListener('click', openCheckoutModal);
+$('checkout-btn').addEventListener('click', openPagarGate);
+$('pagar-gate-close').addEventListener('click', closePagarGate);
+$('pagar-gate-overlay').addEventListener('click', closePagarGate);
+$('gate-login').addEventListener('click', gateIrLogin);
+$('gate-crear-cuenta').addEventListener('click', gateIrRegistro);
+$('gate-invitado').addEventListener('click', gateIrInvitado);
 $('checkout-confirm').addEventListener('click', async () => {
     const method = document.querySelector('input[name="pay-method"]:checked').value;
     // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): confirmar WhatsApp ANTES de pagar.
-    if (!(await garantizarTelefonoVerificado())) return;   // muestra el bloque y frena
+    if (!(await garantizarVerificacion())) return;   // muestra el bloque y frena
     if (method === 'tarjeta') {
         closeCheckoutModal();
         wompiCheckout();
