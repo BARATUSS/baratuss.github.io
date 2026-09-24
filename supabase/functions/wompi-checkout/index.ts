@@ -107,18 +107,82 @@ serve(async (req) => {
   try {
     // ===== CREATE PAYMENT =====
     if (req.method === 'POST' && path === '/create-payment') {
-      const { items, total, userId, deliveryType, deliveryFee, deliveryPoint, customerName, customerPhone, token: tokenCliente,
+      // ⚠️ El `total` (y el `deliveryFee`) que manda el navegador se IGNORAN a propósito:
+      // el monto se calcula acá, en el servidor, igual que en crear-pedido.
+      const { items, userId, deliveryType, deliveryPoint, customerName, customerPhone, token: tokenCliente,
               facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo,
               contactoPreferido, cuponCodigo } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
+      // ===== PRECIOS DEL SERVIDOR (2026-09-23) =====
+      // 🔒 ANTES: el monto del enlace de pago salía del body (`total`) → cualquiera podía
+      // mandar $0.05 y pagar menos. AHORA: se lee el precio REAL en la base y se aplica la
+      // MISMA fórmula de la tienda (idéntica a crear-pedido). Si no coincide al centavo,
+      // el cliente vería un total y pagaría otro.
+      const PRICE_FACTOR = 1.16955;   // 1.13 (IVA 13%) × 1.035 (comisión Wompi 3.50%)
+      const PRICE_FEE    = 0.25;      // $0.25 fija de Wompi
+      const C807_FEE     = 1.00;      // Retiro en agencia C807 (solo con tarjeta)
+      const precioFinal = (bruto: number) => {
+        if (!bruto || bruto <= 0) return 0;
+        return Math.ceil((Number(bruto) * PRICE_FACTOR + PRICE_FEE) * 20) / 20;  // redondeo hacia arriba al 0.05
+      };
+      const money = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
+      const ids = [...new Set((items || []).map((it: any) => Number(it.id)).filter((n: number) => Number.isFinite(n) && n > 0))];
+      if (!ids.length) return new Response(JSON.stringify({ error: 'Los productos no son válidos' }), { status: 400, headers: corsHeaders });
+
+      const { data: prods, error: errProds } = await supabase.from('inventory')
+        .select('id, name, sale_price, stock, active, condition')
+        .in('id', ids);
+      if (errProds) return new Response(JSON.stringify({ error: 'No pudimos consultar los productos' }), { status: 500, headers: corsHeaders });
+
+      const mapa = new Map<number, any>();
+      for (const p of (prods || [])) mapa.set(Number(p.id), p);
+
+      // Los items se reconstruyen del lado del servidor: id, cantidad, nombre y PRECIO reales.
+      // Del navegador solo se conserva lo que NO es dinero (talla e imagen, para el ticket/despacho).
+      const itemsServidor: any[] = [];
+      let subtotalProductos = 0;
+      for (const it of (items || [])) {
+        const id = Number(it.id);
+        const cant = Math.floor(Number(it.qty ?? 1));
+        if (!Number.isFinite(id) || id <= 0) return new Response(JSON.stringify({ error: 'Producto no válido' }), { status: 400, headers: corsHeaders });
+        if (!Number.isFinite(cant) || cant < 1) return new Response(JSON.stringify({ error: 'Cantidad no válida' }), { status: 400, headers: corsHeaders });
+        const p = mapa.get(id);
+        if (!p) return new Response(JSON.stringify({ error: 'Un producto ya no está disponible' }), { status: 400, headers: corsHeaders });
+        if (p.active === false) return new Response(JSON.stringify({ error: 'Un producto ya no está a la venta' }), { status: 400, headers: corsHeaders });
+        if (Number(p.stock || 0) < cant) {
+          return new Response(JSON.stringify({ error: 'Se agotó: ' + String(p.name || 'un producto') }), { status: 409, headers: corsHeaders });
+        }
+        const precio = precioFinal(Number(p.sale_price || 0));
+        if (precio <= 0) return new Response(JSON.stringify({ error: 'Un producto no tiene precio válido' }), { status: 409, headers: corsHeaders });
+
+        subtotalProductos += precio * cant;
+        const talla = it.size ?? it.talla ?? null;
+        const imagen = it.image ?? it.imagen ?? null;
+        itemsServidor.push({
+          id, qty: cant, name: String(p.name || 'Producto'), price: precio,
+          ...(talla ? { size: String(talla) } : {}),
+          ...(p.condition ? { condition: String(p.condition) } : {}),
+          ...(imagen ? { image: String(imagen) } : {}),
+        });
+      }
+      subtotalProductos = money(subtotalProductos);
+
+      // ===== ENVÍO (mismo criterio que la tienda, no se confía en el body) =====
+      // Puntos de BARATUSS = gratis · Agencia C807 = $1.00 (solo con tarjeta)
+      const tipoEntrega = String(deliveryType || 'retiro-punto');
+      if (!['retiro-punto', 'retiro-c807'].includes(tipoEntrega)) {
+        return new Response(JSON.stringify({ error: 'Forma de entrega no válida' }), { status: 400, headers: corsHeaders });
+      }
+      const envio = tipoEntrega === 'retiro-c807' ? C807_FEE : 0;
+
       // ===== CUPÓN (2026-09-18): se valida y se aplica EN EL SERVIDOR =====
-      // Nunca se confía en el descuento que manda el navegador: se recalcula desde los items.
+      // Nunca se confía en el descuento que manda el navegador: se recalcula desde los precios
+      // REALES de la base (antes se usaba it.price del carrito, que también era manipulable).
       // Reglas: solo producto (el envío no lleva descuento), un solo uso, con tope.
       let descuentoCupon = 0;
       let cuponAplicado: string | null = null;
-      const subtotalProductos = (items || []).reduce(
-        (s: number, it: any) => s + Number(it.price || 0) * Number(it.qty || 1), 0);
       if (cuponCodigo) {
         const { data: val } = await supabase.rpc('validar_cupon', {
           p_codigo: String(cuponCodigo),
@@ -134,10 +198,14 @@ serve(async (req) => {
         }
         descuentoCupon = Number(val.descuento || 0);
         cuponAplicado = String(val.codigo || cuponCodigo).toUpperCase();
+        if (descuentoCupon > subtotalProductos) descuentoCupon = subtotalProductos;  // nunca menos que $0
       }
-      const totalFinal = cuponAplicado
-        ? Math.round((subtotalProductos + Number(deliveryFee || 0) - descuentoCupon) * 100) / 100
-        : total;
+
+      // ===== TOTAL (calculado acá, jamás con el `total` del navegador) =====
+      const totalFinal = money(Math.max(0, subtotalProductos + envio - descuentoCupon));
+      if (totalFinal <= 0) {
+        return new Response(JSON.stringify({ error: 'El total del pedido no puede ser $0' }), { status: 400, headers: corsHeaders });
+      }
 
       const ref = 'BAR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
       const token = await getWompiToken();
@@ -164,12 +232,12 @@ serve(async (req) => {
       if (!pay.ok) throw new Error(JSON.stringify(payData));
 
       await supabase.from('orders').insert({
-        user_id: userId || null, items, total: totalFinal, reference: ref,
+        user_id: userId || null, items: itemsServidor, total: totalFinal, reference: ref,
         cupon_codigo: cuponAplicado, cupon_descuento: descuentoCupon || null,
         status: 'pendiente', payment_status: 'pendiente',
         transaction_id: payData.idTransaccion || null,
-        delivery_type: deliveryType,
-        delivery_fee: deliveryFee,
+        delivery_type: tipoEntrega,
+        delivery_fee: envio,
         contacto_preferido: contactoPreferido || 'whatsapp',
         // PLAN 2 (19-sep-2026): teléfono normalizado (para avisos y búsquedas) y
         // vencimiento a las 48 h si el pago con tarjeta no se completa.
@@ -194,13 +262,17 @@ serve(async (req) => {
 
       // ✅ VENTA ATÓMICA de stock al confirmar el pedido (función en la base, imposible de pisar)
       // Si el producto ya se vendió o lo tiene reservado otro cliente → se rechaza el pago.
-      const tokenSesion = String(tokenCliente || 'checkout') + '-' + ref;
+      // 🔧 ARREGLO 2026-09-23: antes se le agregaba '-' + ref, y por eso NO coincidía con la
+      // reserva de 5 minutos que la propia clienta hizo al abrir el carrito → el sistema
+      // respondía "reservada_por_otro" y rechazaba el 100% de los pagos con tarjeta.
+      // Ahora usa el mismo token que crear-pedido (el del carrito, o la referencia si no vino).
+      const tokenSesion = tokenCliente || ref;
       // ✅ VENTA ATÓMICA (2026-09-18): todo-o-nada con la misma función de la base.
       // Antes se vendía producto por producto y, si uno fallaba, los anteriores quedaban
       // vendidos sin pedido (stock desaparecido). Ya no hace falta el bucle de devolución.
       {
         const { data: venta } = await supabase.rpc('vender_carrito', {
-          p_items: (items || []).map((it: any) => ({ id: Number(it.id), qty: Number(it.qty || 1) })),
+          p_items: (itemsServidor || []).map((it: any) => ({ id: Number(it.id), qty: Number(it.qty || 1) })),
           p_token: tokenSesion,
         });
         if (!venta?.ok) {
