@@ -1616,6 +1616,13 @@ function descuentoCodigo(baseTotal) {
     return Math.round(Math.min(bruto, tope) * 100) / 100;
 }
 
+// El código tal cual está en el input (lo manda al servidor, que es quien clasifica
+// cupón vs referido). codigoAplicado es solo la cotización visual del cupón.
+function codigoEnviado() {
+    const v = ($('cupon-codigo')?.value || '').trim().toUpperCase();
+    return v || null;
+}
+
 // Cotiza el código con el backend y, si aplica, lo deja listo (NO descuenta del
 // stock ni crea pedido: eso pasa al confirmar, en el servidor).
 async function aplicarCodigo() {
@@ -1648,8 +1655,16 @@ async function aplicarCodigo() {
         const d = await r.json().catch(() => ({}));
         if (!d || !d.ok) {
             codigoAplicado = null;
-            msg.style.color = '#b9453a';
-            msg.textContent = '❌ ' + (d && (d.mensaje || d.error) ? (d.mensaje || d.error) : 'Ese código no es válido');
+            const motivo = d && d.motivo;
+            if (motivo === 'no_existe') {
+                // Podría ser un código de amiga (referido): el SERVIDOR lo clasifica
+                // al confirmar. Acá solo avisamos sin rechazar.
+                msg.style.color = '#8a5b52';
+                msg.textContent = '🎟️ Lo vamos a verificar al confirmar tu pedido 🙌';
+            } else {
+                msg.style.color = '#b9453a';
+                msg.textContent = '❌ ' + (d && (d.mensaje || d.error) ? (d.mensaje || d.error) : 'Ese código no es válido');
+            }
             updateCheckoutUI();
             return;
         }
@@ -1987,8 +2002,9 @@ function continuarPaso(i) {
         return;
     }
     if (i === 2) {
-        // CUPÓN: opcional — se aplica/omite sin bloquear
-        marcarCompletado(2, codigoAplicado ? '🎟️ ' + codigoAplicado.codigo : 'Sin cupón');
+        // CUPÓN: opcional — se aplica/omite sin bloquear. Si no es cupón, el
+        // servidor lo clasifica (referido) al confirmar.
+        marcarCompletado(2, codigoEnviado() ? '🎟️ ' + codigoEnviado() : 'Sin cupón');
         irAPaso(3);
         updateCheckoutUI();
         return;
@@ -2016,10 +2032,11 @@ function renderResumenFinal() {
     const baseTotal = getCartTotal();
     const fee = (pm !== 'efectivo' && dm === 'c807') ? C807_FEE : 0;
     const desc = descuentoCodigo(baseTotal);
+    const codigoMostrar = codigoEnviado();
     const filas = [
         ['📦 Entrega', dm === 'c807' ? 'Agencia C807' : punto],
         ['💌 Contacto', nombre + ' · ' + telTxt],
-        ['🎟️ Código', codigoAplicado ? codigoAplicado.codigo + ' (−$' + desc.toFixed(2) + ')' : 'Sin cupón'],
+        ['🎟️ Código', codigoMostrar ? codigoMostrar + (codigoAplicado ? ' (−$' + desc.toFixed(2) + ')' : '') : 'Sin cupón'],
         ['💳 Pago', pm === 'tarjeta' ? 'Tarjeta (Wompi)' : 'Efectivo'],
     ];
     box.innerHTML = filas.map(([l, v]) =>
@@ -2184,7 +2201,7 @@ async function wompiCheckout() {
                 customerEmail: fac.datos.customer_email || null,
                 facturaPorCorreo: fac.datos.factura_por_correo,
                 // 🎟️ Código único (cupón o referido): el servidor clasifica y recalcula
-                codigo: codigoAplicado ? codigoAplicado.codigo : null,
+                codigo: codigoEnviado(),
                 sesionToken: await sesionDeCuenta()
             })
         });
@@ -2307,7 +2324,7 @@ async function cashCheckout() {
                         },
                         sesion_token: await sesionDeCuenta(),
                         entrega: { tipo: 'retiro-punto', punto: punto },
-                        codigo: (codigoAplicado && codigoAplicado.codigo) || null,
+                        codigo: codigoEnviado(),
                         factura: {
                             tipo: facTipo,
                             nombre: fac.datos.factura_nombre,
