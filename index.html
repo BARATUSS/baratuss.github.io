@@ -512,6 +512,34 @@
                     </small>
                 </div>
             </div>
+
+            <!-- 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): confirmar WhatsApp ANTES de pagar -->
+            <div id="checkout-verificacion" style="display:none;margin-top:14px;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+                <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:6px;">Confirmemos tu WhatsApp 📱</div>
+                <div id="verif-msg" style="font-size:.8rem;margin-bottom:10px;color:#5a4a47;line-height:1.5;">
+                    💗 Antes de pagar, confirmá tu WhatsApp: te mandamos un código de 6 números. 🔒
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <input id="verif-codigo" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+                           placeholder="• • • • • •"
+                           style="flex:1;padding:12px;border:1.5px solid #ffd9d2;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:6px;">
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button type="button" id="verif-enviar"
+                            style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#25D366;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
+                        Enviarme el código 💬
+                    </button>
+                    <button type="button" id="verif-confirmar"
+                            style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
+                        Confirmar ✅
+                    </button>
+                </div>
+                <div style="margin-top:10px;font-size:.78rem;line-height:1.5;">
+                    🤔 ¿No tenés WhatsApp o necesitás ayuda?
+                    <a href="https://wa.me/50376626575" target="_blank" rel="noopener"
+                       style="color:#25D366;font-weight:700;text-decoration:underline;">Escribirle a Cindy 💬</a>
+                </div>
+            </div>
         </div>
 
         <!-- ===== DOCUMENTO TRIBUTARIO — el CLIENTE decide (opcional) ===== -->
@@ -812,6 +840,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260923efectivo"></script>
+<script src="scripts.js?v=20260924verif"></script>
 </body>
 </html>

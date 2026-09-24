@@ -13,10 +13,27 @@
 //   'cotizar'      → calcula y devuelve el desglose SIN crear nada (para mostrar)
 // ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verificacionActiva, telefonoVerificado, bienvenidaYaUsada } from '../_shared/verificacion.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+// 🎁 Averigua de quién es una sesión (para el programa de referidos).
+// Se pregunta a la API de autenticación: así el id que llega NO se puede falsificar.
+async function usuarioDeToken(token: string): Promise<string> {
+  if (!token) return '';
+  try {
+    const r = await fetch(SUPABASE_URL + '/auth/v1/user', {
+      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + token },
+    });
+    if (!r.ok) return '';
+    const u = (await r.json().catch(() => null)) as Record<string, unknown> | null;
+    return u && u.id ? String(u.id) : '';
+  } catch (_e) {
+    return '';
+  }
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -88,6 +105,10 @@ Deno.serve(async (req) => {
 
   const telefono = normalizarTelefono(String(cli.telefono || ''));
   if (!telefono) return json({ ok: false, error: 'Necesitamos un teléfono de contacto válido (8 dígitos)' }, 400);
+
+  // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): estado del teléfono para ENFORZAR y para el 10%.
+  const verifActiva = await verificacionActiva();
+  const telVerificado = await telefonoVerificado(telefono);
 
   const usaWhatsapp = cli.usa_whatsapp === undefined ? true : !!cli.usa_whatsapp;
   const correo = String(cli.correo || '').trim();
@@ -192,6 +213,68 @@ Deno.serve(async (req) => {
     if (descuento > subtotal) descuento = subtotal;   // nunca menos que $0
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // 🎁 PROGRAMA DE REFERIDOS (23-sep-2026)
+  // Reglas que pidió Cindy:
+  //   · La clienta que USA el código tiene que tener cuenta en la página ✅
+  //   · La amiga que recomendó también (su código sale de su cuenta) ✅
+  //   · 10% sobre los productos, con TOPE de $5 ✅
+  //   · Solo sirve para la PRIMERA compra ✅
+  //   · No se acumula con cupones ✅
+  //   · El premio de la amiga se entrega cuando la compra se ENTREGA ✅
+  //     (de eso se encarga el vigilante de referidos)
+  // ══════════════════════════════════════════════════════════════════════
+  let referidoCodigo: string | null = null;
+  let referidoDescuento = 0;
+  const codeRef = String(((b.referido ?? {}) as Record<string, unknown>).codigo ?? '').trim().toUpperCase();
+
+  if (codeRef && descuento === 0) {
+    // 1) ¿La clienta está con su cuenta abierta? (obligatorio para participar)
+    const userId = await usuarioDeToken(String(b.sesion_token || '').trim());
+    if (!userId) {
+      return json({
+        ok: false,
+        error: 'Para usar el código de una amiga necesitás entrar a tu cuenta (o crearte una) 💛',
+        motivo: 'requiere_cuenta',
+      }, 409);
+    }
+    // 2) ¿Existe ese código?
+    const { data: duenio } = await supabase
+      .from('profiles').select('id, name').eq('codigo_referido', codeRef).maybeSingle();
+    if (!duenio) {
+      return json({ ok: false, error: 'Ese código no existe, revisalo 🔍', motivo: 'codigo_invalido' }, 409);
+    }
+    if (String(duenio.id) === String(userId)) {
+      return json({ ok: false, error: 'No podés usar tu propio código 😊', motivo: 'codigo_propio' }, 409);
+    }
+    // 3) Tiene que ser su PRIMERA compra (ni con su cuenta ni con su teléfono)
+    const { count: previos } = await supabase
+      .from('orders').select('id', { count: 'exact', head: true })
+      .or(`user_id.eq.${userId},customer_phone.eq.${telefono}`);
+    if ((previos || 0) > 0) {
+      return json({
+        ok: false,
+        error: 'El descuento por referido es solo para la primera compra 💛',
+        motivo: 'no_es_primera_compra',
+      }, 409);
+    }
+    // 4) Se aplica: 10% de los productos, con tope de $5
+    referidoCodigo = codeRef;
+    referidoDescuento = money(Math.min(subtotal * 0.10, 5));
+    descuento = referidoDescuento;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 🎁 10% DE BIENVENIDA (24-sep-2026)
+  // Regla de Cindy: solo en la 1ª compra de un teléfono VERIFICADO · no se
+  // acumula con cupón ni con referido (solo un descuento por pedido).
+  // ══════════════════════════════════════════════════════════════════════
+  let bienvenidaAplicada = false;
+  if (descuento === 0 && verifActiva && telVerificado && !(await bienvenidaYaUsada(telefono))) {
+    bienvenidaAplicada = true;
+    descuento = money(Math.min(subtotal * 0.10, 5));
+  }
+
   // ---------------------------------------------------------------- 4) ENVÍO
   // Puntos de BARATUSS = gratis · C807 = $1.00 (solo tarjeta, ya bloqueado arriba)
   const envio = 0;
@@ -206,12 +289,25 @@ Deno.serve(async (req) => {
     envio,
     descuento,
     cupon_codigo: cuponCodigo,
+    referido_codigo: referidoCodigo,
+    referido_descuento: referidoDescuento > 0 ? referidoDescuento : null,
+    bienvenida_aplicada: bienvenidaAplicada,
     total,
     telefono,
   };
 
   // Si solo querían cotizar (mostrar el desglose), no se crea nada
   if (cotizar) return json({ ok: true, cotizacion: true, ...desglose });
+
+  // 🔐 ENFORZAMIENTO (24-sep-2026): con la verificación activa, un teléfono SIN
+  // verificar NO crea pedido ni aparta stock (regla de Cindy: verificar ANTES de pagar).
+  if (verifActiva && !telVerificado) {
+    return json({
+      ok: false,
+      error: 'Antes de confirmar tu pedido, confirmá tu WhatsApp 💗 (te mandamos un código de 6 números)',
+      motivo: 'telefono_no_verificado',
+    }, 409);
+  }
 
   // ------------------------------------------------------------ 6) REFERENCIA
   const referencia = nuevaReferencia();
@@ -233,10 +329,28 @@ Deno.serve(async (req) => {
     contacto_preferido: usaWhatsapp ? 'whatsapp' : 'correo',
     cupon_codigo: cuponCodigo,
     cupon_descuento: descuento > 0 ? descuento : null,
+    referido_por_codigo: referidoCodigo,
+    referido_descuento: referidoDescuento > 0 ? referidoDescuento : null,
     factura_tipo: tipoFactura,
     factura_por_correo: !!fac.por_correo,
+    // 🔐 VERIFICACIÓN (24-sep-2026): deja rastro del estado de verificación y del 10%.
+    telefono_verificado: telVerificado,
+    verificacion_estado: verifActiva ? (telVerificado ? 'verificado' : 'pendiente') : 'no_requiere',
+    bienvenida_aplicada: bienvenidaAplicada,
+    descuento_bienvenida: bienvenidaAplicada ? descuento : 0,
   };
   if (correo) pedido.customer_email = correo;
+
+  // 📝 ¿CÓMO NOS CONOCISTE? (23-sep-2026) — opcional, para las estadísticas de la Agenda.
+  // Solo se aceptan las opciones del formulario (para que no entre cualquier cosa).
+  const OPCIONES_CONOCIO = ['redes', 'amiga', 'otro'];
+  const conocio = (b.conocio ?? {}) as Record<string, unknown>;
+  const comoConocio = String(conocio.como ?? '').trim().slice(0, 30);
+  const conocioDetalle = String(conocio.detalle ?? '').trim().slice(0, 120);
+  if (comoConocio && OPCIONES_CONOCIO.includes(comoConocio)) {
+    pedido.como_nos_conocio = comoConocio;
+    if (conocioDetalle) pedido.conocio_detalle = conocioDetalle;
+  }
   if (tipoFactura === 'ccf' || tipoFactura === 'consumidor') {
     pedido.factura_nombre  = String(fac.nombre || nombre);
     pedido.factura_nit     = fac.nit ? String(fac.nit) : null;
@@ -266,6 +380,18 @@ Deno.serve(async (req) => {
     if (motivo === 'sin_stock') return json({ ok: false, error: 'Se agotó: ' + nombreFallo, motivo: 'sin_stock', producto: idFallo }, 409);
     if (motivo === 'reservada_por_otro') return json({ ok: false, error: 'Alguien está comprando: ' + nombreFallo, motivo: 'reservada_por_otro', producto: idFallo }, 409);
     return json({ ok: false, error: 'No pudimos apartar el producto', motivo: motivo || 'error_stock' }, 409);
+  }
+
+  // 🎁 Registrar el 10% de bienvenida (una sola vez por teléfono verificado).
+  // Se graba recién AHORA, con el pedido ya creado y el stock apartado: si algo
+  // falló antes, el pedido se borró y el 10% queda disponible para la próxima.
+  if (bienvenidaAplicada) {
+    try {
+      await supabase.from('bienvenidas').upsert(
+        { dato: telefono, order_reference: referencia, usado_en: new Date().toISOString() },
+        { onConflict: 'dato' },
+      );
+    } catch (_e) { /* no bloquea la compra */ }
   }
 
   // -------------------------------------------- 9) MARCAR EL CUPÓN COMO USADO

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { verificacionActiva, telefonoVerificado, bienvenidaYaUsada, normalizarTel } from '../_shared/verificacion.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') || '',
@@ -114,6 +115,19 @@ serve(async (req) => {
               contactoPreferido, cuponCodigo } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
+      // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): el teléfono debe estar VERIFICADO
+      // ANTES de crear el enlace de pago (regla de Cindy: verificar ANTES de pagar).
+      const telVerif = normalizarTel(String(customerPhone || ''));
+      const telVerificadoW = telVerif ? await telefonoVerificado(telVerif) : false;
+      if (await verificacionActiva()) {
+        if (!telVerif || telVerif.length !== 11) {
+          return new Response(JSON.stringify({ error: 'Necesitamos tu teléfono para confirmar el pedido', motivo: 'telefono_requerido' }), { status: 400, headers: corsHeaders });
+        }
+        if (!telVerificadoW) {
+          return new Response(JSON.stringify({ error: 'Antes de pagar, confirmá tu WhatsApp 💗 (te mandamos un código de 6 números)', motivo: 'telefono_no_verificado' }), { status: 409, headers: corsHeaders });
+        }
+      }
+
       // ===== PRECIOS DEL SERVIDOR (2026-09-23) =====
       // 🔒 ANTES: el monto del enlace de pago salía del body (`total`) → cualquiera podía
       // mandar $0.05 y pagar menos. AHORA: se lee el precio REAL en la base y se aplica la
@@ -201,8 +215,17 @@ serve(async (req) => {
         if (descuentoCupon > subtotalProductos) descuentoCupon = subtotalProductos;  // nunca menos que $0
       }
 
+      // 🎁 10% DE BIENVENIDA (24-sep-2026): solo en la 1ª compra de un teléfono
+      // VERIFICADO y sin cupón (no se acumula; regla de Cindy: un solo descuento).
+      let bienvenidaAplicada = false;
+      let bienvenidaDescuento = 0;
+      if (descuentoCupon === 0 && telVerificadoW && !(await bienvenidaYaUsada(telVerif))) {
+        bienvenidaAplicada = true;
+        bienvenidaDescuento = money(Math.min(subtotalProductos * 0.10, 5));
+      }
+
       // ===== TOTAL (calculado acá, jamás con el `total` del navegador) =====
-      const totalFinal = money(Math.max(0, subtotalProductos + envio - descuentoCupon));
+      const totalFinal = money(Math.max(0, subtotalProductos + envio - descuentoCupon - bienvenidaDescuento));
       if (totalFinal <= 0) {
         return new Response(JSON.stringify({ error: 'El total del pedido no puede ser $0' }), { status: 400, headers: corsHeaders });
       }
@@ -257,6 +280,11 @@ serve(async (req) => {
         factura_direccion: facturaDireccion || null,
         customer_email: customerEmail || null,
         factura_por_correo: facturaPorCorreo || false,
+        // 🔐 VERIFICACIÓN (24-sep-2026): deja rastro del estado y del 10% de bienvenida.
+        telefono_verificado: telVerificadoW,
+        verificacion_estado: telVerificadoW ? 'verificado' : 'pendiente',
+        bienvenida_aplicada: bienvenidaAplicada,
+        descuento_bienvenida: bienvenidaDescuento,
         stock_reservado: true
       });
 
@@ -288,6 +316,17 @@ serve(async (req) => {
               : 'Uno de los productos acaba de venderse.'
           }), { status: 409, headers: corsHeaders });
         }
+      }
+
+      // 🎁 Registrar el 10% de bienvenida (una sola vez por teléfono verificado).
+      // Con el pedido creado y el stock vendido; si algo falló antes, no se graba.
+      if (bienvenidaAplicada) {
+        try {
+          await supabase.from('bienvenidas').upsert(
+            { dato: telVerif, order_reference: ref, usado_en: new Date().toISOString() },
+            { onConflict: 'dato' },
+          );
+        } catch (_e) { /* no bloquea el pago */ }
       }
 
       return new Response(JSON.stringify({ paymentUrl: payData.urlEnlace, reference: ref }), { headers: corsHeaders });

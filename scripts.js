@@ -8,6 +8,9 @@ const SUPABASE_ANON_KEY = 'sb_publishable_m85uJKNu8Izi5ujT8ukWWQ_XvEMOToA';
 const WOMPI_API_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/wompi-checkout';
 // NIVEL B (21-sep-2026): el pedido lo arma el servidor (nadie puede tocar los precios)
 const CREAR_PEDIDO_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/crear-pedido';
+const VERIF_ESTADO_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/verificacion-estado';
+const VERIF_ENVIAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/enviar-codigo-wa';
+const VERIF_CONFIRMAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/verificar-codigo-wa';
 let supabaseClient = null;
 
 function getSupabase() {
@@ -1474,7 +1477,9 @@ function sessionToken() {
 }
 
 // Reserva los productos del carrito al entrar al checkout (el primero que llega gana)
-async function reservarCarrito() {
+// `minutos` permite extender la reserva durante la verificación (la clienta necesita
+// tiempo para recibir el código de WhatsApp y confirmarlo → 20 min).
+async function reservarCarrito(minutos = RESERVA_MINUTOS) {
     if (!cart.length) return true;
     try {
         const r = await fetch(STOCK_API_URL + '/reservar', {
@@ -1483,7 +1488,7 @@ async function reservarCarrito() {
             body: JSON.stringify({
                 items: cart.map(i => ({ id: i.id, qty: i.qty || 1 })),
                 token: sessionToken(),
-                minutos: RESERVA_MINUTOS
+                minutos: minutos
             })
         });
         const d = await r.json();
@@ -1498,7 +1503,7 @@ async function reservarCarrito() {
             }
             return false;
         }
-        iniciarTimerReserva(RESERVA_MINUTOS * 60);
+        iniciarTimerReserva(minutos * 60);
         return true;
     } catch (e) {
         console.log('Error reservando stock:', e.message);
@@ -1792,6 +1797,110 @@ async function revisarClienteEnCheckout() {
     } catch (_e) { bloquearEfectivo(false); }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026) — confirmar WhatsApp antes de pagar
+// El servidor (crear-pedido / wompi-checkout) EXIGE el teléfono verificado
+// cuando el interruptor `plan_verificacion_clientes` está ACTIVO. Acá está la
+// pantalla que le permite a la clienta verificarlo en el momento.
+// ══════════════════════════════════════════════════════════════════════
+async function telefonoEstaVerificado(tel) {
+    try {
+        const r = await fetch(VERIF_ESTADO_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ telefono: tel })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!d || d.interruptor !== 'activo') return true;   // sin verificación → libre
+        return !!(d && d.telefono_verificado);
+    } catch (_e) { return true; }   // si no se puede consultar, NO bloquear la venta
+}
+
+async function enviarCodigoVerificacion() {
+    const tel = normalizarTelefono($('checkout-phone').value);
+    if (!tel) { showToast('📱 Escribí primero tu teléfono'); return; }
+    const nombre = $('checkout-name').value.trim();
+    const btn = $('verif-enviar');
+    btn.disabled = true;
+    $('verif-msg').textContent = '📨 Mandándote el código por WhatsApp…';
+    try {
+        const r = await fetch(VERIF_ENVIAR_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ telefono: tel, nombre })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.ok) {
+            $('verif-msg').textContent = '💬 ¡Listo! Te mandamos un código de 6 números. Escribilo acá y dale a Confirmar ✅';
+        } else {
+            const motivo = d && d.motivo;
+            if (motivo === 'sin_whatsapp') {
+                $('verif-msg').textContent = '📵 Ese número no tiene WhatsApp. Escribile a Cindy al 7662-6575 y lo dejamos listo 💗';
+            } else if (motivo === 'cooldown') {
+                $('verif-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otro código.';
+            } else if (motivo === 'limite_envios' || motivo === 'limite_ip') {
+                $('verif-msg').textContent = '⏳ Pediste muchos códigos seguidos. Escribile a Cindy al 7662-6575 💗';
+            } else {
+                $('verif-msg').textContent = '😕 No pudimos mandar el código. Escribile a Cindy al 7662-6575 💗';
+            }
+        }
+    } catch (_e) {
+        $('verif-msg').textContent = '😕 Error de conexión. Probá de nuevo o escribile a Cindy 💗';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function confirmarCodigoVerificacion() {
+    const tel = normalizarTelefono($('checkout-phone').value);
+    const codigo = ($('verif-codigo').value || '').replace(/\D/g, '');
+    if (!tel) { showToast('📱 Escribí primero tu teléfono'); return; }
+    if (codigo.length !== 6) { showToast('✏️ Escribí los 6 números del código'); return; }
+    const btn = $('verif-confirmar');
+    btn.disabled = true;
+    try {
+        const r = await fetch(VERIF_CONFIRMAR_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ telefono: tel, codigo })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.ok) {
+            $('verif-msg').textContent = '🎉 ¡Tu WhatsApp quedó confirmado! Ya podés confirmar tu pedido 💗';
+            $('checkout-verificacion').style.display = 'none';
+            $('verif-codigo').value = '';
+            showToast('✅ ¡WhatsApp confirmado!');
+        } else {
+            const motivo = d && d.motivo;
+            if (motivo === 'incorrecto') {
+                $('verif-msg').textContent = '🤔 Mmm, ese código no coincide. Probá otra vez 👇 (te quedan ' + (d.intentos_restantes || 0) + ' intentos)';
+            } else if (motivo === 'expirado') {
+                $('verif-msg').textContent = '⏰ Ese código ya venció. Pedí uno nuevo 💗';
+            } else if (motivo === 'demasiados_intentos') {
+                $('verif-msg').textContent = '🙈 Probaste muchas veces seguidas. Escribile a Cindy al 7662-6575 💗';
+            } else {
+                $('verif-msg').textContent = '😕 No pudimos confirmar el código. Escribile a Cindy al 7662-6575 💗';
+            }
+            $('verif-codigo').value = '';
+        }
+    } catch (_e) {
+        $('verif-msg').textContent = '😕 Error de conexión. Probá de nuevo 💗';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function garantizarTelefonoVerificado() {
+    const tel = normalizarTelefono($('checkout-phone').value);
+    if (!tel) return true;   // sin teléfono → lo valida validarDatosCompra (muestra su mensaje)
+    if (await telefonoEstaVerificado(tel)) return true;
+    // No verificado → mostrar el bloque, extender la reserva y frenar el pago
+    $('checkout-verificacion').style.display = '';
+    $('verif-msg').textContent = '💗 Antes de pagar, confirmá tu WhatsApp: te mandamos un código de 6 números. 🔒';
+    $('verif-codigo').value = '';
+    // 🔐 Extendemos la reserva a 20 min: la clienta necesita tiempo para el código
+    reservarCarrito(20);
+    showToast('📱 Confirmá tu WhatsApp para seguir 💗');
+    return false;
+}
+
 function openCheckoutModal() {
     // La reserva de 5 minutos se renueva cada vez que abre el checkout
     reservarMiCarrito(cart);
@@ -1811,6 +1920,8 @@ function openCheckoutModal() {
     reservarCarrito(); // NUEVO: reserva los productos por 5 min (el primero que llega gana)
     $('checkout-overlay').style.display = '';
     $('checkout-modal').style.display = '';
+    // 🔐 Reset del bloque de verificación (se muestra solo si hace falta)
+    if ($('checkout-verificacion')) $('checkout-verificacion').style.display = 'none';
 }
 
 function closeCheckoutModal() {
@@ -2509,8 +2620,10 @@ if (_telInput) {
 
 // ===== BOTÓN PRINCIPAL DE CHECKOUT =====
 $('checkout-btn').addEventListener('click', openCheckoutModal);
-$('checkout-confirm').addEventListener('click', () => {
+$('checkout-confirm').addEventListener('click', async () => {
     const method = document.querySelector('input[name="pay-method"]:checked').value;
+    // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): confirmar WhatsApp ANTES de pagar.
+    if (!(await garantizarTelefonoVerificado())) return;   // muestra el bloque y frena
     if (method === 'tarjeta') {
         closeCheckoutModal();
         wompiCheckout();
@@ -2518,6 +2631,12 @@ $('checkout-confirm').addEventListener('click', () => {
         cashCheckout();
     }
 });
+
+// 🔐 Botones del bloque de verificación de WhatsApp
+const _verifEnviarBtn = $('verif-enviar');
+const _verifConfirmarBtn = $('verif-confirmar');
+if (_verifEnviarBtn) _verifEnviarBtn.addEventListener('click', enviarCodigoVerificacion);
+if (_verifConfirmarBtn) _verifConfirmarBtn.addEventListener('click', confirmarCodigoVerificacion);
 
 // ===== NEWSLETTER =====
 document.getElementById('newsletter-form').addEventListener('submit', (e) => {
