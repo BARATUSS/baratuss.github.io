@@ -12,6 +12,7 @@
 // ============================================================
 // Generación del código QR dentro de la función (sin servicios externos)
 import QRCode from 'https://esm.sh/qrcode@1.5.3';
+import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -124,6 +125,204 @@ async function qrPng(texto: string, escala = 4, quiet = 4): Promise<Uint8Array> 
   ]);
 }
 
+// ============================================================
+// QR compartido entre el comprobante HTML (correo) y el PDF (WhatsApp).
+// Se arma UNA vez por pedido y queda en `_qrPng` para ambos medios.
+// ============================================================
+async function prepararQR(o: Record<string, any>): Promise<void> {
+  const total = Number(o.total || 0);
+  const esCCF = o.factura_tipo === 'ccf';
+  const f = new Date(o.created_at || Date.now());
+  const fechaTxt = f.toLocaleDateString('es-SV') + ' ' + f.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+  const correlativo = (EMISOR.simulacion ? 'SIM-' : '') + (esCCF ? 'CCF' : 'CF') + '-' + String(o.reference || '').slice(-6);
+  _qrPng = null;
+  try {
+    const textoQR = [
+      (esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL') + ' — ' + EMISOR.nombre,
+      'N°: ' + correlativo,
+      'Fecha: ' + fechaTxt,
+      'Emisor — NIT: ' + EMISOR.nit + ' / NRC: ' + EMISOR.nrc,
+      'Receptor: ' + (o.factura_nombre || o.customer_name || 'Consumidor final'),
+      'Total: $' + total.toFixed(2),
+      'Referencia: ' + (o.reference || '—'),
+      EMISOR.simulacion ? 'DOCUMENTO DE SIMULACIÓN — SIN VALOR FISCAL' : '',
+    ].filter(Boolean).join('\n');
+    _qrPng = await qrPng(textoQR, 4, 4);
+  } catch (_e) { _qrPng = null; }
+}
+
+// ============================================================
+// PDF de la factura (WhatsApp) — mismo contenido que el comprobante de correo,
+// armado con pdf-lib (prolijo, no pixel-perfect al HTML). El QR se reutiliza
+// desde `_qrPng` (embedPng). No lleva emojis: StandardFonts sólo soporta WinAnsi.
+// ============================================================
+async function generarPDF(o: Record<string, any>): Promise<Uint8Array> {
+  const total = Number(o.total || 0);
+  const gravada = total / (1 + IVA);
+  const iva = total - gravada;
+  const esCCF = o.factura_tipo === 'ccf';
+  const f = new Date(o.created_at || Date.now());
+  const fechaTxt = f.toLocaleDateString('es-SV') + ' ' + f.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+  const correlativo = (EMISOR.simulacion ? 'SIM-' : '') + (esCCF ? 'CCF' : 'CF') + '-' + String(o.reference || '').slice(-6);
+
+  await prepararQR(o);
+
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const page = doc.addPage([595.28, 841.89]);
+  const W = 595.28, H = 841.89;
+  const m = 48;
+  const ancho = W - m * 2;
+
+  const negro = rgb(0.13, 0.13, 0.13);
+  const gris = rgb(0.35, 0.35, 0.35);
+  const grisClaro = rgb(0.6, 0.6, 0.6);
+  const rosa = rgb(0.78, 0.33, 0.25);
+  const ambar = rgb(0.878, 0.627, 0.043);
+  const ambarFondo = rgb(1, 0.957, 0.898);
+  const ambarTexto = rgb(0.647, 0.384, 0.043);
+
+  const partir = (t: string, fnt: any, s: number, max: number): string[] => {
+    const palabras = String(t || '').split(' ');
+    const lineas: string[] = [];
+    let cur = '';
+    for (const p of palabras) {
+      const prueba = cur ? cur + ' ' + p : p;
+      if (fnt.widthOfTextAtSize(prueba, s) > max && cur) { lineas.push(cur); cur = p; }
+      else cur = prueba;
+    }
+    if (cur) lineas.push(cur);
+    return lineas.length ? lineas : [''];
+  };
+  const dibujarDerecha = (t: string, xDerecha: number, yTop: number, s: number, fnt: any, c: any) => {
+    page.drawText(t, { x: xDerecha - fnt.widthOfTextAtSize(t, s), y: yTop, size: s, font: fnt, color: c });
+  };
+
+  let y = H - 48;
+
+  // Banner de simulación
+  if (EMISOR.simulacion) {
+    const alto = 24;
+    page.drawRectangle({ x: m, y: y - alto, width: ancho, height: alto, color: ambarFondo, borderColor: ambar, borderWidth: 1 });
+    const t = 'SIMULACIÓN — DOCUMENTO SIN VALOR FISCAL';
+    const w = bold.widthOfTextAtSize(t, 10);
+    page.drawText(t, { x: m + (ancho - w) / 2, y: y - alto + 7, size: 10, font: bold, color: ambarTexto });
+    y -= alto + 22;
+  }
+
+  // Encabezado: emisor a la izquierda, N° de documento a la derecha
+  const yHeader = y;
+  page.drawText('BARATUSS', { x: m, y, size: 24, font: bold, color: negro });
+  y -= 16;
+  const datosEmisor = [
+    EMISOR.razonSocial,
+    'NIT: ' + EMISOR.nit + ' · NRC: ' + EMISOR.nrc,
+    'Giro: ' + EMISOR.giro,
+    'Dirección: ' + EMISOR.direccion,
+    'Tel. ' + EMISOR.telefono + ' · ' + EMISOR.correo,
+    'Establecimiento: ' + EMISOR.establecimiento,
+  ];
+  for (const l of datosEmisor) {
+    for (const ln of partir(l, font, 9, 295)) { page.drawText(ln, { x: m, y, size: 9, font, color: gris }); y -= 13; }
+  }
+
+  const xDer = m + ancho - 185;
+  page.drawText(esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL', { x: xDer, y: yHeader, size: 9, font: bold, color: rosa });
+  page.drawText('N° ' + correlativo, { x: xDer, y: yHeader - 18, size: 14, font: bold, color: negro });
+  page.drawText('Fecha de emisión: ' + fechaTxt, { x: xDer, y: yHeader - 34, size: 8.5, font, color: gris });
+  page.drawText('Condición de pago: contado', { x: xDer, y: yHeader - 47, size: 8.5, font, color: gris });
+  page.drawText('Referencia: ' + (o.reference || '—'), { x: xDer, y: yHeader - 60, size: 8.5, font, color: gris });
+
+  y -= 8;
+  page.drawLine({ start: { x: m, y }, end: { x: W - m, y }, thickness: 1.5, color: rosa });
+  y -= 22;
+
+  // Datos del comprador (grilla de 2 columnas)
+  page.drawText('DATOS DEL COMPRADOR', { x: m, y, size: 9, font: bold, color: grisClaro });
+  y -= 16;
+  const colW = ancho / 2 - 10;
+  const dibujarCampo = (k: string, v: string, x: number, yTop: number) => {
+    page.drawText(k.toUpperCase(), { x, y: yTop, size: 7.5, font: bold, color: grisClaro });
+    let vy = yTop - 12;
+    for (const ln of partir(v, font, 9.5, colW)) { page.drawText(ln, { x, y: vy, size: 9.5, font, color: negro }); vy -= 12; }
+  };
+  const g0 = y;
+  dibujarCampo('Nombre', o.factura_nombre || o.customer_name || 'Consumidor final', m, g0);
+  dibujarCampo('NIT', esCCF ? (o.factura_nit || '—') : '—', m + ancho / 2, g0);
+  dibujarCampo('NRC', esCCF ? (o.factura_nrc || '—') : '—', m, g0 - 58);
+  dibujarCampo('Giro', esCCF ? (o.factura_giro || '—') : '—', m + ancho / 2, g0 - 58);
+  dibujarCampo('Dirección', esCCF ? (o.factura_direccion || '—') : '—', m, g0 - 116);
+  dibujarCampo('Teléfono', o.customer_phone || '—', m + ancho / 2, g0 - 116);
+  dibujarCampo('Entrega', o.delivery_point || '—', m, g0 - 174);
+  y = g0 - 200;
+
+  // Tabla de items
+  const xCant = m;
+  const xDesc = m + 38;
+  const xUnit = m + 386;   // borde derecho de "P. unitario"
+  const xGrav = W - m;     // borde derecho de "Ventas gravadas"
+  let hy = y;
+  page.drawText('Cant.', { x: xCant, y: hy, size: 8, font: bold, color: grisClaro });
+  page.drawText('Descripción', { x: xDesc, y: hy, size: 8, font: bold, color: grisClaro });
+  dibujarDerecha('P. unitario', xUnit, hy, 8, bold, grisClaro);
+  dibujarDerecha('Ventas gravadas', xGrav, hy, 8, bold, grisClaro);
+  page.drawLine({ start: { x: m, y: hy - 4 }, end: { x: W - m, y: hy - 4 }, thickness: 0.8, color: grisClaro });
+  let iy = hy - 8;
+  for (const it of (o.items || [])) {
+    const qty = it.qty || 1;
+    const sub = (it.price || 0) * qty;
+    const unitario = sub / (1 + IVA) / qty;
+    const subGravada = sub / (1 + IVA);
+    const descripcion = (it.name || '') + (it.size ? ' · Talla ' + it.size : '') + ' · cód. #' + it.id;
+    const lineas = partir(descripcion, font, 9, 240);
+    const alto = Math.max(1, lineas.length) * 11 + 6;
+    page.drawText(String(qty), { x: xCant, y: iy - 9, size: 9, font, color: negro });
+    let dy = iy - 9;
+    for (const ln of lineas) { page.drawText(ln, { x: xDesc, y: dy, size: 9, font, color: negro }); dy -= 11; }
+    dibujarDerecha('$' + unitario.toFixed(2), xUnit, iy - 9, 9, font, negro);
+    dibujarDerecha('$' + subGravada.toFixed(2), xGrav, iy - 9, 9, font, negro);
+    iy -= alto;
+    page.drawLine({ start: { x: m, y: iy }, end: { x: W - m, y: iy }, thickness: 0.5, color: rgb(0.93, 0.93, 0.93) });
+  }
+  y = iy - 16;
+
+  // Totales (bloque a la derecha)
+  const xEtiqueta = W - m - 220;
+  const dibujarTotal = (k: string, v: string, yy: number, s: number, fnt: any) => {
+    page.drawText(k, { x: xEtiqueta, y: yy, size: s, font: fnt, color: negro });
+    dibujarDerecha(v, xGrav, yy, s, fnt, negro);
+  };
+  dibujarTotal('Ventas gravadas', '$' + gravada.toFixed(2), y, 11, font);
+  y -= 18;
+  dibujarTotal('IVA 13% (incluido)', '$' + iva.toFixed(2), y, 11, font);
+  y -= 18;
+  page.drawLine({ start: { x: xEtiqueta, y: y + 6 }, end: { x: xGrav, y: y + 6 }, thickness: 0.8, color: negro });
+  dibujarTotal('Total a pagar', '$' + total.toFixed(2), y - 14, 14, bold);
+  y -= 46;
+
+  // Código QR
+  if (_qrPng) {
+    try {
+      const img = await doc.embedPng(_qrPng);
+      const ladoQR = 108;
+      const xq = m + (ancho - ladoQR) / 2;
+      page.drawImage(img, { x: xq, y: y - ladoQR, width: ladoQR, height: ladoQR });
+      const tt = 'Escaneá para verificar este documento';
+      page.drawText(tt, { x: m + (ancho - font.widthOfTextAtSize(tt, 9)) / 2, y: y - ladoQR - 16, size: 9, font, color: grisClaro });
+      y -= ladoQR + 32;
+    } catch (_e) { /* QR no embebido: el PDF sale sin QR */ }
+  }
+
+  // Pie legal
+  const pie = EMISOR.simulacion
+    ? 'Documento de PRUEBA del sistema de facturación: no tiene valor fiscal mientras el emisor no cuente con NRC y la autorización de DTE del Ministerio de Hacienda.'
+    : 'El IVA (13%) ya está incluido en los precios.';
+  for (const ln of partir(pie, font, 8.5, ancho)) { page.drawText(ln, { x: m, y, size: 8.5, font, color: grisClaro }); y -= 11; }
+
+  return await doc.save();
+}
+
 async function documentoHTML(o: Record<string, any>) {
   const total = Number(o.total || 0);
   const gravada = total / (1 + IVA);
@@ -143,21 +342,8 @@ async function documentoHTML(o: Record<string, any>) {
   }).join('');
 
   // Código QR: en un DTE autorizado debe llevar el enlace oficial de consulta de Hacienda;
-  // mientras no exista autorización, lleva los datos del documento.
-  _qrPng = null;
-  try {
-    const textoQR = [
-      (esCCF ? 'COMPROBANTE DE CRÉDITO FISCAL' : 'FACTURA DE CONSUMIDOR FINAL') + ' — ' + EMISOR.nombre,
-      'N°: ' + correlativo,
-      'Fecha: ' + fechaTxt,
-      'Emisor — NIT: ' + EMISOR.nit + ' / NRC: ' + EMISOR.nrc,
-      'Receptor: ' + (o.factura_nombre || o.customer_name || 'Consumidor final'),
-      'Total: $' + total.toFixed(2),
-      'Referencia: ' + (o.reference || '—'),
-      EMISOR.simulacion ? 'DOCUMENTO DE SIMULACIÓN — SIN VALOR FISCAL' : '',
-    ].filter(Boolean).join('\n');
-    _qrPng = await qrPng(textoQR, 4, 4);
-  } catch (_e) { _qrPng = null; }
+  // mientras no exista autorización, lleva los datos del documento. (Se comparte con el PDF.)
+  await prepararQR(o);
 
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:640px;font-size:13px;">
   ${EMISOR.simulacion ? `<div style="background:#fff4e5;border:1px dashed #e0a04a;color:#a5620b;font-size:10px;font-weight:bold;letter-spacing:1px;text-align:center;padding:6px;border-radius:8px;margin-bottom:10px;">SIMULACIÓN — DOCUMENTO SIN VALOR FISCAL</div>` : ''}
@@ -404,6 +590,44 @@ async function enviarTextoWA(tel: string, texto: string): Promise<string | null>
   } catch (_e) { return null; }
 }
 
+// Sube el PDF a Meta como media y devuelve el media id (para type:'document').
+// El campo `type` del multipart es el MIME del archivo (application/pdf); el
+// `type:'document'` va en el MENSAJE, no en la subida del media.
+async function subirMediaWA(pdf: Uint8Array, filename: string): Promise<string | null> {
+  if (!WA_TOKEN || !WA_PHONE_ID) return null;
+  try {
+    const fd = new FormData();
+    fd.append('messaging_product', 'whatsapp');
+    fd.append('type', 'application/pdf');
+    fd.append('file', new Blob([pdf], { type: 'application/pdf' }), filename);
+    const r = await fetch('https://graph.facebook.com/v21.0/' + WA_PHONE_ID + '/media', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + WA_TOKEN },
+      body: fd,
+    });
+    const d = await r.json();
+    return d?.id ? String(d.id) : null;
+  } catch (_e) { return null; }
+}
+
+async function enviarDocumentoWA(tel: string, mediaId: string, filename: string, caption: string): Promise<string | null> {
+  if (!WA_TOKEN || !WA_PHONE_ID) return null;
+  try {
+    const r = await fetch('https://graph.facebook.com/v21.0/' + WA_PHONE_ID + '/messages', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: normalizarTel(tel),
+        type: 'document',
+        document: { id: mediaId, filename, caption },
+      }),
+    });
+    const d = await r.json();
+    return d?.messages?.[0]?.id ? String(d.messages[0].id) : null;
+  } catch (_e) { return null; }
+}
+
 async function registrarSalienteWA(wamid: string, tel: string, ref: string, contenido: string) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/wa_mensajes`, {
@@ -504,18 +728,39 @@ Deno.serve(async (req) => {
         if (medio === 'whatsapp') {
           const tel = normalizarTel(String(o.customer_phone || ''));
           if (!tel) { resultados.push({ referencia: o.reference, medio, ok: false, error: 'sin teléfono' }); continue; }
-          // Mismo patrón que la verificación de tel: sin ventana de 24 h el texto
+          // Mismo patrón que la verificación de tel: sin ventana de 24 h el mensaje
           // se pierde (re-engagement). No marcamos enviada → se reintenta cuando la
-          // clienta vuelva a escribir (o cuando exista plantilla de factura).
+          // clienta vuelva a escribir.
           if (!(await ventanaAbierta(tel))) {
-            resultados.push({ referencia: o.reference, medio, ok: false, error: 'sin ventana 24h (se reintenta)' });
-            continue;
+            resultados.push({ referencia: o.reference, medio, ok: false, error: 'sin ventana 24h (se reintenta)' }); continue;
           }
-          const wamid = await enviarTextoWA(tel, resumenWhatsApp(o));
+          // 1) PDF real (documento). 2) Si la generación/subida falla, texto simple.
+          let wamid: string | null = null;
+          let tipo = 'texto';
+          const filename = 'factura-' + (o.reference || 'x') + '.pdf';
+          try {
+            const pdf = await generarPDF(o);
+            const mediaId = await subirMediaWA(pdf, filename);
+            if (mediaId) {
+              const wid = await enviarDocumentoWA(tel, mediaId, filename, '🧾 Tu factura de BARATUSS 💛');
+              if (wid) { wamid = wid; tipo = 'documento'; }
+              else console.error('[enviar-factura] Meta rechazó el documento para ' + tel);
+            } else {
+              console.error('[enviar-factura] No se pudo subir el PDF como media para ' + tel);
+            }
+          } catch (e) {
+            console.error('[enviar-factura] Fallo generando/subiendo el PDF (' + tel + '): ' + String(e).slice(0, 200));
+          }
+          if (!wamid) {
+            // Fallback: el resumen de texto de siempre, para no perder la factura.
+            wamid = await enviarTextoWA(tel, resumenWhatsApp(o));
+            tipo = 'texto';
+          }
           if (!wamid) { resultados.push({ referencia: o.reference, medio, ok: false, error: 'no se pudo enviar' }); continue; }
-          await registrarSalienteWA(wamid, tel, o.reference, resumenWhatsApp(o));
+          const contenido = tipo === 'documento' ? '[PDF] ' + filename + '\n' + resumenWhatsApp(o) : resumenWhatsApp(o);
+          await registrarSalienteWA(wamid, tel, o.reference, contenido);
           await marcarEnviada(o.reference);
-          resultados.push({ referencia: o.reference, medio, para: tel, ok: true });
+          resultados.push({ referencia: o.reference, medio, para: tel, ok: true, tipo });
         } else {
           const esCCF = o.factura_tipo === 'ccf';
           const asunto = `Tu ${esCCF ? 'comprobante de crédito fiscal' : 'factura'} de BARATUSS · #${o.reference}`;
