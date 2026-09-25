@@ -1723,6 +1723,41 @@ const HEADERS_PAGOS = {
     'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
 };
 
+// ===== 🎁 10% DE BIENVENIDA (display) — 24-sep-2026 =====
+// El servidor (crear-pedido / wompi-checkout) aplica el 10% de bienvenida sobre el
+// subtotal de productos, tope $5, SOLO si: verificación activa + teléfono verificado
+// + 1ª compra de ese teléfono + sin cupón ni referido. Acá replicamos el MISMO cálculo
+// para que el resumen muestre EXACTAMENTE lo que se cobra.
+//   · server: descuento = money(Math.min(subtotal * 0.10, 5))
+//   · money(n) = Math.round(n * 100) / 100
+let _bienvenida = { tel: '', aplica: false, consultado: false };
+
+function descuentoBienvenida(subtotal) {
+    if (!_bienvenida.aplica) return 0;
+    const bruto = Math.min(Number(subtotal || 0) * 0.10, 5);
+    return Math.round(bruto * 100) / 100;   // = money() del servidor
+}
+
+// Consulta el estado del teléfono (verificado + si le toca el 10%). No revela de quién es.
+async function consultarBienvenida() {
+    const tel = normalizarTelefono(($('checkout-phone')?.value || ''));
+    if (!tel) { _bienvenida = { tel: '', aplica: false, consultado: true }; updateCheckoutUI(); return; }
+    if (_bienvenida.tel === tel && _bienvenida.consultado) { updateCheckoutUI(); return; }
+    _bienvenida = { tel, aplica: false, consultado: false };
+    try {
+        const r = await fetch(VERIF_ESTADO_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ telefono: tel })
+        });
+        const d = await r.json().catch(() => ({}));
+        const aplica = !!(d && d.interruptor === 'activo' && d.telefono_verificado && d.puede_bienvenida);
+        _bienvenida = { tel, aplica, consultado: true };
+    } catch (_e) {
+        _bienvenida = { tel, aplica: false, consultado: true };
+    }
+    updateCheckoutUI();
+}
+
 // Normaliza el teléfono: 8 dígitos (7000-0000) → 503XXXXXXXX. Devuelve '' si no es válido.
 function normalizarTelefono(v) {
     let t = String(v || '').replace(/\D/g, '');
@@ -1911,6 +1946,7 @@ function terminarVerificacionWhatsApp() {
     const estado = $('verif-estado');
     if (estado) { estado.style.display = 'none'; estado.textContent = ''; }
     showToast('✅ ¡WhatsApp confirmado!');
+    consultarBienvenida();   // 🎁 al quedar verificado, recalculamos si le toca el 10%
     // Avanza solo: si sigue en el paso de contacto, continúa al pago.
     if (checkoutPasoActual === 1) setTimeout(() => continuarPaso(1), 400);
 }
@@ -2197,6 +2233,7 @@ function continuarPaso(i) {
         garantizarVerificacion().then(ok => {
             if (ok) {
                 marcarCompletado(1, '💌 ' + datos.nombre.split(' ')[0] + ' · ' + datos.tel.slice(3, 7) + '-' + datos.tel.slice(7));
+                consultarBienvenida();   // 🎁 teléfono verificado → refresca el 10% si aplica
                 irAPaso(2);
             } else {
                 irAPaso(1);   // el bloque de verificación queda visible dentro del paso
@@ -2235,13 +2272,17 @@ function renderResumenFinal() {
     const baseTotal = getCartTotal();
     const fee = (pm !== 'efectivo' && dm === 'c807') ? C807_FEE : 0;
     const desc = descuentoCodigo(baseTotal);
+    const descBienvenida = codigoAplicado ? 0 : descuentoBienvenida(baseTotal);
     const codigoMostrar = codigoEnviado();
+    const totalFinal = Math.max(0, baseTotal + fee - desc - descBienvenida);
     const filas = [
         ['📦 Entrega', dm === 'c807' ? 'Agencia C807' : punto],
         ['💌 Contacto', nombre + ' · ' + telTxt],
         ['🎟️ Código', codigoMostrar ? codigoMostrar + (codigoAplicado ? ' (−$' + desc.toFixed(2) + ')' : '') : 'Sin cupón'],
         ['💳 Pago', pm === 'tarjeta' ? 'Tarjeta (Wompi)' : 'Efectivo'],
     ];
+    if (descBienvenida > 0) filas.push(['🎁 10% de bienvenida', '−$' + descBienvenida.toFixed(2)]);
+    filas.push(['🧾 Total', '$' + totalFinal.toFixed(2)]);
     box.innerHTML = filas.map(([l, v]) =>
         `<div class="checkout-resumen-final__row"><span class="checkout-resumen-final__label">${l}</span><span class="checkout-resumen-final__valor">${v}</span></div>`
     ).join('');
@@ -2266,6 +2307,7 @@ function openCheckoutModal() {
     }
     iniciarCheckoutPasos();   // 5 pasos: arranca en Entrega (pre-marca Contacto si ya está verificado)
     updateCheckoutUI();
+    consultarBienvenida();   // 🎁 10% de bienvenida: consulta el estado del teléfono y refresca el total
     mostrarResumenCompra();
     renderPuntosCards();   // tarjetas de día/punto con la fecha real de la próxima entrega
     toggleFacturaUI();     // estado inicial del bloque de comprobante
@@ -2328,12 +2370,17 @@ function updateCheckoutUI() {
     
     const baseTotal = getCartTotal();
     const descCupon = descuentoCodigo(baseTotal);
-    const totalConFee = Math.max(0, baseTotal + fee - descCupon);
+    // 🎁 10% de bienvenida: NO se acumula con cupón/referido (regla del servidor).
+    const descBienvenida = codigoAplicado ? 0 : descuentoBienvenida(baseTotal);
+    const totalConFee = Math.max(0, baseTotal + fee - descCupon - descBienvenida);
     $('checkout-total').textContent = '$' + totalConFee.toFixed(2);
     const breakdown = $('checkout-breakdown');
     if (breakdown) {
         breakdown.innerHTML =
             (fee > 0 ? `<small style="opacity:.7;display:block;margin-top:4px;">Retiro C807: +$${fee.toFixed(2)}</small>` : '')
+            + (descBienvenida > 0
+                ? `<small style="display:block;margin-top:4px;color:#1a7f4b;">🎁 10% de bienvenida: −$${descBienvenida.toFixed(2)}</small>`
+                : '')
             + (descCupon > 0
                 ? `<small style="display:block;margin-top:4px;color:#1a7f4b;">🎟️ Código ${codigoAplicado.codigo}: −$${descCupon.toFixed(2)}`
                   + ` <a href="#" onclick="quitarCodigo();return false;" style="color:#b9453a;">(quitar)</a></small>`
@@ -3008,6 +3055,8 @@ const _telInput = $('checkout-phone');
 if (_telInput) {
     _telInput.addEventListener('blur', revisarClienteEnCheckout);
     _telInput.addEventListener('change', revisarClienteEnCheckout);
+    _telInput.addEventListener('blur', consultarBienvenida);
+    _telInput.addEventListener('change', consultarBienvenida);
 }
 
 // ===== BOTÓN PRINCIPAL DE CHECKOUT =====
