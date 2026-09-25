@@ -873,6 +873,20 @@
             <button type="submit" class="btn btn--primary btn--full" id="reset-submit">Enviar link</button>
             <p class="auth-form__switch"><a href="#" id="switch-to-login-reset">Volver a iniciar sesión</a></p>
         </form>
+
+        <!-- NEW PASSWORD FORM (recuperación) -->
+        <form id="new-password-form" class="auth-form" style="display:none;">
+            <p style="color:var(--gray-600);margin-bottom:20px;font-size:0.9rem;">🔐 Elegí tu nueva contraseña y guardala.</p>
+            <div class="form-group">
+                <label>Nueva contraseña</label>
+                <input type="password" id="new-password" placeholder="Mínimo 6 caracteres" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label>Confirmar contraseña</label>
+                <input type="password" id="new-password-confirm" placeholder="Repetí la contraseña" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn--primary btn--full" id="new-password-submit">Guardar contraseña</button>
+        </form>
     </div>
 </div>
 
@@ -1000,6 +1014,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260926bienvenidafix"></script>
+<script src="scripts.js?v=20260924resetpass"></script>
 </body>
 </html>

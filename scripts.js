@@ -250,7 +250,7 @@ async function resetPassword(email) {
     const client = sb();
     if (!client) return { error: 'Supabase no conectado' };
     const { error } = await client.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/tienda-ropa/'
+        redirectTo: window.location.origin + '/'
     });
     return { error: error?.message };
 }
@@ -260,6 +260,7 @@ async function checkSession() {
     if (!isSupabaseReady) checkSupabase();
     const client = sb();
     if (!client) return;
+    setupPasswordRecovery();
     
     const { data: { session } } = await client.auth.getSession();
     if (session?.user) {
@@ -1307,6 +1308,68 @@ document.getElementById('reset-form').addEventListener('submit', async (e) => {
     showToast('📬 Revisá tu correo para restablecer');
     showLoginForm();
     e.target.reset();
+});
+
+// ===== AUTH — Recuperar contraseña (nueva contraseña) =====
+// Tras hacer clic en el link del correo, Supabase dispara PASSWORD_RECOVERY
+// (o llega el hash #type=recovery en la URL). Mostramos el formulario de nueva contraseña.
+let recoveryHandlerReady = false;
+
+function showNewPasswordForm() {
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('register-form').style.display = 'none';
+    document.getElementById('reset-form').style.display = 'none';
+    document.getElementById('new-password-form').style.display = '';
+    document.getElementById('auth-title').textContent = '🔑 Elegí tu nueva contraseña';
+    openModal('auth');
+}
+
+function setupPasswordRecovery() {
+    const client = sb();
+    if (!client || recoveryHandlerReady) return;
+    recoveryHandlerReady = true;
+
+    client.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+            showNewPasswordForm();
+        }
+    });
+
+    // Fallback: si el link del correo ya trae #access_token=...&type=recovery
+    // al cargar (por timing del onAuthStateChange), lo detectamos igual.
+    if (window.location.hash.indexOf('type=recovery') !== -1) {
+        showNewPasswordForm();
+    }
+}
+
+document.getElementById('new-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const client = sb();
+    if (!client) { showToast('❌ Supabase no conectado'); return; }
+
+    const btn = document.getElementById('new-password-submit');
+    const pass = document.getElementById('new-password').value;
+    const pass2 = document.getElementById('new-password-confirm').value;
+
+    if (pass.length < 6) { showToast('❌ La contraseña debe tener al menos 6 caracteres'); return; }
+    if (pass !== pass2) { showToast('❌ Las contraseñas no coinciden'); return; }
+
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    const { error } = await client.auth.updateUser({ password: pass });
+    btn.disabled = false; btn.textContent = 'Guardar contraseña';
+
+    if (error) {
+        showToast('❌ ' + error.message);
+        return;
+    }
+
+    showToast('✅ Contraseña actualizada');
+    currentUser = null;
+    updateAuthUI();
+    closeAllModals();
+    e.target.reset();
+    // Limpiar el hash (evita re-disparar la recuperación) y volver al inicio
+    setTimeout(() => { window.location.href = window.location.origin + '/'; }, 900);
 });
 
 // ===== PROFILE — Open =====
