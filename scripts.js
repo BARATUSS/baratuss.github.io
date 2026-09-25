@@ -1739,10 +1739,10 @@ function descuentoBienvenida(subtotal) {
 }
 
 // Consulta el estado del teléfono (verificado + si le toca el 10%). No revela de quién es.
-async function consultarBienvenida() {
+async function consultarBienvenida(force) {
     const tel = normalizarTelefono(($('checkout-phone')?.value || ''));
     if (!tel) { _bienvenida = { tel: '', aplica: false, consultado: true }; updateCheckoutUI(); return; }
-    if (_bienvenida.tel === tel && _bienvenida.consultado) { updateCheckoutUI(); return; }
+    if (!force && _bienvenida.tel === tel && _bienvenida.consultado) { updateCheckoutUI(); return; }
     _bienvenida = { tel, aplica: false, consultado: false };
     try {
         const r = await fetch(VERIF_ESTADO_URL, {
@@ -1946,7 +1946,7 @@ function terminarVerificacionWhatsApp() {
     const estado = $('verif-estado');
     if (estado) { estado.style.display = 'none'; estado.textContent = ''; }
     showToast('✅ ¡WhatsApp confirmado!');
-    consultarBienvenida();   // 🎁 al quedar verificado, recalculamos si le toca el 10%
+    consultarBienvenida(true);   // 🎁 al quedar verificado, recalculamos si le toca el 10%
     // Avanza solo: si sigue en el paso de contacto, continúa al pago.
     if (checkoutPasoActual === 1) setTimeout(() => continuarPaso(1), 400);
 }
@@ -2233,7 +2233,7 @@ function continuarPaso(i) {
         garantizarVerificacion().then(ok => {
             if (ok) {
                 marcarCompletado(1, '💌 ' + datos.nombre.split(' ')[0] + ' · ' + datos.tel.slice(3, 7) + '-' + datos.tel.slice(7));
-                consultarBienvenida();   // 🎁 teléfono verificado → refresca el 10% si aplica
+                consultarBienvenida(true);   // 🎁 teléfono verificado → refresca el 10% si aplica
                 irAPaso(2);
             } else {
                 irAPaso(1);   // el bloque de verificación queda visible dentro del paso
