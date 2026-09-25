@@ -2023,12 +2023,19 @@ function openPagarGate() {
     closeCart();
     $('pagar-gate-overlay').style.display = '';
     $('pagar-gate').style.display = '';
+    // FIX (24-sep-2026): la puerta usa la clase .modal (opacity:0 por defecto) — sin
+    // .modal--open / .open quedaba INVISIBLE y con el body con overflow:hidden la página
+    // parecía congelada ("no sale nada y se traba"). Igual que openModal()/closeAllModals().
+    $('pagar-gate-overlay').classList.add('open');
+    $('pagar-gate').classList.add('modal--open');
     document.body.style.overflow = 'hidden';
 }
 
 function closePagarGate() {
     $('pagar-gate-overlay').style.display = 'none';
     $('pagar-gate').style.display = 'none';
+    $('pagar-gate-overlay').classList.remove('open');
+    $('pagar-gate').classList.remove('modal--open');
     document.body.style.overflow = '';
 }
 
