@@ -13,6 +13,7 @@ const VERIF_ENVIAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/env
 const VERIF_CONFIRMAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/verificar-codigo-wa';
 const VERIF_CORREO_ENVIAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/enviar-codigo-correo';
 const VERIF_CORREO_CONFIRMAR_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/verificar-codigo-correo';
+const VERIF_WA_TOKEN_URL = 'https://lizybztwnlrlvsrmgnug.functions.supabase.co/iniciar-verificacion-wa';
 let supabaseClient = null;
 
 function getSupabase() {
@@ -1822,81 +1823,96 @@ async function telefonoEstaVerificado(tel) {
     } catch (_e) { return true; }   // si no se puede consultar, NO bloquear la venta
 }
 
-async function enviarCodigoVerificacion() {
+// ===== VERIFICACIÓN POR WHATSAPP "escribinos primero" (sin código, 25-sep-2026) =====
+// El botón pide un token corto al backend (iniciar-verificacion-wa), abre WhatsApp con
+// un mensaje preescrito y hace polling de verificacion-estado hasta que el webhook
+// (whatsapp-webhook) marque ese número como verificado. No se escribe ningún código.
+let _pollVerifWA = null;
+
+async function iniciarVerificacionWhatsApp() {
     const tel = normalizarTelefono($('checkout-phone').value);
     if (!tel) { showToast('📱 Escribí primero tu teléfono'); return; }
     const nombre = $('checkout-name').value.trim();
     const btn = $('verif-enviar');
     btn.disabled = true;
-    $('verif-msg').textContent = '📨 Mandándote el código por WhatsApp…';
+    $('verif-msg').textContent = '📨 Preparando tu confirmación…';
+    // Abrimos la pestaña YA (dentro del gesto del clic) para que el navegador no la bloquee.
+    const ventana = window.open('', '_blank');
     try {
-        const r = await fetch(VERIF_ENVIAR_URL, {
+        const r = await fetch(VERIF_WA_TOKEN_URL, {
             method: 'POST', headers: HEADERS_PAGOS,
             body: JSON.stringify({ telefono: tel, nombre })
         });
         const d = await r.json().catch(() => ({}));
+        if (d && d.ok && d.ya_verificado) {
+            if (ventana) ventana.close();
+            $('verif-msg').textContent = '🎉 ¡Tu WhatsApp ya estaba confirmado! Ya podés continuar 💗';
+            terminarVerificacionWhatsApp();
+            return;
+        }
         if (d && d.ok) {
-            $('verif-msg').textContent = '💬 ¡Listo! Te mandamos un código de 6 números. Escribilo acá y dale a Confirmar ✅';
+            const link = d.wa_link || ('https://wa.me/50362852631?text=' + encodeURIComponent('Hola BARATUSS 💛 Confirmar ' + (d.token || '')));
+            if (ventana) ventana.location.href = link; else window.open(link, '_blank', 'noopener');
+            $('verif-msg').innerHTML = '📲 Te abrimos WhatsApp con un mensaje listo. <b>Tocá ENVIAR</b> y volvé acá: se confirma sola. 👇<br>'
+                + '<a href="' + link + '" target="_blank" rel="noopener" style="display:inline-block;margin:8px 0;padding:10px 16px;background:#25D366;color:#fff;border-radius:10px;font-weight:700;text-decoration:none;">💬 Abrir WhatsApp y enviar</a>';
+            const estado = $('verif-estado');
+            estado.style.display = '';
+            estado.style.color = '#1a7f4b';
+            estado.textContent = '⏳ Esperando tu mensaje… (esto se confirma solo)';
+            iniciarPollingVerificacion(tel);
         } else {
+            if (ventana) ventana.close();
             const motivo = d && d.motivo;
-            if (motivo === 'sin_whatsapp') {
-                $('verif-msg').textContent = '📵 Ese número no tiene WhatsApp. Escribile a Cindy al 7662-6575 y lo dejamos listo 💗';
-            } else if (motivo === 'abrir_whatsapp') {
-                const link = d && d.wa_link ? d.wa_link : 'https://wa.me/50362852631';
-                $('verif-msg').innerHTML = '💬 Para que el código te llegue, WhatsApp nos pide que <b>vos nos escribas primero</b> (una sola vez). 👇<br>'
-                    + '<a href="' + link + '" target="_blank" rel="noopener" style="display:inline-block;margin:8px 0;padding:10px 16px;background:#25D366;color:#fff;border-radius:10px;font-weight:700;text-decoration:none;">📲 Abrir WhatsApp y mandar "Hola"</a><br>'
-                    + 'Cuando ya lo hayas mandado, volvé acá y tocá <b>Enviarme el código</b> de nuevo 💗';
-            } else if (motivo === 'cooldown') {
-                $('verif-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otro código.';
+            if (motivo === 'cooldown') {
+                $('verif-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otra confirmación.';
             } else if (motivo === 'limite_envios' || motivo === 'limite_ip') {
-                $('verif-msg').textContent = '⏳ Pediste muchos códigos seguidos. Escribile a Cindy al 7662-6575 💗';
+                $('verif-msg').innerHTML = '⏳ Pediste muchas confirmaciones seguidas. Podés confirmar con tu correo:<br>' + botonIrACorreo();
             } else {
-                $('verif-msg').textContent = '😕 No pudimos mandar el código. Escribile a Cindy al 7662-6575 💗';
+                $('verif-msg').innerHTML = '😕 No pudimos preparar la confirmación por WhatsApp. Confirmá con tu correo, que <b>siempre llega</b>:<br>' + botonIrACorreo();
             }
         }
     } catch (_e) {
-        $('verif-msg').textContent = '😕 Error de conexión. Probá de nuevo o escribile a Cindy 💗';
+        if (ventana) ventana.close();
+        $('verif-msg').innerHTML = '😕 Error de conexión. Probá de nuevo o confirmá con tu correo:<br>' + botonIrACorreo();
     } finally {
         btn.disabled = false;
     }
 }
 
-async function confirmarCodigoVerificacion() {
-    const tel = normalizarTelefono($('checkout-phone').value);
-    const codigo = ($('verif-codigo').value || '').replace(/\D/g, '');
-    if (!tel) { showToast('📱 Escribí primero tu teléfono'); return; }
-    if (codigo.length !== 6) { showToast('✏️ Escribí los 6 números del código'); return; }
-    const btn = $('verif-confirmar');
-    btn.disabled = true;
-    try {
-        const r = await fetch(VERIF_CONFIRMAR_URL, {
-            method: 'POST', headers: HEADERS_PAGOS,
-            body: JSON.stringify({ telefono: tel, codigo })
-        });
-        const d = await r.json().catch(() => ({}));
-        if (d && d.ok) {
-            $('verif-msg').textContent = '🎉 ¡Tu WhatsApp quedó confirmado! Ya podés confirmar tu pedido 💗';
-            $('checkout-verificacion').style.display = 'none';
-            $('verif-codigo').value = '';
-            showToast('✅ ¡WhatsApp confirmado!');
-        } else {
-            const motivo = d && d.motivo;
-            if (motivo === 'incorrecto') {
-                $('verif-msg').textContent = '🤔 Mmm, ese código no coincide. Probá otra vez 👇 (te quedan ' + (d.intentos_restantes || 0) + ' intentos)';
-            } else if (motivo === 'expirado') {
-                $('verif-msg').textContent = '⏰ Ese código ya venció. Pedí uno nuevo 💗';
-            } else if (motivo === 'demasiados_intentos') {
-                $('verif-msg').textContent = '🙈 Probaste muchas veces seguidas. Escribile a Cindy al 7662-6575 💗';
-            } else {
-                $('verif-msg').textContent = '😕 No pudimos confirmar el código. Escribile a Cindy al 7662-6575 💗';
+function iniciarPollingVerificacion(tel) {
+    detenerPollingVerificacion();
+    let intentos = 0;
+    _pollVerifWA = setInterval(async () => {
+        intentos++;
+        if (intentos > 40) {   // ~2 minutos
+            detenerPollingVerificacion();
+            const estado = $('verif-estado');
+            if (estado) {
+                estado.textContent = '🕐 Todavía no vemos tu mensaje. Revisá que lo hayas enviado y tocá el botón de nuevo 💗';
+                estado.style.color = '#b9453a';
             }
-            $('verif-codigo').value = '';
+            return;
         }
-    } catch (_e) {
-        $('verif-msg').textContent = '😕 Error de conexión. Probá de nuevo 💗';
-    } finally {
-        btn.disabled = false;
-    }
+        const ok = await telefonoEstaVerificado(tel);
+        if (ok) {
+            detenerPollingVerificacion();
+            terminarVerificacionWhatsApp();
+        }
+    }, 3000);
+}
+
+function detenerPollingVerificacion() {
+    if (_pollVerifWA) { clearInterval(_pollVerifWA); _pollVerifWA = null; }
+}
+
+function terminarVerificacionWhatsApp() {
+    detenerPollingVerificacion();
+    $('checkout-verificacion').style.display = 'none';
+    const estado = $('verif-estado');
+    if (estado) { estado.style.display = 'none'; estado.textContent = ''; }
+    showToast('✅ ¡WhatsApp confirmado!');
+    // Avanza solo: si sigue en el paso de contacto, continúa al pago.
+    if (checkoutPasoActual === 1) setTimeout(() => continuarPaso(1), 400);
 }
 
 // ===== MEDIO DE VERIFICACIÓN (24-sep-2026): invitado elige UN solo medio =====
@@ -1912,6 +1928,23 @@ function cambiarMedioVerificacion() {
     if (gCorreo) gCorreo.style.display = esCorreo ? '' : 'none';
     if (gWa) gWa.style.display = 'none';
     if ($('checkout-verificacion-correo')) $('checkout-verificacion-correo').style.display = 'none';
+}
+
+// 📧 Atajo: pasar de WhatsApp a correo (el correo SIEMPRE llega, sin regla de 24 h).
+function botonIrACorreo() {
+    return '<button type="button" onclick="elegirVerificacionCorreo()" '
+        + 'style="display:inline-block;margin:8px 0 0;padding:9px 14px;border:1.5px solid #3a52a8;border-radius:10px;background:#f3f6ff;color:#3a52a8;font-weight:700;font-size:.82rem;cursor:pointer;">'
+        + '📧 Recibir el código por correo</button>';
+}
+
+function elegirVerificacionCorreo() {
+    const radio = document.querySelector('input[name="verif-medio"][value="correo"]');
+    if (radio) radio.checked = true;
+    cambiarMedioVerificacion();
+    const grupo = $('checkout-correo-verif-group');
+    if (grupo) grupo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const input = $('checkout-verif-email');
+    if (input) setTimeout(() => input.focus(), 350);
 }
 
 async function correoEstaVerificado(correo) {
@@ -2002,13 +2035,14 @@ async function garantizarVerificacion() {
         showToast('📧 Confirmá tu correo para seguir 💗');
         return false;
     }
-    // WhatsApp (comportamiento original)
+    // WhatsApp (flujo "escribinos primero", sin código)
     const tel = normalizarTelefono($('checkout-phone').value);
     if (!tel) return true;
     if (await telefonoEstaVerificado(tel)) return true;
     $('checkout-verificacion').style.display = '';
-    $('verif-msg').textContent = '💗 Antes de pagar, confirmá tu WhatsApp: te mandamos un código de 6 números. 🔒';
-    $('verif-codigo').value = '';
+    $('verif-msg').textContent = '💗 Antes de pagar, confirmá tu WhatsApp: te damos un mensaje listo para enviar y listo. 🔒';
+    const estado = $('verif-estado');
+    if (estado) { estado.style.display = 'none'; estado.textContent = ''; }
     reservarCarrito(20);
     showToast('📱 Confirmá tu WhatsApp para seguir 💗');
     return false;
@@ -2995,11 +3029,10 @@ $('checkout-confirm').addEventListener('click', async () => {
     }
 });
 
-// 🔐 Botones del bloque de verificación de WhatsApp
-const _verifEnviarBtn = $('verif-enviar');
-const _verifConfirmarBtn = $('verif-confirmar');
-if (_verifEnviarBtn) _verifEnviarBtn.addEventListener('click', enviarCodigoVerificacion);
-if (_verifConfirmarBtn) _verifConfirmarBtn.addEventListener('click', confirmarCodigoVerificacion);
+// 🔐 Botón de verificación de WhatsApp: se conecta por onclick en el HTML (igual que los de correo).
+
+// Sincroniza el medio por defecto (correo recomendado) al cargar.
+cambiarMedioVerificacion();
 
 // ===== NEWSLETTER =====
 document.getElementById('newsletter-form').addEventListener('submit', (e) => {

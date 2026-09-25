@@ -32,6 +32,15 @@ export function generarCodigo6(): string {
   return Array.from(b).map((x) => String(x % 10)).join('');
 }
 
+// Token corto legible (sin I/O/0/1) para la verificación de WhatsApp "escribinos primero":
+// la clienta manda "Hola BARATUSS 💛 Confirmar {TOKEN}" desde SU número y el webhook la verifica.
+const ALFABETO_TOKEN = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export function generarTokenCorto(n = 6): string {
+  const b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return Array.from(b).map((x) => ALFABETO_TOKEN[x % ALFABETO_TOKEN.length]).join('');
+}
+
 export async function sha256Hex(txt: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');

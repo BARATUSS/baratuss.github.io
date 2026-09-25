@@ -539,19 +539,21 @@
                     </small>
                 </div>
 
-                <!-- 🚪 MEDIO DE VERIFICACIÓN (24-sep-2026): invitado elige UN solo medio -->
-                <div id="checkout-medio" style="margin:12px 0;padding:10px 12px;background:#faf7f6;border:1px solid #eee;border-radius:10px;">
-                    <div style="font-size:.8rem;font-weight:600;color:#3a3230;margin-bottom:8px;">¿Por dónde querés confirmar tu compra?</div>
+                <!-- 🚪 MEDIO DE VERIFICACIÓN (24-sep-2026): invitado elige UN solo medio.
+                     El correo es el recomendado/por defecto porque SIEMPRE llega (sin regla de 24h). -->
+                <div id="checkout-medio" style="margin:12px 0;padding:12px 14px;background:#f3f6ff;border:1.5px solid #d0d9ff;border-radius:10px;">
+                    <div style="font-size:.8rem;font-weight:700;color:#3a52a8;margin-bottom:8px;">🔐 ¿Por dónde querés confirmar tu compra?</div>
                     <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;">
-                        <input type="radio" name="verif-medio" value="whatsapp" checked onchange="cambiarMedioVerificacion()"> 📱 WhatsApp
+                        <input type="radio" name="verif-medio" value="correo" checked onchange="cambiarMedioVerificacion()"> 📧 Correo electrónico <span style="background:#3a52a8;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:999px;">Recomendado</span>
                     </label>
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="radio" name="verif-medio" value="correo" onchange="cambiarMedioVerificacion()"> 📧 Correo electrónico
+                        <input type="radio" name="verif-medio" value="whatsapp" onchange="cambiarMedioVerificacion()"> 📱 WhatsApp
                     </label>
+                    <div style="margin-top:6px;font-size:.72rem;color:#5a6bb0;line-height:1.4;">El correo te llega siempre y al instante. 💗</div>
                 </div>
 
-                <!-- Correo para verificar (solo cuando elige "correo") -->
-                <div id="checkout-correo-verif-group" style="display:none;">
+                <!-- Correo para verificar (visible por defecto: el correo es el medio recomendado) -->
+                <div id="checkout-correo-verif-group" style="">
                     <div class="form-group">
                         <label>Tu correo</label>
                         <input type="email" id="checkout-verif-email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
@@ -584,27 +586,19 @@
                 <div id="checkout-verificacion" style="display:none;margin-top:14px;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
                     <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:6px;">Confirmemos tu WhatsApp 📱</div>
                     <div id="verif-msg" style="font-size:.8rem;margin-bottom:10px;color:#5a4a47;line-height:1.5;">
-                        💗 Antes de pagar, confirmá tu WhatsApp: te mandamos un código de 6 números. 🔒
+                        💗 Tocá el botón y envianos el mensaje que se arma solo: así confirmamos que el número es tuyo. 🔒
                     </div>
-                    <div style="display:flex;gap:8px;margin-bottom:10px;">
-                        <input id="verif-codigo" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
-                               placeholder="• • • • • •"
-                               style="flex:1;padding:12px;border:1.5px solid #ffd9d2;border-radius:10px;font-size:1.1rem;text-align:center;letter-spacing:6px;">
-                    </div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <button type="button" id="verif-enviar"
-                                style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#25D366;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
-                            Enviarme el código 💬
+                    <button type="button" id="verif-enviar" onclick="iniciarVerificacionWhatsApp()"
+                            style="display:block;width:100%;padding:12px;border:none;border-radius:10px;background:#25D366;color:#fff;font-weight:700;font-size:.9rem;cursor:pointer;">
+                        Confirmar por WhatsApp 💬
+                    </button>
+                    <div id="verif-estado" style="display:none;margin-top:10px;font-size:.8rem;color:#1a7f4b;line-height:1.5;"></div>
+                    <div style="margin-top:12px;font-size:.78rem;line-height:1.5;">
+                        <button type="button" onclick="elegirVerificacionCorreo()"
+                                style="display:block;width:100%;padding:9px 12px;border:1.5px solid #3a52a8;border-radius:10px;background:#f3f6ff;color:#3a52a8;font-weight:700;font-size:.82rem;cursor:pointer;">
+                            📧 Prefiero confirmar con mi correo
                         </button>
-                        <button type="button" id="verif-confirmar"
-                                style="flex:1;min-width:150px;padding:11px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;">
-                            Confirmar ✅
-                        </button>
-                    </div>
-                    <div style="margin-top:10px;font-size:.78rem;line-height:1.5;">
-                        🤔 ¿No tenés WhatsApp o necesitás ayuda?
-                        <a href="https://wa.me/50376626575" target="_blank" rel="noopener"
-                           style="color:#25D366;font-weight:700;text-decoration:underline;">Escribirle a Cindy 💬</a>
+                        <div style="margin-top:8px;text-align:center;">🤔 ¿Necesitás ayuda? <a href="https://wa.me/50376626575" target="_blank" rel="noopener" style="color:#25D366;font-weight:700;text-decoration:underline;">Escribirle a Cindy 💬</a></div>
                     </div>
                 </div>
 
@@ -1006,6 +1000,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260925pagarfix"></script>
+<script src="scripts.js?v=20260926correoverif"></script>
 </body>
 </html>

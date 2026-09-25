@@ -4,6 +4,7 @@
 //     una sola respuesta por conversación, y derivar cambios/reclamos a decisión humana.
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hashCodigo, normalizarTel } from '../_shared/verificacion.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') || '',
@@ -321,6 +322,45 @@ serve(async (req) => {
               wa_timestamp: ts
             }, { onConflict: 'wa_message_id', ignoreDuplicates: true });
             if (errIns) errores++; else guardados++;
+
+            // ================== VERIFICACIÓN POR WHATSAPP "escribinos primero" (sin código) ==================
+            // El checkout genera un token corto (iniciar-verificacion-wa) y la clienta manda
+            // "Hola BARATUSS 💛 Confirmar {TOKEN}" desde SU número. Acá se valida el token y
+            // se marca ese número como verificado en verif_datos.
+            const mToken = String(texto || '').match(/confirmar\s+([A-Z0-9]{6})/i);
+            if (mToken) {
+              try {
+                const token = mToken[1].toUpperCase();
+                const tNorm = normalizarTel(tel);
+                const hash = await hashCodigo(token, tNorm);
+
+                const ahoraTok = Date.now();
+                const { data: pend } = await supabase.from('verif_codigos')
+                  .select('id, expira_en')
+                  .eq('tipo', 'telefono').eq('dato', tNorm).eq('codigo_hash', hash)
+                  .is('consumido_en', null)
+                  .order('creado_en', { ascending: false }).limit(1);
+                const p = pend && pend.length ? pend[0] : null;
+
+                if (p && new Date(p.expira_en).getTime() >= ahoraTok) {
+                  const nowISO = new Date().toISOString();
+                  await supabase.from('verif_codigos').update({ verificado_en: nowISO, consumido_en: nowISO }).eq('id', p.id);
+                  const { data: existente } = await supabase.from('verif_datos')
+                    .select('id').eq('tipo', 'telefono').eq('dato', tNorm).is('revocado_en', null).maybeSingle();
+                  if (existente) {
+                    await supabase.from('verif_datos').update({ canal: 'whatsapp', verificado_en: nowISO }).eq('id', existente.id);
+                  } else {
+                    await supabase.from('verif_datos').insert({ tipo: 'telefono', dato: tNorm, canal: 'whatsapp', verificado_en: nowISO });
+                  }
+                  await responderWhatsApp(tNorm, '¡Listo! ✅ Tu número quedó verificado. Volvé a la página y seguí con tu pedido 💛');
+                  await avisarTelegram('✅ VERIFICACIÓN WHATSAPP\n\nNúmero: +' + tNorm + '\n(Token confirmado por la clienta)');
+                  continue;
+                } else {
+                  await responderWhatsApp(tNorm, '🙈 No encontramos ese código de confirmación. Volvé a la página y tocá "Confirmar por WhatsApp" de nuevo 💛');
+                  continue;
+                }
+              } catch (eTok) { console.log('error verificación token', String(eTok)); }
+            }
 
             // ================== CONTINGENCIAS DE ENTREGA (plan v1.2) ==================
             // Se atiende ANTES que el resto: si el mensaje es una respuesta al menú de
