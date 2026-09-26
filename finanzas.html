@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FINANZAS BARATUSS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="admin.css?v=20260919prep">
+    <style>
+        /* ===== Tarjetas y números grandes de finanzas ===== */
+        .fin-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 22px; }
+        .fin-card {
+            background: var(--white); border: 1px solid var(--gray-200);
+            border-radius: 14px; padding: 18px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+        .fin-card__label { font-size: .75rem; text-transform: uppercase; letter-spacing: .8px; color: var(--gray-600); font-weight: 600; margin-bottom: 6px; }
+        .fin-card__value { font-size: 1.65rem; font-weight: 800; color: var(--black); line-height: 1.1; }
+        .fin-card__sub { font-size: .75rem; color: var(--gray-400); margin-top: 4px; }
+        .fin-card--accent { background: linear-gradient(135deg,#ff9686,#ffb4a8); border: none; color: #fff; }
+        .fin-card--accent .fin-card__label { color: rgba(255,255,255,.85); }
+        .fin-card--accent .fin-card__value { color: #fff; }
+        .fin-card--accent .fin-card__sub { color: rgba(255,255,255,.85); }
+
+        .fin-hero {
+            background: linear-gradient(135deg,#fff5f3,#ffe8e4);
+            border-radius: 16px; padding: 22px 26px; margin-bottom: 20px;
+            display: flex; align-items: center; gap: 18px;
+        }
+        .fin-hero__emoji { font-size: 2.4rem; }
+        .fin-hero h1 { font-size: 1.35rem; color: var(--black); margin: 0; }
+        .fin-hero p { color: var(--gray-600); margin: 4px 0 0; font-size: .9rem; }
+
+        .fin-alertas { border-radius: 14px; padding: 16px 20px; margin-bottom: 22px; border: 1.5px solid var(--gray-200); background: var(--white); }
+        .fin-alertas__title { font-weight: 700; font-size: .95rem; margin-bottom: 10px; color: var(--black); }
+        .fin-alerta { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; font-size: .86rem; }
+        .fin-alerta:last-child { margin-bottom: 0; }
+        .fin-alerta--verde { background: #eafaf1; color: #1e7d43; }
+        .fin-alerta--amarillo { background: #fff7e6; color: #8a6d1a; }
+        .fin-alerta--rojo { background: #fdecec; color: #b13a2f; }
+        .fin-alerta .fin-alerta__icon { font-size: 1.1rem; }
+        .fin-alerta .fin-alerta__texto { flex: 1; }
+        .fin-alerta__btn {
+            background: var(--white); border: 1.5px solid currentColor; color: inherit;
+            border-radius: 100px; padding: 5px 14px; font-size: .78rem; font-weight: 600; cursor: pointer;
+        }
+        .fin-alerta__btn:hover { opacity: .85; }
+
+        .fin-list { display: flex; flex-direction: column; gap: 10px; }
+        .fin-item {
+            background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px;
+            padding: 14px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        }
+        .fin-item__main { flex: 1; min-width: 160px; }
+        .fin-item__title { font-weight: 700; color: var(--black); font-size: .92rem; }
+        .fin-item__meta { font-size: .78rem; color: var(--gray-600); margin-top: 2px; }
+        .fin-item__money { font-weight: 800; font-size: 1.05rem; color: var(--black); text-align: right; }
+        .fin-item__money small { display: block; font-size: .72rem; font-weight: 500; color: var(--gray-400); }
+        .fin-pill { font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 100px; }
+        .fin-pill--efectivo { background: #eafaf1; color: #1e7d43; }
+        .fin-pill--tarjeta { background: #eef2ff; color: #3b55c9; }
+        .fin-pill--muted { background: var(--gray-100); color: var(--gray-600); }
+
+        .fin-form { background: var(--white); border: 1px solid var(--gray-200); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+        .fin-form h3 { font-size: 1rem; color: var(--black); margin-bottom: 14px; }
+        .fin-form__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+        .fin-form__grid label { font-size: .78rem; font-weight: 600; color: var(--gray-600); display: flex; flex-direction: column; gap: 5px; }
+        .fin-form__grid input, .fin-form__grid select {
+            padding: 10px 12px; border: 1px solid var(--gray-200); border-radius: 8px;
+            font-family: var(--ff-sans); font-size: .9rem; outline: none;
+        }
+        .fin-form__grid input:focus, .fin-form__grid select:focus { border-color: var(--accent); }
+        .fin-form__actions { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+
+        .fin-subtabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .fin-subtab {
+            background: var(--white); border: 1.5px solid var(--gray-200); color: var(--gray-600);
+            border-radius: 100px; padding: 8px 18px; font-size: .85rem; font-weight: 600; cursor: pointer;
+        }
+        .fin-subtab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        .fin-empty { color: var(--gray-400); font-size: .88rem; padding: 18px; text-align: center; }
+        .fin-note { font-size: .82rem; color: var(--gray-600); background: var(--gray-50); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
+        .fin-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .fin-table th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .6px; color: var(--gray-600); padding: 8px 10px; border-bottom: 1px solid var(--gray-200); }
+        .fin-table td { padding: 10px; border-bottom: 1px solid var(--gray-100); color: var(--gray-800); }
+        .fin-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="admin-login" id="fin-login">
+    <div class="admin-login__card">
+        <img src="assets/logo.jpg" alt="BARATUSS" class="admin-login__logo">
+        <h2>💗 FINANZAS BARATUSS</h2>
+        <p>Iniciá sesión con tu cuenta de administradora</p>
+        <form id="fin-login-form">
+            <input type="email" id="fin-email" placeholder="Correo electrónico" required>
+            <input type="password" id="fin-password" placeholder="Contraseña" required>
+            <button type="submit" class="admin-btn admin-btn--primary">Ingresar</button>
+            <p class="admin-login__error" id="fin-login-error"></p>
+
+            <button type="button" id="fin-otp-btn"
+                    style="width:100%;margin-top:6px;padding:12px;border-radius:100px;border:1.5px solid #ff9686;background:#fff;color:#d4574a;font-weight:600;cursor:pointer;">
+                🔑 Entrar con un código a mi correo
+            </button>
+            <div id="fin-otp-box" style="display:none;margin-top:12px;">
+                <input type="text" id="fin-otp-code" placeholder="Escribí el código que te llegó"
+                       maxlength="10" style="width:100%;padding:12px 16px;border-radius:100px;border:1px solid #e5e5e5;margin-bottom:8px;text-align:center;font-size:1rem;letter-spacing:2px;">
+                <button type="button" id="fin-otp-verify"
+                        style="width:100%;padding:12px;border-radius:100px;border:0;background:#ff9686;color:#fff;font-weight:700;cursor:pointer;">
+                    Entrar
+                </button>
+            </div>
+            <p id="fin-otp-aviso" style="margin:8px 0 0;font-size:.8rem;color:#7a5a55;line-height:1.45;"></p>
+            <a href="admin.html" class="admin-login__back">← Volver al panel</a>
+        </form>
+    </div>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="admin-dashboard" id="fin-dashboard" style="display:none;">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__logo">
+            <img src="assets/logo.jpg" alt="BARATUSS">
+        </div>
+        <nav class="admin-nav">
+            <a href="#" class="admin-nav__item active" data-section="dinero"><i class="fas fa-sack-dollar"></i> Dinero</a>
+            <a href="#" class="admin-nav__item" data-section="ventas"><i class="fas fa-shopping-bag"></i> Ventas</a>
+            <a href="#" class="admin-nav__item" data-section="inventario"><i class="fas fa-box"></i> Inventario</a>
+            <a href="#" class="admin-nav__item" data-section="gastos"><i class="fas fa-receipt"></i> Gastos y compras</a>
+            <a href="#" class="admin-nav__item" data-section="negocio"><i class="fas fa-chart-line"></i> Mi negocio</a>
+            <a href="#" class="admin-nav__item" data-section="hacienda"><i class="fas fa-landmark"></i> Hacienda</a>
+            <a href="#" class="admin-nav__item" data-section="config"><i class="fas fa-gear"></i> Configuración</a>
+        </nav>
+        <div class="admin-sidebar__footer">
+            <span id="fin-user-name">Admin</span>
+            <button id="fin-logout" class="admin-btn admin-btn--ghost"><i class="fas fa-sign-out-alt"></i> Salir</button>
+        </div>
+    </aside>
+
+    <main class="admin-main">
+        <!-- ===== ENCABEZADO ===== -->
+        <div class="fin-hero">
+            <div class="fin-hero__emoji">💗</div>
+            <div>
+                <h1>FINANZAS BARATUSS</h1>
+                <p>Hola Cindy 👋 Aquí puedes ver cómo está el dinero de Baratuss.</p>
+            </div>
+        </div>
+
+        <!-- ===== BLOQUE DE REVISIÓN ===== -->
+        <div class="fin-alertas" id="fin-alertas-block" style="display:none;">
+            <div class="fin-alertas__title">🔔 ¿HAY ALGO QUE REVISAR?</div>
+            <div id="fin-alertas-list"></div>
+        </div>
+
+        <!-- ===== DINERO ===== -->
+        <section class="admin-section" id="section-dinero">
+            <div class="admin-section__header"><h1>💰 Dinero</h1></div>
+            <div class="fin-cards" id="dinero-cards"></div>
+            <div class="fin-cards" id="dinero-cards2"></div>
+        </section>
+
+        <!-- ===== VENTAS ===== -->
+        <section class="admin-section" id="section-ventas" style="display:none;">
+            <div class="admin-section__header"><h1>🛒 Ventas</h1></div>
+            <div class="fin-cards" id="ventas-cards"></div>
+            <div class="fin-list" id="ventas-list"></div>
+        </section>
+
+        <!-- ===== INVENTARIO ===== -->
+        <section class="admin-section" id="section-inventario" style="display:none;">
+            <div class="admin-section__header"><h1>📦 Inventario</h1></div>
+            <div class="fin-cards" id="inventario-cards"></div>
+            <h3 style="font-size:.9rem;color:var(--gray-600);margin:8px 0 10px;">Productos sin movimiento (con stock, aún sin venta)</h3>
+            <div class="fin-list" id="inventario-sin-movimiento"></div>
+            <h3 style="font-size:.9rem;color:var(--gray-600);margin:20px 0 10px;">Todos los productos</h3>
+            <div class="fin-list" id="inventario-list"></div>
+        </section>
+
+        <!-- ===== GASTOS Y COMPRAS ===== -->
+        <section class="admin-section" id="section-gastos" style="display:none;">
+            <div class="admin-section__header"><h1>💸 Gastos y compras</h1></div>
+            <div class="fin-subtabs">
+                <button class="fin-subtab active" id="tab-compras">🛍️ Compras</button>
+                <button class="fin-subtab" id="tab-gastos">🧾 Gastos</button>
+            </div>
+
+            <div id="panel-compras">
+                <div class="fin-form">
+                    <h3>➕ Registrar compra</h3>
+                    <div class="fin-form__grid">
+                        <label>Proveedor <input type="text" id="compra-proveedor" placeholder="Ej. Mayorista"></label>
+                        <label>Producto <input type="text" id="compra-producto" placeholder="Nombre del producto"></label>
+                        <label>Fecha <input type="date" id="compra-fecha"></label>
+                        <label>Cantidad <input type="number" id="compra-cantidad" min="1" step="1" value="1"></label>
+                        <label>Costo total ($) <input type="number" id="compra-costo-total" min="0" step="0.01" placeholder="0.00"></label>
+                        <label>Método de pago
+                            <select id="compra-metodo"><option value="">—</option><option>efectivo</option><option>tarjeta</option><option>transferencia</option></select>
+                        </label>
+                        <label>Documento <input type="text" id="compra-documento" placeholder="N° factura / recibo"></label>
+                        <label>Nota <input type="text" id="compra-nota" placeholder="Opcional"></label>
+                    </div>
+                    <div class="fin-form__actions">
+                        <button class="admin-btn admin-btn--primary" id="btn-compra-crear" style="width:auto;">Registrar compra</button>
+                        <span id="compra-aviso" style="font-size:.8rem;"></span>
+                    </div>
+                </div>
+                <div class="fin-cards" id="compras-cards"></div>
+                <div class="fin-list" id="compras-list"></div>
+            </div>
+
+            <div id="panel-gastos" style="display:none;">
+                <div class="fin-form">
+                    <h3>➕ Registrar gasto</h3>
+                    <div class="fin-form__grid">
+                        <label>Categoría
+                            <select id="gasto-categoria"><option value="">—</option><option>renta</option><option>empleado</option><option>propietaria</option><option>electricidad</option><option>agua</option><option>internet</option><option>publicidad</option><option>google</option><option>otro</option></select>
+                        </label>
+                        <label>Descripción <input type="text" id="gasto-descripcion" placeholder="En qué se gastó"></label>
+                        <label>Fecha <input type="date" id="gasto-fecha"></label>
+                        <label>Monto ($) <input type="number" id="gasto-monto" min="0" step="0.01" placeholder="0.00"></label>
+                        <label>Método de pago
+                            <select id="gasto-metodo"><option value="">—</option><option>efectivo</option><option>tarjeta</option><option>transferencia</option></select>
+                        </label>
+                        <label>Documento <input type="text" id="gasto-documento" placeholder="N° factura / recibo"></label>
+                    </div>
+                    <div class="fin-form__actions">
+                        <button class="admin-btn admin-btn--primary" id="btn-gasto-crear" style="width:auto;">Registrar gasto</button>
+                        <span id="gasto-aviso" style="font-size:.8rem;"></span>
+                    </div>
+                </div>
+                <div class="fin-cards" id="gastos-cards"></div>
+                <div class="fin-list" id="gastos-list"></div>
+            </div>
+        </section>
+
+        <!-- ===== MI NEGOCIO ===== -->
+        <section class="admin-section" id="section-negocio" style="display:none;">
+            <div class="admin-section__header"><h1>📊 Mi negocio</h1></div>
+            <div class="fin-cards" id="negocio-cards"></div>
+            <div class="fin-cards" id="negocio-cards2"></div>
+            <h3 style="font-size:.9rem;color:var(--gray-600);margin:8px 0 10px;">🏆 Productos más vendidos</h3>
+            <div class="fin-list" id="negocio-top"></div>
+            <h3 style="font-size:.9rem;color:var(--gray-600);margin:20px 0 10px;">📅 Evolución mensual</h3>
+            <div class="admin-table-wrap">
+                <table class="fin-table">
+                    <thead><tr><th>Mes</th><th class="num">Ventas</th><th class="num">Venta neta</th><th class="num">Utilidad</th></tr></thead>
+                    <tbody id="negocio-evolucion"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ===== HACIENDA ===== -->
+        <section class="admin-section" id="section-hacienda" style="display:none;">
+            <div class="admin-section__header"><h1>🧾 Hacienda (IVA)</h1></div>
+            <div class="fin-cards" id="hacienda-cards"></div>
+            <h3 style="font-size:.9rem;color:var(--gray-600);margin:8px 0 10px;">Resumen por mes</h3>
+            <div class="admin-table-wrap">
+                <table class="fin-table">
+                    <thead><tr><th>Mes</th><th class="num">Venta neta</th><th class="num">IVA cobrado</th><th class="num">Compras</th><th class="num">Gastos</th></tr></thead>
+                    <tbody id="hacienda-tabla"></tbody>
+                </table>
+            </div>
+            <div class="fin-note" id="hacienda-aviso"></div>
+        </section>
+
+        <!-- ===== CONFIGURACIÓN ===== -->
+        <section class="admin-section" id="section-config" style="display:none;">
+            <div class="admin-section__header"><h1>⚙️ Configuración</h1></div>
+            <div class="fin-form">
+                <h3>Números de referencia (se usan en los cálculos)</h3>
+                <div class="fin-form__grid" id="config-grid"></div>
+                <div class="fin-form__actions">
+                    <button class="admin-btn admin-btn--primary" id="btn-config-save" style="width:auto;">Guardar</button>
+                    <span id="config-aviso" style="font-size:.8rem;"></span>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script src="finanzas.js"></script>
+</body>
+</html>
