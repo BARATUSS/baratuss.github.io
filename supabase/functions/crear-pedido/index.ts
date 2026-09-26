@@ -330,7 +330,7 @@ Deno.serve(async (req) => {
     telefono_normalizado: telefono,
     contacto_preferido: usaWhatsapp ? 'whatsapp' : 'correo',
     cupon_codigo: cuponCodigo,
-    cupon_descuento: descuento > 0 ? descuento : null,
+    cupon_descuento: cuponCodigo ? descuento : null,
     referido_por_codigo: referidoCodigo,
     referido_descuento: referidoDescuento > 0 ? referidoDescuento : null,
     factura_tipo: tipoFactura,
