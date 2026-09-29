@@ -969,10 +969,23 @@ function addToCart(id, size) {
     const product = products.find(p => p.id === id);
     if (!product) return;
     const key = size ? id + '-' + size : String(id);
-    const existing = cart.find(item => item.key === key);
-    if (existing) { existing.qty += 1; }
-    else {
-        cart.push({ key, id, size: size || null, name: product.name, price: product.price, image: product.image || null, qty: 1 });
+    let existing = cart.find(item => item.key === key);
+    const reservaMs = RESERVA_MINUTOS * 60 * 1000;
+    const ahora = Date.now();
+
+    // Si el producto sigue en el carrito pero su reserva de 5 min ya venció,
+    // NO lo sumamos como una segunda unidad (solo hay 1): lo volvemos a reservar fresco.
+    const expiro = !!(existing && existing.reservadoHasta && existing.reservadoHasta < ahora);
+    if (expiro) {
+        cart = cart.filter(item => item.key !== key);
+        existing = null;
+    }
+
+    if (existing) {
+        existing.qty += 1;
+        existing.reservadoHasta = ahora + reservaMs;
+    } else {
+        cart.push({ key, id, size: size || null, name: product.name, price: product.price, image: product.image || null, qty: 1, reservadoHasta: ahora + reservaMs });
     }
     saveCart();
     updateCartUI();
@@ -995,6 +1008,20 @@ function updateQty(key, delta) {
 }
 function getCartTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
 function saveCart() { localStorage.setItem('baratuss_cart', JSON.stringify(cart)); }
+
+// Quita del carrito los productos cuya reserva de 5 min ya venció, para que no
+// queden "fantasmas" que se vean en el carrito pero ya estén libres en la tienda.
+function limpiarReservasExpiradas(silencioso) {
+    const ahora = Date.now();
+    const antes = cart.length;
+    cart = cart.filter(item => !(item.reservadoHasta && item.reservadoHasta < ahora));
+    if (cart.length < antes) {
+        saveCart();
+        updateCartUI();
+        if (!silencioso) showToast('⏰ Se liberó un producto de tu carrito (pasaron 5 min). Agregalo de nuevo 💛');
+    }
+    return cart.length < antes;
+}
 
 function updateCartUI() {
     const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
@@ -1117,7 +1144,7 @@ function mostrarResumenCompra() {
 }
 
 // ===== CART SIDEBAR =====
-function openCart() { cartSidebar.classList.add('open'); cartOverlay.classList.add('open'); document.body.style.overflow = 'hidden'; videoCarrito('play'); }
+function openCart() { limpiarReservasExpiradas(); cartSidebar.classList.add('open'); cartOverlay.classList.add('open'); document.body.style.overflow = 'hidden'; videoCarrito('play'); }
 // 🎬 El video del carrito arranca al abrirlo y se pausa al cerrarlo (así no gasta datos ✅)
 function videoCarrito(accion) {
     const v = document.getElementById('cart-video-el');
@@ -1559,6 +1586,8 @@ async function reservarCarrito(minutos = RESERVA_MINUTOS) {
             }
             return false;
         }
+        cart = cart.map(i => ({ ...i, reservadoHasta: Date.now() + minutos * 60 * 1000 }));
+        saveCart();
         iniciarTimerReserva(minutos * 60);
         return true;
     } catch (e) {
@@ -3224,6 +3253,7 @@ function initApp() {
         return p ? { ...item, price: p.price } : item;
     });
     saveCart();
+    limpiarReservasExpiradas(true);   // quitar lo que ya venció de sesiones anteriores
     renderProducts();
     updateCartUI();
     loadProductsFromSupabase();
