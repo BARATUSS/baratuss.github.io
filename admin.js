@@ -869,6 +869,7 @@ function renderOrders() {
                 ${(!esTransferencia && canMarkPaid) ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markCashPaid('${o.id}')">✅ Marcar pagado</button>` : ''}
                 ${canCancel ? `<br><button class="admin-btn admin-btn--danger" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="cancelOrder('${o.id}')">❌ Cancelar y devolver stock</button>` : ''}
                 ${!['cancelado', 'entregado', 'vencido', 'no-retirado'].includes(o.status) ? `<br><button class="admin-btn admin-btn--ghost" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="abrirAjuste('${o.reference}')">✂️ Ajustar pedido</button>` : ''}
+                <br><button class="admin-btn admin-btn--ghost" style="width:auto;padding:5px 9px;font-size:0.72rem;margin-top:4px;" onclick="verHistorialPedido('${o.reference}')">🕓 Historial</button>
             </td>
         </tr>`;
     }).join('');
@@ -1206,6 +1207,47 @@ async function marcarFacturaEnviada(ref) {
     if (m) m.addEventListener('click', (e) => { if (e.target === m) cerrarFacturaPanel(); });
     const p = $('factura-print');
     if (p) p.addEventListener('click', () => window.print());
+})();
+
+// 🕓 Trazabilidad (30-sep-2026): historial de estados del pedido
+// (tabla pedido_estado_historial, llenada por el trigger en la BD).
+async function verHistorialPedido(ref) {
+    const modal = $('historial-modal');
+    const body = $('historial-body');
+    if (!modal || !body) return;
+    body.innerHTML = '<p style="color:#888;">Cargando historial…</p>';
+    modal.style.display = 'flex';
+    try {
+        const rows = await api('GET', 'pedido_estado_historial?select=status,payment_status,changed_at&order_reference=eq.' + ref + '&order=changed_at.asc');
+        const lista = Array.isArray(rows) ? rows : [];
+        if (!lista.length) {
+            body.innerHTML = '<p style="color:#888;">Sin cambios de estado registrados.</p>';
+            return;
+        }
+        const labels = {
+            pendiente: '🕐 Pendiente', entregado: '✅ Entregado', cancelado: '❌ Cancelado',
+            vencido: '⏰ Vencido', 'no-retirado': '🚫 No retirado', pagado: '💰 Pagado',
+            aprobado: '💸 Aprobado', efectivo: '💵 Efectivo', pendiente_prep: '📦 Preparando'
+        };
+        body.innerHTML = '<p style="margin-bottom:8px;"><b>' + ref + '</b></p>'
+            + lista.map((r, i) => {
+                const st = labels[r.status] || (r.status || '—');
+                const ps = labels[r.payment_status] || (r.payment_status || '—');
+                const dt = r.changed_at ? new Date(r.changed_at).toLocaleString('es-SV') : '';
+                return '<div style="padding:6px 0;border-bottom:1px solid #eee;">'
+                    + '<b>' + (i + 1) + '.</b> ' + st + ' · ' + ps
+                    + '<br><small style="color:#aaa;">' + dt + '</small></div>';
+            }).join('');
+    } catch (e) {
+        body.innerHTML = '<p style="color:#b9453a;">No se pudo cargar el historial: ' + (e.message || e) + '</p>';
+    }
+}
+
+(function initHistorialPanel() {
+    const c = $('historial-modal-close');
+    if (c) c.addEventListener('click', () => { const m = $('historial-modal'); if (m) m.style.display = 'none'; });
+    const m = $('historial-modal');
+    if (m) m.addEventListener('click', (e) => { if (e.target === m) m.style.display = 'none'; });
 })();
 
 // ===== HELPERS =====
