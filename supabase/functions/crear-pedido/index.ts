@@ -127,8 +127,8 @@ Deno.serve(async (req) => {
   const punto = String(ent.punto || (tipoEntrega === 'retiro-c807' ? 'Agencia C807' : 'Punto BARATUSS')).trim();
 
   const metodo = String(b.metodo || 'efectivo').toLowerCase();
-  if (metodo !== 'efectivo') return json({ ok: false, error: 'Por acá solo se crean pedidos en efectivo (la tarjeta tiene su propio camino)' }, 400);
-  // C807 es SOLO con tarjeta (regla de la tienda)
+  if (!['efectivo', 'transferencia'].includes(metodo)) return json({ ok: false, error: 'Método de pago no válido (efectivo o transferencia)' }, 400);
+  // C807 es SOLO con tarjeta (regla de la tienda) — aplica a efectivo Y transferencia
   if (tipoEntrega === 'retiro-c807') return json({ ok: false, error: 'El retiro en C807 es solo con pago por tarjeta' }, 400);
 
   const tipoFactura = String(fac.tipo || 'ninguna').toLowerCase();
@@ -320,8 +320,8 @@ Deno.serve(async (req) => {
     items,
     total,
     status: 'pendiente',
-    payment_status: 'efectivo',
-    payment_method: 'efectivo',
+    payment_status: metodo === 'transferencia' ? 'pendiente' : 'efectivo',
+    payment_method: metodo,
     delivery_type: tipoEntrega,
     delivery_fee: envio,
     delivery_point: punto,
@@ -427,7 +427,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           chat_id: TG_CHAT,
           parse_mode: 'Markdown',
-          text: `🛒 *Pedido en efectivo creado por el servidor*\n📦 ${referencia}\n👤 ${nombre} · ${telefono}\n`
+          text: `🛒 *Pedido ${metodo === 'transferencia' ? 'por transferencia (pendiente de pago)' : 'en efectivo'} creado por el servidor*\n📦 ${referencia}\n👤 ${nombre} · ${telefono}\n`
             + `🧮 Total calculado: $${total.toFixed(2)}` + (descuento > 0 ? ` (cupón −$${descuento.toFixed(2)})` : ''),
         }),
       });

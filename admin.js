@@ -843,6 +843,12 @@ function renderOrders() {
             && o.status !== 'cancelado' && o.status !== 'entregado' && o.status !== 'vencido'
             && o.status !== 'no-retirado';
         const canCancel = (payStatus !== 'pagado' && payStatus !== 'aprobado') || o.status === 'cancelado';
+        // 💸 TRANSFERENCIA (28-sep-2026): se cobra ANTES de entregar, así que tiene 2 pasos:
+        //   1) "marcar pago recibido" (Cindy verifica la transferencia) → payment_status 'aprobado'
+        //   2) "marcar entregado" (al entregar el producto) → registra la venta
+        const esTransferencia = o.payment_method === 'transferencia';
+        const esTransferPend = esTransferencia && payStatus === 'pendiente';
+        const esTransferPago = esTransferencia && payStatus === 'aprobado';
         return `
         <tr>
             <td class="admin-mono">${o.reference || o.id?.slice(0, 8) || '—'}</td>
@@ -850,7 +856,7 @@ function renderOrders() {
             <td>$${Number(o.total).toFixed(2)}</td>
             <td><span class="admin-badge admin-badge--${o.status || 'pendiente'}">${capitalize(o.status || 'pendiente')}</span></td>
             <td>
-                <span class="admin-badge ${isCash ? 'admin-badge--efectivo' : 'admin-badge--aprobado'}">${isCash ? '💵 Efectivo' : capitalize(payStatus)}</span>
+                <span class="admin-badge ${isCash ? 'admin-badge--efectivo' : 'admin-badge--aprobado'}">${o.payment_method === 'transferencia' ? ('💸 Transferencia · ' + capitalize(payStatus)) : (isCash ? '💵 Efectivo' : capitalize(payStatus))}</span>
                 ${o.requiere_pago_adelantado ? '<br><span class="admin-badge" style="background:#fff4e5;color:#8a5a1f;">💳 Pago adelantado</span>' : ''}
                 ${String(o.whatsapp_estado || '') === 'sin_whatsapp' ? '<br><span class="admin-badge" style="background:#fdecea;color:#b9453a;">📵 Sin WhatsApp</span>' : ''}
                 ${delivery ? `<br><small style="color:#888;">${delivery}</small>` : ''}
@@ -858,7 +864,9 @@ function renderOrders() {
             <td>${customer || new Date(o.created_at).toLocaleDateString('es-SV')}</td>
             <td>
                 <small style="color:#aaa;">${new Date(o.created_at).toLocaleDateString('es-SV')}</small>
-                ${canMarkPaid ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markCashPaid('${o.id}')">✅ Marcar pagado</button>` : ''}
+                ${esTransferPend ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markTransferPaid('${o.id}')">💸 Marcar pago recibido</button>` : ''}
+                ${esTransferPago ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markCashPaid('${o.id}')">✅ Marcar entregado</button>` : ''}
+                ${(!esTransferencia && canMarkPaid) ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="markCashPaid('${o.id}')">✅ Marcar pagado</button>` : ''}
                 ${canCancel ? `<br><button class="admin-btn admin-btn--danger" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="cancelOrder('${o.id}')">❌ Cancelar y devolver stock</button>` : ''}
                 ${!['cancelado', 'entregado', 'vencido', 'no-retirado'].includes(o.status) ? `<br><button class="admin-btn admin-btn--ghost" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="abrirAjuste('${o.reference}')">✂️ Ajustar pedido</button>` : ''}
             </td>
@@ -908,6 +916,26 @@ async function markCashPaid(id) {
         return;
     }
     showToast('✅ Pedido entregado · 💰 venta registrada en finanzas');
+    await loadOrders();
+    await loadStats();
+}
+
+// 💸 Transferencia (28-sep-2026): marcar SOLO el pago recibido (Cindy verificó la
+// transferencia). NO marca entregado ni registra la venta: eso pasa después al entregar.
+async function markTransferPaid(id) {
+    const o = (orders || []).find(x => x.id === id);
+    if (!confirm('¿Confirmar que ya recibiste la transferencia de este pedido?\n\nEl pedido quedará como PAGADO (pendiente de entrega).')) return;
+    try {
+        await api('PATCH', 'orders?id=eq.' + id, {
+            payment_status: 'aprobado',
+            payment_date: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        });
+    } catch (e) {
+        showToast('❌ No se pudo marcar: ' + (e.message || e));
+        return;
+    }
+    showToast('💸 Transferencia confirmada · pedido pagado');
     await loadOrders();
     await loadStats();
 }

@@ -2344,7 +2344,7 @@ function continuarPaso(i) {
     if (i === 3) {
         // PAGO: método preseleccionado (tarjeta)
         const pm = document.querySelector('input[name="pay-method"]:checked')?.value || 'tarjeta';
-        marcarCompletado(3, pm === 'tarjeta' ? '💳 Tarjeta (Wompi)' : '💵 Efectivo');
+        marcarCompletado(3, pm === 'tarjeta' ? '💳 Tarjeta (Wompi)' : (pm === 'transferencia' ? '💸 Transferencia' : '💵 Efectivo'));
         irAPaso(4);
         renderResumenFinal();
         updateCheckoutUI();
@@ -2371,7 +2371,7 @@ function renderResumenFinal() {
         ['📦 Entrega', dm === 'c807' ? 'Agencia C807' : punto],
         ['💌 Contacto', nombre + ' · ' + telTxt],
         ['🎟️ Código', codigoMostrar ? codigoMostrar + (codigoAplicado ? ' (−$' + desc.toFixed(2) + ')' : '') : 'Sin cupón'],
-        ['💳 Pago', pm === 'tarjeta' ? 'Tarjeta (Wompi)' : 'Efectivo'],
+        ['💳 Pago', pm === 'tarjeta' ? 'Tarjeta (Wompi)' : (pm === 'transferencia' ? 'Transferencia' : 'Efectivo')],
     ];
     if (descBienvenida > 0) filas.push(['🎁 10% de bienvenida', '−$' + descBienvenida.toFixed(2)]);
     filas.push(['🧾 Total', '$' + totalFinal.toFixed(2)]);
@@ -2422,7 +2422,7 @@ function closeCheckoutModal() {
 
 function updateCheckoutUI() {
     const method = document.querySelector('input[name="pay-method"]:checked').value;
-    const isCash = method === 'efectivo';
+    const isCash = method === 'efectivo' || method === 'transferencia';  // ambos son presenciales (sin C807)
     
     const deliveryMethod = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
     const wantsC807 = deliveryMethod === 'c807';
@@ -2611,6 +2611,7 @@ async function wompiCheckout() {
 
 // ===== CHECKOUT — Efectivo (contra entrega / retiro) =====
 async function cashCheckout() {
+    const method = document.querySelector('input[name="pay-method"]:checked')?.value || 'efectivo';
     const datos = validarDatosCompra();
     if (!datos) return;
     const name = datos.nombre;
@@ -2682,7 +2683,7 @@ async function cashCheckout() {
                             por_correo: datos.preferido === 'correo' ? true : !!fac.datos.factura_por_correo,
                             por_whatsapp: datos.preferido === 'whatsapp'
                         },
-                        metodo: 'efectivo',
+                        metodo: method,
                         token: sessionToken(),
                         user_id: currentUser ? currentUser.id : null
                     })
@@ -2810,7 +2811,7 @@ async function cashCheckout() {
             punto: punto,
             mapsUrl: null,
             total: total,
-            metodo: 'efectivo',
+            metodo: method,
             // Documento tributario elegido por el cliente (para el botón "Ver mi factura")
             ...fac.datos
         });
@@ -2895,6 +2896,14 @@ function showTicket(data) {
                 pagoBox.style.display = '';
                 pagoBox.innerHTML = '💵 <b>Pago en efectivo al retirar</b><br>'
                     + '<small style="color:#8a6b66;">Cindy/entregadora escanea este código al entregar tu pedido.</small>';
+            }
+        } else if (data.metodo === 'transferencia') {
+            qrBox.style.display = 'none';
+            if (compBox) compBox.style.display = 'none';
+            if (pagoBox) {
+                pagoBox.style.display = '';
+                pagoBox.innerHTML = '💸 <b>Transferencia pendiente de confirmación</b><br>'
+                    + '<small style="color:#8a6b66;">Te avisamos por WhatsApp cuando verifiquemos tu pago ✅</small>';
             }
         } else {
             qrBox.style.display = 'none';
