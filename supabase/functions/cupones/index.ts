@@ -99,6 +99,29 @@ Deno.serve(async (req) => {
       return json(r ?? { ok: false, error: 'sin_respuesta' });
     }
 
+    // ---------- DISPONIBLE (nombre de usuario / código de amiga) ----------
+    // Al crear cuenta, la clienta elige su "nombre de usuario" y ese es su código
+    // de amiga (profiles.codigo_referido). Acá se valida que no esté tomado.
+    if (accion === 'disponible') {
+      const codigo = String(b.codigo || '').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '');
+      if (codigo.length < 3) return json({ ok: false, error: 'El nombre de usuario debe tener al menos 3 letras o números' });
+      const { data } = await supabase.from('profiles')
+        .select('id').eq('codigo_referido', codigo).maybeSingle();
+      return json({ ok: true, disponible: !data, codigo });
+    }
+
+    // ---------- LISTAR (Mis cupones) ----------
+    if (accion === 'listar') {
+      const tel = String(b.telefono || '').trim();
+      if (!tel) return json({ ok: false, error: 'falta_telefono' });
+      const { data, error } = await supabase.from('cupones')
+        .select('codigo, valor, tope, expira_en, usado_en, activo, origen, creado_en')
+        .eq('cliente_telefono', tel)
+        .order('creado_en', { ascending: false });
+      if (error) return json({ ok: false, error: error.message });
+      return json({ ok: true, cupones: data || [] });
+    }
+
     return json({ ok: false, error: 'accion_desconocida', accion }, 400);
   } catch (e) {
     console.log('ERROR cupones:', String(e));

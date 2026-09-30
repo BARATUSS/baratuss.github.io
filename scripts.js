@@ -200,13 +200,13 @@ function sb() {
 }
 
 // ===== AUTH — Register =====
-async function registerUser(name, email, phone, dui, password, menor) {
+async function registerUser(name, email, phone, dui, password, menor, username) {
     const client = sb();
     if (!client) return { error: 'Supabase no conectado' };
     
     const { data, error } = await client.auth.signUp({
         email, password,
-        options: { data: { name, phone, dui } }
+        options: { data: { name, phone, dui, username } }
     });
     if (error) return { error: error.message };
     
@@ -218,6 +218,7 @@ async function registerUser(name, email, phone, dui, password, menor) {
             email,
             phone,
             dui,
+            codigo_referido: username || null,
             address: '',
             city: '',
             // 👧 MENOR EN CREAR CUENTA (30-sep-2026)
@@ -312,6 +313,75 @@ async function loadProfile() {
         $('profile-phone').value = data.phone || '';
         $('profile-address').value = data.address || '';
         $('profile-city').value = data.city || '';
+        // 👤 Código de amiga (30-sep-2026): el "nombre de usuario" elegido al crear la cuenta.
+        const codigoEl = $('perfil-codigo-referido');
+        if (codigoEl) codigoEl.textContent = data.codigo_referido || '—';
+    }
+}
+
+// ===== PROFILE — Pestañas (perfil / mis cupones) =====
+function cambiarTabPerfil(tab) {
+    document.querySelectorAll('.profile-tab').forEach(b => {
+        b.classList.toggle('profile-tab--active', b.dataset.tab === tab);
+    });
+    const perfil = $('tab-perfil');
+    const cupones = $('tab-cupones');
+    if (perfil) perfil.style.display = tab === 'perfil' ? '' : 'none';
+    if (cupones) {
+        cupones.style.display = tab === 'cupones' ? '' : 'none';
+        if (tab === 'cupones') cargarMisCupones();
+    }
+}
+
+function copiarCodigoAmiga() {
+    const codigo = ($('perfil-codigo-referido')?.textContent || '').trim();
+    if (!codigo || codigo === '—') { showToast('Todavía no tenés código de amiga'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(codigo).then(() => showToast('📋 Código copiado: ' + codigo));
+    } else {
+        showToast('Tu código: ' + codigo);
+    }
+}
+
+// 🎟️ "Mis cupones": lista los cupones de la clienta (por su teléfono del perfil).
+async function cargarMisCupones() {
+    const lista = $('mis-cupones-lista');
+    if (!lista) return;
+    const tel = (currentUser?.profile?.phone || $('profile-phone')?.value || '').trim();
+    if (!tel) {
+        lista.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:.9rem;">Agregá tu teléfono en "Mi perfil" para ver tus cupones 💛</div>';
+        return;
+    }
+    lista.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:.9rem;">Cargando tus cupones…</div>';
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/cupones', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
+            body: JSON.stringify({ accion: 'listar', telefono: tel })
+        });
+        const d = await r.json().catch(() => ({}));
+        const cupones = (d && d.ok && Array.isArray(d.cupones)) ? d.cupones : [];
+        if (!cupones.length) {
+            lista.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:.9rem;">Todavía no tenés cupones 🎟️<br><small>Te avisamos por WhatsApp cuando te regalemos uno 💛</small></div>';
+            return;
+        }
+        lista.innerHTML = cupones.map(c => {
+            const usado = !!c.usado_en;
+            const vencido = c.expira_en && new Date(c.expira_en) < new Date();
+            const estado = usado ? 'Usado' : (vencido ? 'Vencido' : 'Activo');
+            const color = usado || vencido ? '#b3a5a2' : '#1a7f4b';
+            const fecha = c.expira_en ? new Date(c.expira_en).toLocaleDateString('es-SV', { day: 'numeric', month: 'short' }) : '';
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:1.5px solid #eee;border-radius:12px;background:${usado || vencido ? '#fafafa' : '#f4fbf6'};">
+                <div style="min-width:0;">
+                    <div style="font-weight:700;letter-spacing:1px;">${c.codigo}</div>
+                    <div style="font-size:.8rem;color:#6a5a56;">${Number(c.valor)}% de descuento${c.tope ? ' · tope $' + Number(c.tope).toFixed(2) : ''}</div>
+                    ${fecha ? `<div style="font-size:.72rem;color:#a08a86;">Vence ${fecha}</div>` : ''}
+                </div>
+                <span style="font-size:.72rem;font-weight:700;color:${color};white-space:nowrap;">${estado}</span>
+            </div>`;
+        }).join('');
+    } catch (_e) {
+        lista.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:.9rem;">No pudimos cargar tus cupones. Intentá de nuevo 💗</div>';
     }
 }
 
@@ -1164,12 +1234,28 @@ function mostrarResumenCompra() {
                 <small>${item.qty} × $${Number(item.price).toFixed(2)}</small>
             </div>
             <div class="checkout-resumen__precio">$${(item.price * item.qty).toFixed(2)}</div>
+            <button type="button" class="checkout-resumen__remove" onclick="quitarDelCheckout('${item.key}')" title="Quitar este producto" aria-label="Quitar">🗑️</button>
         </div>`).join('') +
         `<div class="checkout-resumen__item" style="border-top:1.5px solid #e5e5e5;">
             <div class="checkout-resumen__txt"><strong>Total</strong></div>
             <div class="checkout-resumen__precio">$${getCartTotal().toFixed(2)}</div>
         </div>`;
     cont.style.display = '';
+}
+
+// 🗑️ Quitar un producto desde el resumen del checkout (30-sep-2026).
+// Refresca el resumen, los totales y, si se vacía el carrito, cierra el cuadro.
+function quitarDelCheckout(key) {
+    removeFromCart(key);
+    if (!cart.length) {
+        closeCheckoutModal();
+        showToast('🗑️ Quitaste todos los productos del carrito');
+        return;
+    }
+    mostrarResumenCompra();
+    renderResumenFinal();
+    updateCheckoutUI();
+    showToast('🗑️ Producto quitado');
 }
 
 // ===== CART SIDEBAR =====
@@ -1351,8 +1437,24 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
         showToast('🔒 Confirmá los datos de contacto para crear la cuenta');
         return;
     }
+    // 👤 Nombre de usuario = código de amiga (30-sep-2026): validar y chequear que esté libre.
+    const username = (document.getElementById('register-username').value || '').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '');
+    if (username.length < 3) { showToast('👤 Elegí un nombre de usuario de al menos 3 letras o números'); return; }
     btn.disabled = true; btn.textContent = 'Creando cuenta...';
-    
+
+    try {
+        const disp = await fetch(SUPABASE_URL + '/functions/v1/cupones', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
+            body: JSON.stringify({ accion: 'disponible', codigo: username })
+        }).then(r => r.json()).catch(() => ({}));
+        if (disp && disp.ok === true && disp.disponible === false) {
+            btn.disabled = false; btn.textContent = 'Crear cuenta';
+            showToast('❌ Ese nombre de usuario ya está en uso. Elegí otro.');
+            return;
+        }
+    } catch (_e) { /* si no se pudo consultar, seguimos; el servidor de todos modos guarda el código */ }
+
     const name = menor ? menor.menorNombre : document.getElementById('register-name').value;
     const phone = regTelefono();
     const result = await registerUser(
@@ -1361,7 +1463,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
         phone,
         dui,
         document.getElementById('register-password').value,
-        menor
+        menor,
+        username
     );
     
     btn.disabled = false; btn.textContent = 'Crear cuenta';

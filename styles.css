@@ -1268,6 +1268,22 @@ ul { list-style: none; }
 .checkout-resumen__txt strong { font-size: 0.88rem; }
 .checkout-resumen__txt small { color: var(--gray-500); font-size: 0.76rem; }
 .checkout-resumen__precio { margin-left: auto; font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+.checkout-resumen__remove {
+    background: none; border: none; cursor: pointer;
+    font-size: 1rem; padding: 6px; color: var(--gray-400);
+    flex-shrink: 0; line-height: 1; border-radius: 8px;
+    transition: var(--transition);
+}
+.checkout-resumen__remove:hover { color: #b9453a; background: #fdecec; transform: scale(1.08); }
+
+/* Pestañas del modal "Mi cuenta" (Mi perfil / Mis cupones) */
+.profile-tab {
+    flex: 1; padding: 10px 12px; border: 1.5px solid var(--gray-200);
+    border-radius: 10px; background: var(--white); cursor: pointer;
+    font-size: .85rem; font-weight: 600; color: var(--gray-600);
+    transition: var(--transition);
+}
+.profile-tab--active { background: #ff9686; border-color: #ff9686; color: #fff; }
 
 /* ============================================================
    TARJETAS DE DÍA Y PUNTO DE ENTREGA (2026-09-17)
@@ -1402,6 +1418,10 @@ ul { list-style: none; }
     .cart-sidebar__header { padding: 16px; }
     .cart-sidebar__items { padding: 16px; }
     .cart-sidebar__footer { padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+    /* 🎬 El video de marca arriba del carrito se encoge en celular (ocupa
+       mucho alto con 16:9 a todo el ancho) para que el botón "Pagar ahora"
+       SIEMPRE quede a la vista, no cortado. */
+    .cart-video { max-height: 110px; }
 
     /* --- iOS hace zoom al tocar un campo con letra menor a 16px --- */
     input, select, textarea { font-size: 16px; }

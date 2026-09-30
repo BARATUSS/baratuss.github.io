@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=20260930botonpagar">
+    <link rel="stylesheet" href="styles.css?v=20260930usuario">
     <style id="checkout-steps-css">
     /* ===== Checkout progresivo en 5 pasos (24-sep-2026) ===== */
     .checkout-help { text-align:right; margin:0 0 8px; }
@@ -1018,7 +1018,12 @@
                 </label>
             </div>
 
-            <!-- COMPARTIDO (contraseña) -->
+            <!-- COMPARTIDO (nombre de usuario + contraseña) -->
+            <div class="form-group">
+                <label>Nombre de usuario 👤</label>
+                <input type="text" id="register-username" placeholder="ej. CINDY93" required minlength="3" maxlength="20" autocomplete="off" style="text-transform:uppercase;">
+                <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">💛 Este es tu <b>código de amiga</b>: tus amigas lo escriben al pagar y ganan su descuento.</small>
+            </div>
             <div class="form-group">
                 <label>Contraseña</label>
                 <input type="password" id="register-password" placeholder="Mínimo 6 caracteres" required minlength="6">
@@ -1057,33 +1062,58 @@
 <!-- ========== PROFILE MODAL ========== -->
 <div class="modal" id="profile-modal">
     <div class="modal__header">
-        <h3>Mi perfil</h3>
+        <h3>Mi cuenta</h3>
         <button class="modal__close" id="profile-close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal__body">
-        <form id="profile-form">
-            <div class="form-group">
-                <label>Nombre completo</label>
-                <input type="text" id="profile-name" required>
+        <!-- Pestañas -->
+        <div class="profile-tabs" style="display:flex;gap:8px;margin-bottom:14px;">
+            <button type="button" class="profile-tab profile-tab--active" data-tab="perfil" onclick="cambiarTabPerfil('perfil')">👤 Mi perfil</button>
+            <button type="button" class="profile-tab" data-tab="cupones" onclick="cambiarTabPerfil('cupones')">🎟️ Mis cupones</button>
+        </div>
+
+        <!-- CÓDIGO DE AMIGA (30-sep-2026): el "usuario" es el código que las amigas escriben -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;margin-bottom:14px;">
+            <div style="font-size:.85rem;color:#8a5a1f;line-height:1.4;">
+                💛 Tu <b>código de amiga</b><br>
+                <span id="perfil-codigo-referido" style="font-weight:700;letter-spacing:1px;font-size:1.05rem;">—</span>
             </div>
-            <div class="form-group">
-                <label>Correo electrónico</label>
-                <input type="email" id="profile-email" disabled style="background:var(--gray-100);color:var(--gray-600);">
+            <button type="button" onclick="copiarCodigoAmiga()" style="padding:9px 13px;border:none;border-radius:10px;background:#ff9686;color:#fff;font-weight:700;font-size:.8rem;cursor:pointer;white-space:nowrap;">📋 Copiar</button>
+        </div>
+
+        <!-- TAB: perfil -->
+        <div id="tab-perfil">
+            <form id="profile-form">
+                <div class="form-group">
+                    <label>Nombre completo</label>
+                    <input type="text" id="profile-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Correo electrónico</label>
+                    <input type="email" id="profile-email" disabled style="background:var(--gray-100);color:var(--gray-600);">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="profile-phone">
+                </div>
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <input type="text" id="profile-address" placeholder="Calle y número">
+                </div>
+                <div class="form-group">
+                    <label>Ciudad</label>
+                    <input type="text" id="profile-city" placeholder="San Salvador">
+                </div>
+                <button type="submit" class="btn btn--primary btn--full">Guardar cambios</button>
+            </form>
+        </div>
+
+        <!-- TAB: mis cupones -->
+        <div id="tab-cupones" style="display:none;">
+            <div id="mis-cupones-lista" style="display:flex;flex-direction:column;gap:10px;">
+                <div style="text-align:center;color:var(--gray-400);padding:20px;font-size:.9rem;">Cargando tus cupones…</div>
             </div>
-            <div class="form-group">
-                <label>Teléfono</label>
-                <input type="tel" id="profile-phone">
-            </div>
-            <div class="form-group">
-                <label>Dirección</label>
-                <input type="text" id="profile-address" placeholder="Calle y número">
-            </div>
-            <div class="form-group">
-                <label>Ciudad</label>
-                <input type="text" id="profile-city" placeholder="San Salvador">
-            </div>
-            <button type="submit" class="btn btn--primary btn--full">Guardar cambios</button>
-        </form>
+        </div>
     </div>
 </div>
 
@@ -1178,6 +1208,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930fixinvitado"></script>
+<script src="scripts.js?v=20260930usuario"></script>
 </body>
 </html>
