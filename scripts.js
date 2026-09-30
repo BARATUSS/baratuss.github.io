@@ -1315,6 +1315,7 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     if (menor) {
         if (menor.menorNombre.length < 2) { showToast('👧 Escribí el nombre de la menor'); return; }
         if (!menor.menorFechaNac) { showToast('👧 Poné la fecha de nacimiento de la menor'); return; }
+        if (!menor.menorTelefono) { showToast('👧 Escribí el teléfono de la menor'); return; }
         if (menor.responsableNombre.length < 2) { showToast('👧 Escribí el nombre del responsable legal'); return; }
         if (!menor.responsableRelacion) { showToast('👧 Elegí la relación del responsable'); return; }
         if (!menor.responsableTelefono && !menor.responsableCorreo) { showToast('👧 Necesitamos teléfono o correo del responsable'); return; }
@@ -1322,10 +1323,12 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     }
     btn.disabled = true; btn.textContent = 'Creando cuenta...';
     
+    const name = menor ? menor.menorNombre : document.getElementById('register-name').value;
+    const phone = menor ? menor.menorTelefono : document.getElementById('register-phone').value;
     const result = await registerUser(
-        document.getElementById('register-name').value,
+        name,
         document.getElementById('register-email').value,
-        document.getElementById('register-phone').value,
+        phone,
         dui,
         document.getElementById('register-password').value,
         menor
@@ -1911,11 +1914,13 @@ function datosMenor() {
     return { esMenor, menorNombre, menorFechaNac, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion };
 }
 
-// 👧 MENOR EN CREAR CUENTA (30-sep-2026): pregunta "¿eres mayor?" y, si es menor, F-2.
+// 👧 MENOR EN CREAR CUENTA (30-sep-2026): 1ª pregunta "¿eres mayor?"; según respuesta, F-1 o F-2.
 function toggleRegMenorForm() {
     const esMenor = document.querySelector('input[name="reg-mayor-edad"]:checked')?.value === 'no';
-    const form = $('reg-menor-form');
-    if (form) form.style.display = esMenor ? '' : 'none';
+    const f1 = $('reg-f1');
+    const f2 = $('reg-f2');
+    if (f1) f1.style.display = esMenor ? 'none' : '';
+    if (f2) f2.style.display = esMenor ? '' : 'none';
 }
 
 function datosRegMenor() {
@@ -1925,6 +1930,7 @@ function datosRegMenor() {
         esMenor: true,
         menorNombre: ($('reg-menor-nombre').value || '').trim(),
         menorFechaNac: ($('reg-menor-fecha-nac').value || '').trim(),
+        menorTelefono: normalizarTelefono($('reg-menor-telefono').value),
         responsableNombre: ($('reg-responsable-nombre').value || '').trim(),
         responsableRelacion: ($('reg-responsable-relacion').value || '').trim(),
         responsableTelefono: normalizarTelefono($('reg-responsable-telefono').value),

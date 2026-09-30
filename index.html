@@ -913,25 +913,9 @@
 
         <!-- REGISTER FORM -->
         <form id="register-form" class="auth-form" style="display:none;">
+            <!-- 1) PRIMERA PREGUNTA: ¿mayor de edad? (30-sep-2026) -->
             <div class="form-group">
-                <label>Nombre completo</label>
-                <input type="text" id="register-name" placeholder="Tu nombre" required>
-            </div>
-            <div class="form-group">
-                <label>Correo electrónico</label>
-                <input type="email" id="register-email" placeholder="tucorreo@ejemplo.com" required>
-            </div>
-            <div class="form-group">
-                <label>Teléfono</label>
-                <input type="tel" id="register-phone" placeholder="+503 1234-5678">
-            </div>
-            <div class="form-group">
-                <label>DUI 🪪</label>
-                <input type="text" id="register-dui" placeholder="12345678-9" inputmode="numeric" required>
-                <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">Lo pedimos para verificar tu identidad al entregarte el pedido. 🔒</small>
-            </div>
-            <div class="form-group">
-                <label>¿Eres mayor de edad?</label>
+                <label>¿Eres mayor de edad? 👧</label>
                 <div style="display:flex;gap:14px;margin-top:4px;">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.9rem;">
                         <input type="radio" name="reg-mayor-edad" value="si" checked onchange="toggleRegMenorForm()"> Sí
@@ -940,9 +924,23 @@
                         <input type="radio" name="reg-mayor-edad" value="no" onchange="toggleRegMenorForm()"> No
                     </label>
                 </div>
-                <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">Si sos menor, necesitamos la autorización de tu responsable legal.</small>
+                <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">Según tu edad te mostramos el formulario que te toca.</small>
             </div>
-            <div id="reg-menor-form" style="display:none;margin:12px 0;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+
+            <!-- F-1 · MAYOR DE EDAD (se muestra si dijo "Sí") -->
+            <div id="reg-f1">
+                <div class="form-group">
+                    <label>Nombre completo</label>
+                    <input type="text" id="register-name" placeholder="Tu nombre" required>
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="register-phone" placeholder="+503 1234-5678">
+                </div>
+            </div>
+
+            <!-- F-2 · MENOR DE EDAD (se muestra si dijo "No") -->
+            <div id="reg-f2" style="display:none;margin:12px 0;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
                 <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:6px;">👧 Compra de menor de edad</div>
                 <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos de la menor</div>
                 <div class="form-group">
@@ -952,6 +950,11 @@
                 <div class="form-group">
                     <label>Fecha de nacimiento</label>
                     <input type="date" id="reg-menor-fecha-nac">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="reg-menor-telefono" placeholder="7000-0000">
+                    <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">Lo confirmamos antes de entregarte el pedido. 📲</small>
                 </div>
                 <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos del responsable legal</div>
                 <div class="form-group">
@@ -980,6 +983,17 @@
                     <input type="checkbox" id="reg-menor-autorizacion" style="margin-top:3px;">
                     <span style="font-size:.8rem;color:#5a4a47;line-height:1.4;">Soy el responsable legal de la menor y autorizo esta cuenta. 🔒</span>
                 </label>
+            </div>
+
+            <!-- COMPARTIDO (correo, DUI, contraseña) -->
+            <div class="form-group">
+                <label>Correo electrónico</label>
+                <input type="email" id="register-email" placeholder="tucorreo@ejemplo.com" required>
+            </div>
+            <div class="form-group">
+                <label>DUI 🪪</label>
+                <input type="text" id="register-dui" placeholder="12345678-9" inputmode="numeric" required>
+                <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">Lo pedimos para verificar la identidad al entregarte el pedido. 🔒</small>
             </div>
             <div class="form-group">
                 <label>Contraseña</label>
@@ -1140,6 +1154,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930reorden"></script>
+<script src="scripts.js?v=20260930menororden"></script>
 </body>
 </html>
