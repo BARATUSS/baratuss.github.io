@@ -999,6 +999,25 @@
                 <label>Contraseña</label>
                 <input type="password" id="register-password" placeholder="Mínimo 6 caracteres" required minlength="6">
             </div>
+            <!-- VERIFICACIÓN obligatoria para crear cuenta (30-sep-2026) -->
+            <div id="register-verificacion" style="margin:12px 0;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+                <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:4px;">🔒 Confirmá tus datos</div>
+                <div style="font-size:.76rem;color:#8a6b66;margin-bottom:10px;">Para crear la cuenta confirmamos tu correo y tu WhatsApp (así evitamos cuentas falsas).</div>
+                <div class="form-group">
+                    <label>📧 Confirmá tu correo</label>
+                    <button type="button" id="reg-verif-correo-enviar" class="btn btn--primary" style="width:100%;">Enviar código</button>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <input type="text" id="reg-verif-correo-codigo" placeholder="Código de 6 números" inputmode="numeric" maxlength="6" style="flex:1;">
+                        <button type="button" id="reg-verif-correo-confirmar" class="btn btn--primary">Confirmar</button>
+                    </div>
+                    <small id="reg-verif-correo-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
+                </div>
+                <div class="form-group">
+                    <label>📱 Confirmá tu WhatsApp</label>
+                    <button type="button" id="reg-verif-wa" class="btn btn--primary" style="width:100%;">💬 Confirmar por WhatsApp</button>
+                    <small id="reg-verif-wa-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
+                </div>
+            </div>
             <button type="submit" class="btn btn--primary btn--full" id="register-submit">Crear cuenta</button>
             <p class="auth-form__switch">¿Ya tenés cuenta? <a href="#" id="switch-to-login">Iniciar sesión</a></p>
         </form>
@@ -1154,6 +1173,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930menororden"></script>
+<script src="scripts.js?v=20260930verifcuenta"></script>
 </body>
 </html>

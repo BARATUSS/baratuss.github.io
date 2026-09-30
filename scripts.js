@@ -1320,11 +1320,20 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
         if (!menor.responsableRelacion) { showToast('👧 Elegí la relación del responsable'); return; }
         if (!menor.responsableTelefono && !menor.responsableCorreo) { showToast('👧 Necesitamos teléfono o correo del responsable'); return; }
         if (!menor.autorizacion) { showToast('👧 El responsable debe autorizar (marcá la casilla)'); return; }
+    } else if (!normalizarTelefono(document.getElementById('register-phone').value)) {
+        showToast('📱 Escribí tu teléfono de 8 dígitos (ej. 7000-0000)'); return;
+    }
+    // 🔒 VERIFICACIÓN (30-sep-2026): correo + WhatsApp antes de crear la cuenta.
+    const verif = await regVerificacionCompleta();
+    if (!verif.correo || !verif.telefono) {
+        $('register-verificacion').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast('🔒 Confirmá tu correo y tu WhatsApp para crear la cuenta');
+        return;
     }
     btn.disabled = true; btn.textContent = 'Creando cuenta...';
     
     const name = menor ? menor.menorNombre : document.getElementById('register-name').value;
-    const phone = menor ? menor.menorTelefono : document.getElementById('register-phone').value;
+    const phone = regTelefono();
     const result = await registerUser(
         name,
         document.getElementById('register-email').value,
@@ -1345,6 +1354,11 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     showLoginForm();
     e.target.reset();
 });
+
+// 🔒 Verificación al crear cuenta (30-sep-2026): conecta los botones.
+$('reg-verif-correo-enviar').addEventListener('click', regVerificarCorreo);
+$('reg-verif-correo-confirmar').addEventListener('click', regConfirmarCorreo);
+$('reg-verif-wa').addEventListener('click', regVerificarWhatsApp);
 
 // ===== AUTH — Reset Submit =====
 document.getElementById('reset-form').addEventListener('submit', async (e) => {
@@ -1937,6 +1951,159 @@ function datosRegMenor() {
         responsableCorreo: ($('reg-responsable-correo').value || '').trim(),
         autorizacion: !!$('reg-menor-autorizacion').checked
     };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 🔒 VERIFICACIÓN AL CREAR CUENTA (30-sep-2026)
+// Antes de crear la cuenta se confirman correo (código 6) y WhatsApp
+// ("escribinos primero"), reutilizando los endpoints del checkout.
+// ══════════════════════════════════════════════════════════════════════
+function regTelefono() {
+    const menor = datosRegMenor();
+    return normalizarTelefono(menor ? $('reg-menor-telefono').value : $('register-phone').value);
+}
+function regCorreo() {
+    return ($('register-email').value || '').trim().toLowerCase();
+}
+
+async function regVerificarCorreo() {
+    const correo = regCorreo();
+    if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) {
+        $('reg-verif-correo-msg').textContent = '✏️ Escribí bien tu correo arriba 👆';
+        return;
+    }
+    const btn = $('reg-verif-correo-enviar');
+    btn.disabled = true;
+    $('reg-verif-correo-msg').textContent = '📨 Mandándote el código…';
+    try {
+        const r = await fetch(VERIF_CORREO_ENVIAR_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ correo, nombre: ($('register-name').value || '').trim() })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.ok) {
+            $('reg-verif-correo-msg').textContent = '📬 ¡Listo! Te mandamos un código de 6 números a tu correo.';
+        } else {
+            const m = d && d.motivo;
+            if (m === 'cooldown') $('reg-verif-correo-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otro.';
+            else if (m === 'limite_envios' || m === 'limite_ip') $('reg-verif-correo-msg').textContent = '⏳ Pediste muchos códigos. Esperá un rato.';
+            else if (m === 'sin_credenciales') $('reg-verif-correo-msg').textContent = '😕 El envío de correo no está disponible ahora. Escribile a Cindy 💗';
+            else $('reg-verif-correo-msg').textContent = '😕 No pudimos mandar el código. Probá de nuevo.';
+        }
+    } catch (_e) {
+        $('reg-verif-correo-msg').textContent = '😕 Error de conexión. Probá de nuevo.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function regConfirmarCorreo() {
+    const correo = regCorreo();
+    const codigo = ($('reg-verif-correo-codigo').value || '').replace(/\D/g, '');
+    if (codigo.length !== 6) { showToast('✏️ Escribí los 6 números del código'); return; }
+    if (!correo) { showToast('📧 Escribí primero tu correo'); return; }
+    const btn = $('reg-verif-correo-confirmar');
+    btn.disabled = true;
+    try {
+        const r = await fetch(VERIF_CORREO_CONFIRMAR_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ correo, codigo })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.ok) {
+            $('reg-verif-correo-msg').textContent = '🎉 ¡Correo confirmado!';
+            $('reg-verif-correo-msg').style.color = '#1a7f4b';
+            $('reg-verif-correo-codigo').value = '';
+            showToast('✅ ¡Correo confirmado!');
+        } else {
+            const m = d && d.motivo;
+            if (m === 'incorrecto') $('reg-verif-correo-msg').textContent = '🤔 Código incorrecto. Te quedan ' + (d.intentos_restantes || 0) + ' intentos.';
+            else if (m === 'expirado') $('reg-verif-correo-msg').textContent = '⏰ Código vencido. Pedí uno nuevo.';
+            else if (m === 'demasiados_intentos') $('reg-verif-correo-msg').textContent = '🙈 Muchos intentos. Pedí un código nuevo.';
+            else if (m === 'sin_codigo') $('reg-verif-correo-msg').textContent = '🤔 Primero tocá "Enviar código".';
+            else $('reg-verif-correo-msg').textContent = '😕 No pudimos confirmar. Probá de nuevo.';
+            $('reg-verif-correo-codigo').value = '';
+        }
+    } catch (_e) {
+        $('reg-verif-correo-msg').textContent = '😕 Error de conexión. Probá de nuevo.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+let _pollRegWA = null;
+async function regVerificarWhatsApp() {
+    const tel = regTelefono();
+    if (!tel) { showToast('📱 Escribí primero tu teléfono'); return; }
+    const btn = $('reg-verif-wa');
+    btn.disabled = true;
+    $('reg-verif-wa-msg').textContent = '📨 Preparando tu confirmación…';
+    const ventana = window.open('', '_blank');
+    try {
+        const r = await fetch(VERIF_WA_TOKEN_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ telefono: tel, nombre: ($('register-name').value || '').trim() })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.ok && d.ya_verificado) {
+            if (ventana) ventana.close();
+            $('reg-verif-wa-msg').textContent = '🎉 ¡Tu WhatsApp ya estaba confirmado!';
+            $('reg-verif-wa-msg').style.color = '#1a7f4b';
+        } else if (d && d.ok) {
+            const link = d.wa_link || ('https://wa.me/50362852631?text=' + encodeURIComponent('Hola BARATUSS 💛 Confirmar ' + (d.token || '')));
+            if (ventana) ventana.location.href = link; else window.open(link, '_blank', 'noopener');
+            $('reg-verif-wa-msg').innerHTML = '📲 Tocá <b>ENVIAR</b> en WhatsApp y volvé acá (se confirma sola): <a href="' + link + '" target="_blank" rel="noopener" style="color:#25D366;font-weight:700;">💬 Abrir WhatsApp</a>';
+            regPollWhatsApp(tel);
+        } else {
+            if (ventana) ventana.close();
+            const m = d && d.motivo;
+            if (m === 'cooldown') $('reg-verif-wa-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otra.';
+            else $('reg-verif-wa-msg').textContent = '😕 No pudimos preparar la confirmación. Probá de nuevo.';
+        }
+    } catch (_e) {
+        if (ventana) ventana.close();
+        $('reg-verif-wa-msg').textContent = '😕 Error de conexión. Probá de nuevo.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function regPollWhatsApp(tel) {
+    if (_pollRegWA) clearInterval(_pollRegWA);
+    let intentos = 0;
+    _pollRegWA = setInterval(async () => {
+        intentos++;
+        if (intentos > 40) {
+            clearInterval(_pollRegWA); _pollRegWA = null;
+            $('reg-verif-wa-msg').textContent = '🕐 Todavía no vemos tu mensaje. Tocá el botón de nuevo.';
+            return;
+        }
+        const ok = await telefonoEstaVerificado(tel);
+        if (ok) {
+            clearInterval(_pollRegWA); _pollRegWA = null;
+            $('reg-verif-wa-msg').textContent = '🎉 ¡WhatsApp confirmado!';
+            $('reg-verif-wa-msg').style.color = '#1a7f4b';
+            showToast('✅ ¡WhatsApp confirmado!');
+        }
+    }, 3000);
+}
+
+async function regVerificacionCompleta() {
+    const correo = regCorreo();
+    const tel = regTelefono();
+    const res = { correo: true, telefono: true };
+    try {
+        const r = await fetch(VERIF_ESTADO_URL, {
+            method: 'POST', headers: HEADERS_PAGOS,
+            body: JSON.stringify({ correo: correo || undefined, telefono: tel || undefined })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d && d.interruptor === 'activo') {
+            res.correo = !!d.correo_verificado;
+            res.telefono = !!d.telefono_verificado;
+        }
+    } catch (_e) { /* si falla, no bloquear */ }
+    return res;
 }
 
 function validarDatosCompra() {
