@@ -539,6 +539,60 @@
                     </small>
                 </div>
 
+                <!-- 👧 MENOR DE EDAD (30-sep-2026): autorización del responsable legal -->
+                <div class="form-group" style="margin-top:4px;">
+                    <label>¿Eres menor de edad?</label>
+                    <div style="display:flex;gap:14px;margin-top:4px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.9rem;">
+                            <input type="radio" name="menor-edad" value="no" checked onchange="toggleMenorForm()"> No
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.9rem;">
+                            <input type="radio" name="menor-edad" value="si" onchange="toggleMenorForm()"> Sí
+                        </label>
+                    </div>
+                    <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">Si sos menor, necesitamos la autorización de tu responsable legal.</small>
+                </div>
+
+                <div id="checkout-menor-form" style="display:none;margin:12px 0;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+                    <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:6px;">👧 Compra de menor de edad</div>
+                    <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos de la menor</div>
+                    <div class="form-group">
+                        <label>Nombre completo de la menor</label>
+                        <input type="text" id="menor-nombre" placeholder="Nombre completo">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de nacimiento</label>
+                        <input type="date" id="menor-fecha-nac">
+                    </div>
+                    <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos del responsable legal</div>
+                    <div class="form-group">
+                        <label>Nombre completo del responsable</label>
+                        <input type="text" id="responsable-nombre" placeholder="Nombre completo">
+                    </div>
+                    <div class="form-group">
+                        <label>Relación con la menor</label>
+                        <select id="responsable-relacion">
+                            <option value="">Elegí una opción</option>
+                            <option value="madre">Madre</option>
+                            <option value="padre">Padre</option>
+                            <option value="tutor">Tutor/a</option>
+                            <option value="representante">Representante legal</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono del responsable</label>
+                        <input type="tel" id="responsable-telefono" placeholder="7000-0000">
+                    </div>
+                    <div class="form-group">
+                        <label>Correo del responsable (opcional)</label>
+                        <input type="email" id="responsable-correo" placeholder="tucorreo@ejemplo.com">
+                    </div>
+                    <label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;cursor:pointer;">
+                        <input type="checkbox" id="menor-autorizacion" style="margin-top:3px;">
+                        <span style="font-size:.8rem;color:#5a4a47;line-height:1.4;">Soy el responsable legal de la menor y autorizo esta compra. 🔒</span>
+                    </label>
+                </div>
+
                 <!-- 🚪 MEDIO DE VERIFICACIÓN (24-sep-2026): invitado elige UN solo medio.
                      El correo es el recomendado/por defecto porque SIEMPRE llega (sin regla de 24h). -->
                 <div id="checkout-medio" style="margin:12px 0;padding:12px 14px;background:#f3f6ff;border:1.5px solid #d0d9ff;border-radius:10px;">
@@ -1024,6 +1078,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260925transferencia"></script>
+<script src="scripts.js?v=20260930menor"></script>
 </body>
 </html>

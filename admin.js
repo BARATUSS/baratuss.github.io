@@ -297,7 +297,7 @@ async function cargarAgenda() {
     try {
         const res = await Promise.all([
             api('GET', 'ventas?select=order_reference,cliente,telefono,punto_entrega,metodo_pago,total_bruto,utilidad_neta,fecha_compra&order=fecha_compra.desc&limit=3000'),
-            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items,como_nos_conocio,conocio_detalle&order=created_at.desc&limit=3000'),
+            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items,como_nos_conocio,conocio_detalle,menor_de_edad,menor_nombre,menor_fecha_nac,responsable_nombre,responsable_relacion,responsable_telefono,responsable_correo,autorizacion_estado&order=created_at.desc&limit=3000'),
             api('GET', 'profiles?select=id,name,email,phone,codigo_referido')
         ]);
         const ventas = Array.isArray(res[0]) ? res[0] : [];
@@ -859,6 +859,8 @@ function renderOrders() {
                 <span class="admin-badge ${isCash ? 'admin-badge--efectivo' : 'admin-badge--aprobado'}">${o.payment_method === 'transferencia' ? ('💸 Transferencia · ' + capitalize(payStatus)) : (isCash ? '💵 Efectivo' : capitalize(payStatus))}</span>
                 ${o.requiere_pago_adelantado ? '<br><span class="admin-badge" style="background:#fff4e5;color:#8a5a1f;">💳 Pago adelantado</span>' : ''}
                 ${String(o.whatsapp_estado || '') === 'sin_whatsapp' ? '<br><span class="admin-badge" style="background:#fdecea;color:#b9453a;">📵 Sin WhatsApp</span>' : ''}
+                ${o.menor_de_edad ? `<br><span class="admin-badge" style="background:#fdecf6;color:#9c2b78;">👧 Menor · ${o.autorizacion_estado === 'verificada' ? 'Autorizada ✅' : (o.autorizacion_estado === 'rechazada' ? 'Rechazada ❌' : 'Autorización pendiente')}</span>` : ''}
+                ${o.menor_de_edad ? `<br><small style="color:#9c2b78;">👧 ${o.menor_nombre || '—'} (${o.menor_fecha_nac || 's/f'})<br>resp. ${o.responsable_nombre || '—'} · ${o.responsable_relacion || '—'} · ${o.responsable_telefono || o.responsable_correo || '—'}</small>` : ''}
                 ${delivery ? `<br><small style="color:#888;">${delivery}</small>` : ''}
             </td>
             <td>${customer || new Date(o.created_at).toLocaleDateString('es-SV')}</td>
@@ -870,6 +872,7 @@ function renderOrders() {
                 ${canCancel ? `<br><button class="admin-btn admin-btn--danger" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="cancelOrder('${o.id}')">❌ Cancelar y devolver stock</button>` : ''}
                 ${!['cancelado', 'entregado', 'vencido', 'no-retirado'].includes(o.status) ? `<br><button class="admin-btn admin-btn--ghost" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="abrirAjuste('${o.reference}')">✂️ Ajustar pedido</button>` : ''}
                 <br><button class="admin-btn admin-btn--ghost" style="width:auto;padding:5px 9px;font-size:0.72rem;margin-top:4px;" onclick="verHistorialPedido('${o.reference}')">🕓 Historial</button>
+                ${o.menor_de_edad && !['verificada', 'rechazada'].includes(o.autorizacion_estado) ? `<br><button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:6px;" onclick="marcarAutorizacion('${o.id}', 'verificada')">✅ Autorización verificada</button><br><button class="admin-btn admin-btn--danger" style="width:auto;padding:6px 10px;font-size:0.75rem;margin-top:4px;" onclick="marcarAutorizacion('${o.id}', 'rechazada')">❌ Rechazar autorización</button>` : ''}
             </td>
         </tr>`;
     }).join('');
@@ -939,6 +942,26 @@ async function markTransferPaid(id) {
     showToast('💸 Transferencia confirmada · pedido pagado');
     await loadOrders();
     await loadStats();
+}
+
+// 👧 Menor de edad (30-sep-2026): Cindy marca la autorización del responsable.
+async function marcarAutorizacion(id, estado) {
+    if (estado === 'rechazada') {
+        if (!confirm('¿Rechazar la autorización de este pedido de menor de edad?')) return;
+    } else {
+        if (!confirm('¿Confirmar que el responsable legal AUTORIZÓ esta compra de menor de edad?')) return;
+    }
+    try {
+        await api('PATCH', 'orders?id=eq.' + id, {
+            autorizacion_estado: estado,
+            updated_at: new Date().toISOString()
+        });
+    } catch (e) {
+        showToast('❌ No se pudo actualizar: ' + (e.message || e));
+        return;
+    }
+    showToast(estado === 'verificada' ? '👧 Autorización verificada ✅' : '👧 Autorización rechazada ❌');
+    await loadOrders();
 }
 
 // ===== STATS =====

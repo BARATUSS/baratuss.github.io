@@ -1861,6 +1861,26 @@ function normalizarTelefono(v) {
 // Valida nombre + teléfono ANTES de crear el pedido. Si la clienta eligió verificar
 // por CORREO, valida y devuelve el correo (es su medio de contacto). El correo del
 // documento tributario sigue viviendo en datosFactura.
+// 👧 MENOR DE EDAD (30-sep-2026): lee el formulario y devuelve los datos (o null si no es menor).
+function toggleMenorForm() {
+    const esMenor = document.querySelector('input[name="menor-edad"]:checked')?.value === 'si';
+    const form = $('checkout-menor-form');
+    if (form) form.style.display = esMenor ? '' : 'none';
+}
+
+function datosMenor() {
+    const esMenor = document.querySelector('input[name="menor-edad"]:checked')?.value === 'si';
+    if (!esMenor) return null;
+    const menorNombre = ($('menor-nombre').value || '').trim();
+    const menorFechaNac = ($('menor-fecha-nac').value || '').trim();
+    const responsableNombre = ($('responsable-nombre').value || '').trim();
+    const responsableRelacion = ($('responsable-relacion').value || '').trim();
+    const responsableTelefono = normalizarTelefono($('responsable-telefono').value);
+    const responsableCorreo = ($('responsable-correo').value || '').trim();
+    const autorizacion = !!$('menor-autorizacion').checked;
+    return { esMenor, menorNombre, menorFechaNac, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion };
+}
+
 function validarDatosCompra() {
     const nombre = $('checkout-name').value.trim();
     const tel = normalizarTelefono($('checkout-phone').value);
@@ -1880,7 +1900,17 @@ function validarDatosCompra() {
             return null;
         }
     }
-    return { nombre, tel, preferido: medio, correo };
+    // 👧 MENOR DE EDAD (30-sep-2026): validar la autorización si es menor.
+    const menor = datosMenor();
+    if (menor) {
+        if (menor.menorNombre.length < 2) { showToast('👧 Escribí el nombre de la menor'); return null; }
+        if (!menor.menorFechaNac) { showToast('👧 Poné la fecha de nacimiento de la menor'); return null; }
+        if (menor.responsableNombre.length < 2) { showToast('👧 Escribí el nombre del responsable legal'); return null; }
+        if (!menor.responsableRelacion) { showToast('👧 Elegí la relación del responsable'); return null; }
+        if (!menor.responsableTelefono && !menor.responsableCorreo) { showToast('👧 Necesitamos teléfono o correo del responsable'); return null; }
+        if (!menor.autorizacion) { showToast('👧 El responsable debe autorizar la compra (marcá la casilla)'); return null; }
+    }
+    return { nombre, tel, preferido: medio, correo, menor };
 }
 
 function mostrarAvisoTel(msg, ok) {
@@ -2549,7 +2579,16 @@ async function wompiCheckout() {
                 facturaPorWhatsapp: datos.preferido === 'whatsapp',
                 // 🎟️ Código único (cupón o referido): el servidor clasifica y recalcula
                 codigo: codigoEnviado(),
-                sesionToken: await sesionDeCuenta()
+                sesionToken: await sesionDeCuenta(),
+                // 👧 MENOR DE EDAD (30-sep-2026)
+                menorDeEdad: datos.menor ? true : false,
+                menorNombre: datos.menor ? datos.menor.menorNombre : null,
+                menorFechaNac: datos.menor ? datos.menor.menorFechaNac : null,
+                responsableNombre: datos.menor ? datos.menor.responsableNombre : null,
+                responsableRelacion: datos.menor ? datos.menor.responsableRelacion : null,
+                responsableTelefono: datos.menor ? (datos.menor.responsableTelefono || null) : null,
+                responsableCorreo: datos.menor ? (datos.menor.responsableCorreo || null) : null,
+                autorizacion: datos.menor ? datos.menor.autorizacion : false
             })
         });
         
@@ -2664,7 +2703,17 @@ async function cashCheckout() {
                             nombre: name,
                             telefono: phone,
                             correo: datos.correo || fac.datos.customer_email || null,
-                            usa_whatsapp: datos.preferido === 'whatsapp'
+                            usa_whatsapp: datos.preferido === 'whatsapp',
+                            ...(datos.menor ? {
+                                menor_de_edad: true,
+                                menor_nombre: datos.menor.menorNombre,
+                                menor_fecha_nac: datos.menor.menorFechaNac,
+                                responsable_nombre: datos.menor.responsableNombre,
+                                responsable_relacion: datos.menor.responsableRelacion,
+                                responsable_telefono: datos.menor.responsableTelefono || null,
+                                responsable_correo: datos.menor.responsableCorreo || null,
+                                autorizacion: datos.menor.autorizacion
+                            } : {})
                         },
                         conocio: {
                             como: (document.getElementById('checkout-como-conocio') || {}).value || null,

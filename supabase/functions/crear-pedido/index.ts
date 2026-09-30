@@ -115,6 +115,24 @@ Deno.serve(async (req) => {
   if (!usaWhatsapp && !correo) return json({ ok: false, error: 'Como no usás WhatsApp, necesitamos tu correo electrónico' }, 400);
   if (correo && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(correo)) return json({ ok: false, error: 'El correo no parece válido' }, 400);
 
+  // 👧 MENOR DE EDAD (30-sep-2026): autorización del responsable legal.
+  const esMenor = !!cli.menor_de_edad;
+  const menorNombre = String(cli.menor_nombre || '').trim();
+  const menorFechaNac = String(cli.menor_fecha_nac || '').trim();
+  const responsableNombre = String(cli.responsable_nombre || '').trim();
+  const responsableRelacion = String(cli.responsable_relacion || '').trim();
+  const responsableTelefono = normalizarTelefono(String(cli.responsable_telefono || ''));
+  const responsableCorreo = String(cli.responsable_correo || '').trim();
+  const autoriza = !!cli.autorizacion;
+  if (esMenor) {
+    if (menorNombre.length < 2) return json({ ok: false, error: 'Falta el nombre de la menor' }, 400);
+    if (!menorFechaNac) return json({ ok: false, error: 'Falta la fecha de nacimiento de la menor' }, 400);
+    if (responsableNombre.length < 2) return json({ ok: false, error: 'Falta el nombre del responsable legal' }, 400);
+    if (!['madre', 'padre', 'tutor', 'representante'].includes(responsableRelacion)) return json({ ok: false, error: 'Elegí la relación del responsable con la menor' }, 400);
+    if (!responsableTelefono && !responsableCorreo) return json({ ok: false, error: 'Necesitamos teléfono o correo del responsable legal' }, 400);
+    if (!autoriza) return json({ ok: false, error: 'El responsable legal debe autorizar la compra' }, 400);
+  }
+
   // Invitado que eligió verificar por CORREO (un solo medio): el correo verificado
   // también desbloquea el pedido, pero el 10% de bienvenida sigue exigiendo TELÉFONO.
   const correoVerif = correo ? await correoVerificado(correo) : false;
@@ -342,6 +360,15 @@ Deno.serve(async (req) => {
     verificacion_estado: verifActiva ? (telVerificado || correoVerif ? 'verificado' : 'pendiente') : 'no_requiere',
     bienvenida_aplicada: bienvenidaAplicada,
     descuento_bienvenida: bienvenidaAplicada ? descuento : 0,
+    // 👧 MENOR DE EDAD (30-sep-2026): autorización del responsable legal.
+    menor_de_edad: esMenor,
+    menor_nombre: esMenor ? menorNombre : null,
+    menor_fecha_nac: esMenor ? menorFechaNac : null,
+    responsable_nombre: esMenor ? responsableNombre : null,
+    responsable_relacion: esMenor ? responsableRelacion : null,
+    responsable_telefono: esMenor ? responsableTelefono : null,
+    responsable_correo: esMenor ? responsableCorreo : null,
+    autorizacion_estado: esMenor ? 'pendiente' : null,
   };
   if (correo) pedido.customer_email = correo;
 
