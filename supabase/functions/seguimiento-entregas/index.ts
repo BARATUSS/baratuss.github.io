@@ -228,15 +228,21 @@ function fmtFecha(f: Date): string {
 // Un pedido de tarjeta abandonado (sin pagar) todavía NO es una compra: no se agradece ni se
 // recuerda hasta que Meta/Wompi confirma el pago (antes se saludaba igual: se creaba el despacho
 // al iniciar el pago, no al pagarlo).
-async function datosOrden(ref: string): Promise<{ monto: string; pagado: boolean; existe: boolean }> {
+async function datosOrden(ref: string): Promise<{ monto: string; pagado: boolean; existe: boolean; responsable_telefono: string; menor_nombre: string }> {
   const { data } = await supabase.from('orders')
-    .select('total, payment_status, payment_method, status').eq('reference', ref).limit(1).maybeSingle();
+    .select('total, payment_status, payment_method, status, responsable_telefono, menor_nombre').eq('reference', ref).limit(1).maybeSingle();
   // Sin pedido asociado = despacho huérfano (el pago falló y se borró el pedido). NO se le escribe
   // a nadie por una compra que no existe.
-  if (!data) return { monto: '—', pagado: false, existe: false };
+  if (!data) return { monto: '—', pagado: false, existe: false, responsable_telefono: '', menor_nombre: '' };
   const estado = String(data.payment_status || '').toLowerCase();
   const sinPagar = ['pendiente', 'rechazado', 'cancelado', 'fallido'].includes(estado);
-  return { monto: '$' + Number(data.total || 0).toFixed(2), pagado: !sinPagar, existe: true };
+  return {
+    monto: '$' + Number(data.total || 0).toFixed(2),
+    pagado: !sinPagar,
+    existe: true,
+    responsable_telefono: String(data.responsable_telefono || ''),
+    menor_nombre: String(data.menor_nombre || ''),
+  };
 }
 
 async function marcar(despId: number, notas: string, marca: string) {
@@ -348,6 +354,20 @@ serve(async (_req) => {
           await registrarSaliente(env.wamid, tel, env.plantilla, ref, env.texto || '');
           pedidosAgrad.add(ref);
           log.push('AGRAD -> ' + tel + ' [' + env.plantilla + ']');
+          // 👧 MENOR (30-sep-2026): también se le avisa al responsable legal de la compra.
+          const telResp = normalizarTel(String(orden.responsable_telefono || ''));
+          if (telResp && telResp !== tel) {
+            const menorNombre = String(orden.menor_nombre || '').trim();
+            const naturalResp = '👧 ' + (menorNombre || nombre) + ' hizo una compra en BARATUSS 💖\n\n'
+              + '📦 Pedido: ' + ref + '\n💵 Total: ' + monto + '\n📅 Entrega: ' + destino + '\n\n'
+              + 'Como responsable legal, te avisamos. ¡Gracias!';
+            const envR = await enviarPaso(telResp, 'agradecimiento', [menorNombre || nombre, ref, monto], 'AGRADECIMIENTO-RESPONSABLE',
+              naturalResp, ['Sáb 19/09 · ' + destino]);
+            if (envR) {
+              await registrarSaliente(envR.wamid, telResp, envR.plantilla, ref, '🧑‍⚖️ ' + (envR.texto || ''));
+              log.push('AGRAD-RESP -> ' + telResp + ' [' + envR.plantilla + ']');
+            }
+          }
         } else {
           await devolverReclamo(ref, notas);
           log.push('AGRAD FALLO (se reintenta) -> ' + tel);
