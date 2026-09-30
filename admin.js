@@ -297,7 +297,7 @@ async function cargarAgenda() {
     try {
         const res = await Promise.all([
             api('GET', 'ventas?select=order_reference,cliente,telefono,punto_entrega,metodo_pago,total_bruto,utilidad_neta,fecha_compra&order=fecha_compra.desc&limit=3000'),
-            api('GET', 'orders?select=reference,customer_name,customer_phone,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items,como_nos_conocio,conocio_detalle,menor_de_edad,menor_nombre,menor_fecha_nac,responsable_nombre,responsable_relacion,responsable_telefono,responsable_correo,autorizacion_estado&order=created_at.desc&limit=3000'),
+            api('GET', 'orders?select=reference,customer_name,customer_phone,dui,customer_city,delivery_point,payment_method,total,status,payment_status,created_at,items,como_nos_conocio,conocio_detalle,menor_de_edad,menor_nombre,menor_fecha_nac,responsable_nombre,responsable_relacion,responsable_telefono,responsable_correo,autorizacion_estado&order=created_at.desc&limit=3000'),
             api('GET', 'profiles?select=id,name,email,phone,codigo_referido')
         ]);
         const ventas = Array.isArray(res[0]) ? res[0] : [];
@@ -836,6 +836,7 @@ function renderOrders() {
             ? `🏠 Domicilio${o.delivery_fee ? ` (+$${Number(o.delivery_fee).toFixed(2)})` : ''}`
             : o.delivery_type === 'retiro' ? '🏪 Retiro' : '';
         const customer = (o.customer_name ? `${o.customer_name}<br><small>📱 ${o.customer_phone || ''}</small>` : '') +
+            (o.dui ? `<br><small>🪪 ${o.dui}</small>` : '') +
             (o.customer_address ? `<br><small>📍 ${o.customer_address}, ${o.customer_city || ''}</small>` : '');
         // PLAN 2: se puede marcar PAGADO cualquier pedido que todavía no esté pago
         // (por ejemplo, un pedido con tarjeta que el cliente decidió pagar en efectivo al retirar)

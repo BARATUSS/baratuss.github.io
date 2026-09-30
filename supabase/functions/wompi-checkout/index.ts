@@ -128,9 +128,13 @@ serve(async (req) => {
       // el monto se calcula acá, en el servidor, igual que en crear-pedido.
       const { items, userId, deliveryType, deliveryPoint, customerName, customerPhone, token: tokenCliente,
               facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo, facturaPorWhatsapp,
-              contactoPreferido, codigo, sesionToken, cuponCodigo,
+              contactoPreferido, codigo, sesionToken, cuponCodigo, dui,
               menorDeEdad, menorNombre, menorFechaNac, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
+
+      // 🪪 DUI OBLIGATORIO (30-sep-2026): se usa para verificar la identidad al entregar.
+      const duiNormalizado = String(dui || '').replace(/\D/g, '');
+      if (duiNormalizado.length !== 9) return new Response(JSON.stringify({ error: 'Necesitamos tu DUI completo (9 dígitos, ej. 12345678-9)' }), { status: 400, headers: corsHeaders });
 
       // 👧 MENOR DE EDAD (30-sep-2026): autorización del responsable legal (igual que crear-pedido).
       const esMenorC = !!menorDeEdad;
@@ -336,6 +340,7 @@ serve(async (req) => {
         delivery_point: deliveryPoint || null,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
+        dui: duiNormalizado,
         // Documento tributario elegido por el cliente (ejercicio de facturación)
         factura_tipo: facturaTipo || 'ninguna',
         factura_nombre: facturaNombre || null,

@@ -106,6 +106,10 @@ Deno.serve(async (req) => {
   const telefono = normalizarTelefono(String(cli.telefono || ''));
   if (!telefono) return json({ ok: false, error: 'Necesitamos un teléfono de contacto válido (8 dígitos)' }, 400);
 
+  // 🪪 DUI OBLIGATORIO (30-sep-2026): se usa para verificar la identidad al entregar.
+  const dui = String(cli.dui || '').replace(/\D/g, '');
+  if (dui.length !== 9) return json({ ok: false, error: 'Necesitamos tu DUI completo (9 dígitos, ej. 12345678-9)' }, 400);
+
   // 🔐 VERIFICACIÓN DE CLIENTES (24-sep-2026): estado del teléfono para ENFORZAR y para el 10%.
   const verifActiva = await verificacionActiva();
   const telVerificado = await telefonoVerificado(telefono);
@@ -345,6 +349,7 @@ Deno.serve(async (req) => {
     delivery_point: punto,
     customer_name: nombre,
     customer_phone: telefono,
+    dui: dui,
     telefono_normalizado: telefono,
     contacto_preferido: usaWhatsapp ? 'whatsapp' : 'correo',
     cupon_codigo: cuponCodigo,

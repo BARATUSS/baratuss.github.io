@@ -200,13 +200,13 @@ function sb() {
 }
 
 // ===== AUTH — Register =====
-async function registerUser(name, email, phone, password) {
+async function registerUser(name, email, phone, dui, password) {
     const client = sb();
     if (!client) return { error: 'Supabase no conectado' };
     
     const { data, error } = await client.auth.signUp({
         email, password,
-        options: { data: { name, phone } }
+        options: { data: { name, phone, dui } }
     });
     if (error) return { error: error.message };
     
@@ -217,6 +217,7 @@ async function registerUser(name, email, phone, password) {
             name,
             email,
             phone,
+            dui,
             address: '',
             city: ''
         });
@@ -1298,12 +1299,15 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 document.getElementById('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('register-submit');
+    const dui = normalizarDUI(document.getElementById('register-dui').value);
+    if (!dui) { showToast('🪪 Escribí tu DUI completo (9 dígitos, ej. 12345678-9)'); return; }
     btn.disabled = true; btn.textContent = 'Creando cuenta...';
     
     const result = await registerUser(
         document.getElementById('register-name').value,
         document.getElementById('register-email').value,
         document.getElementById('register-phone').value,
+        dui,
         document.getElementById('register-password').value
     );
     
@@ -1861,6 +1865,12 @@ function normalizarTelefono(v) {
 // Valida nombre + teléfono ANTES de crear el pedido. Si la clienta eligió verificar
 // por CORREO, valida y devuelve el correo (es su medio de contacto). El correo del
 // documento tributario sigue viviendo en datosFactura.
+// 🪪 DUI (30-sep-2026): normaliza a 9 dígitos (sin guiones ni espacios).
+function normalizarDUI(v) {
+    const d = String(v || '').replace(/\D/g, '');
+    return d.length === 9 ? d : '';
+}
+
 // 👧 MENOR DE EDAD (30-sep-2026): lee el formulario y devuelve los datos (o null si no es menor).
 function toggleMenorForm() {
     const esMenor = document.querySelector('input[name="menor-edad"]:checked')?.value === 'si';
@@ -1891,6 +1901,9 @@ function validarDatosCompra() {
         return null;
     }
     mostrarAvisoTel('✅ Te escribiremos al ' + tel.slice(3, 7) + '-' + tel.slice(7), true);
+    // 🪪 DUI OBLIGATORIO (30-sep-2026)
+    const dui = normalizarDUI($('checkout-dui').value);
+    if (!dui) { showToast('🪪 Escribí tu DUI completo (9 dígitos, ej. 12345678-9)'); return null; }
     const medio = medioVerificacion();
     let correo = null;
     if (medio === 'correo') {
@@ -1910,7 +1923,7 @@ function validarDatosCompra() {
         if (!menor.responsableTelefono && !menor.responsableCorreo) { showToast('👧 Necesitamos teléfono o correo del responsable'); return null; }
         if (!menor.autorizacion) { showToast('👧 El responsable debe autorizar la compra (marcá la casilla)'); return null; }
     }
-    return { nombre, tel, preferido: medio, correo, menor };
+    return { nombre, tel, dui, preferido: medio, correo, menor };
 }
 
 function mostrarAvisoTel(msg, ok) {
@@ -2426,6 +2439,7 @@ function openCheckoutModal() {
         const p = currentUser.profile || {};
         $('checkout-name').value = p.name || '';
         $('checkout-phone').value = p.phone || '';
+        $('checkout-dui').value = p.dui || '';
     }
     iniciarCheckoutPasos();   // 5 pasos: arranca en Entrega (pre-marca Contacto si ya está verificado)
     updateCheckoutUI();
@@ -2564,6 +2578,7 @@ async function wompiCheckout() {
                 deliveryPoint: punto,
                 customerName: name || null,
                 customerPhone: phone || null,
+                dui: datos.dui,
                 // PLAN 2: si no usa WhatsApp, el correo es el canal de aviso
                 contactoPreferido: datos.preferido,
                 token: sessionToken(),
@@ -2702,6 +2717,7 @@ async function cashCheckout() {
                         cliente: {
                             nombre: name,
                             telefono: phone,
+                            dui: datos.dui,
                             correo: datos.correo || fac.datos.customer_email || null,
                             usa_whatsapp: datos.preferido === 'whatsapp',
                             ...(datos.menor ? {
