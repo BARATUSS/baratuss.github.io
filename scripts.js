@@ -1960,39 +1960,9 @@ function toggleRegMenorForm() {
     if (f1) f1.style.display = esMenor ? 'none' : '';
     if (f2) f2.style.display = esMenor ? '' : 'none';
 
-    // 🔒 Verificación: mayor elige UN medio; menor confirma correo + 2 teléfonos.
-    const vMayor = $('reg-verif-mayor');
-    const vCorreoBlock = $('reg-verif-correo-block');
-    const vWaBlock = $('reg-verif-wa-block');
-    const vWaMenorBlock = $('reg-verif-wa-menor-block');
-    const vWaRespBlock = $('reg-verif-wa-resp-block');
-    const correoLabel = $('reg-verif-correo-label');
+    // 🔒 La verificación va pegada a cada campo (teléfono/correo); solo cambia la etiqueta del correo.
     const emailLabel = $('register-email-label');
-
-    if (esMenor) {
-        if (vMayor) vMayor.style.display = 'none';
-        if (vCorreoBlock) vCorreoBlock.style.display = '';
-        if (vWaBlock) vWaBlock.style.display = 'none';
-        if (vWaMenorBlock) vWaMenorBlock.style.display = '';
-        if (vWaRespBlock) vWaRespBlock.style.display = '';
-        if (correoLabel) correoLabel.textContent = '📧 Correo de la menor';
-        if (emailLabel) emailLabel.textContent = 'Correo de la menor';
-    } else {
-        if (vMayor) vMayor.style.display = '';
-        if (vWaMenorBlock) vWaMenorBlock.style.display = 'none';
-        if (vWaRespBlock) vWaRespBlock.style.display = 'none';
-        if (correoLabel) correoLabel.textContent = '📧 Tu correo';
-        if (emailLabel) emailLabel.textContent = 'Correo electrónico';
-        toggleRegVerifMedio();   // muestra correo o WhatsApp según la elección
-    }
-}
-
-function toggleRegVerifMedio() {
-    const medio = document.querySelector('input[name="reg-verif-medio"]:checked')?.value || 'correo';
-    const vCorreoBlock = $('reg-verif-correo-block');
-    const vWaBlock = $('reg-verif-wa-block');
-    if (vCorreoBlock) vCorreoBlock.style.display = medio === 'correo' ? '' : 'none';
-    if (vWaBlock) vWaBlock.style.display = medio === 'whatsapp' ? '' : 'none';
+    if (emailLabel) emailLabel.textContent = esMenor ? 'Correo de la menor' : 'Correo electrónico';
 }
 
 function datosRegMenor() {
@@ -2036,7 +2006,7 @@ async function regVerificarCorreo() {
     try {
         const r = await fetch(VERIF_CORREO_ENVIAR_URL, {
             method: 'POST', headers: HEADERS_PAGOS,
-            body: JSON.stringify({ correo, nombre: ($('register-name').value || '').trim() })
+            body: JSON.stringify({ correo, nombre: (($('register-name').value || $('reg-menor-nombre').value) || '').trim() })
         });
         const d = await r.json().catch(() => ({}));
         if (d && d.ok) {
@@ -2090,7 +2060,7 @@ async function regConfirmarCorreo() {
 }
 
 let _pollRegWA = null;
-async function regVerificarWhatsAppTarget(telInputId, btnId, msgId) {
+async function regVerificarWhatsAppTarget(telInputId, btnId, msgId, nombreId) {
     const tel = normalizarTelefono($(telInputId).value);
     if (!tel) { showToast('📱 Escribí primero el teléfono'); return; }
     const btn = $(btnId);
@@ -2100,7 +2070,7 @@ async function regVerificarWhatsAppTarget(telInputId, btnId, msgId) {
     try {
         const r = await fetch(VERIF_WA_TOKEN_URL, {
             method: 'POST', headers: HEADERS_PAGOS,
-            body: JSON.stringify({ telefono: tel, nombre: ($('register-name').value || '').trim() })
+            body: JSON.stringify({ telefono: tel, nombre: (nombreId ? ($(nombreId).value || '').trim() : '') })
         });
         const d = await r.json().catch(() => ({}));
         if (d && d.ok && d.ya_verificado) {
@@ -2126,9 +2096,9 @@ async function regVerificarWhatsAppTarget(telInputId, btnId, msgId) {
     }
 }
 
-function regVerificarWhatsApp() { regVerificarWhatsAppTarget('register-phone', 'reg-verif-wa', 'reg-verif-wa-msg'); }
-function regVerificarWhatsAppMenor() { regVerificarWhatsAppTarget('reg-menor-telefono', 'reg-verif-wa-menor', 'reg-verif-wa-menor-msg'); }
-function regVerificarWhatsAppResponsable() { regVerificarWhatsAppTarget('reg-responsable-telefono', 'reg-verif-wa-resp', 'reg-verif-wa-resp-msg'); }
+function regVerificarWhatsApp() { regVerificarWhatsAppTarget('register-phone', 'reg-verif-wa', 'reg-verif-wa-msg', 'register-name'); }
+function regVerificarWhatsAppMenor() { regVerificarWhatsAppTarget('reg-menor-telefono', 'reg-verif-wa-menor', 'reg-verif-wa-menor-msg', 'reg-menor-nombre'); }
+function regVerificarWhatsAppResponsable() { regVerificarWhatsAppTarget('reg-responsable-telefono', 'reg-verif-wa-resp', 'reg-verif-wa-resp-msg', 'reg-responsable-nombre'); }
 
 function regPollWhatsAppTarget(tel, msgId) {
     if (_pollRegWA) clearInterval(_pollRegWA);
@@ -2181,16 +2151,11 @@ async function regVerificacionCompleta() {
         if (!dMenor.telefono_verificado) res.faltan.push('telefono-menor');
         if (!dResp.telefono_verificado) res.faltan.push('telefono-responsable');
     } else {
-        // 🙋 Mayor: elige UN medio (correo o WhatsApp), ese es su canal de aviso.
-        const medio = document.querySelector('input[name="reg-verif-medio"]:checked')?.value || 'correo';
-        if (medio === 'correo') {
-            const d = await regEstadoVerificacion({ correo });
-            if (!d.correo_verificado) res.faltan.push('correo');
-        } else {
-            const tel = normalizarTelefono($('register-phone').value);
-            const d = tel ? await regEstadoVerificacion({ telefono: tel }) : { telefono_verificado: false };
-            if (!d.telefono_verificado) res.faltan.push('whatsapp');
-        }
+        // 🙋 Mayor: confirmó su correo O su WhatsApp (con uno alcanza).
+        const tel = normalizarTelefono($('register-phone').value);
+        const dCorreo = await regEstadoVerificacion({ correo });
+        const dTel = tel ? await regEstadoVerificacion({ telefono: tel }) : { telefono_verificado: false };
+        if (!dCorreo.correo_verificado && !dTel.telefono_verificado) res.faltan.push('medio');
     }
     res.ok = res.faltan.length === 0;
     return res;

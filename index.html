@@ -932,6 +932,8 @@
                 <div class="form-group">
                     <label>Teléfono</label>
                     <input type="tel" id="register-phone" placeholder="+503 1234-5678">
+                    <button type="button" id="reg-verif-wa" class="btn btn--primary" style="width:100%;margin-top:8px;">💬 Confirmar por WhatsApp</button>
+                    <small id="reg-verif-wa-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
                 </div>
             </div>
 
@@ -950,7 +952,8 @@
                 <div class="form-group">
                     <label>Teléfono de la menor</label>
                     <input type="tel" id="reg-menor-telefono" placeholder="7000-0000">
-                    <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">Lo confirmamos antes de entregarte el pedido. 📲</small>
+                    <button type="button" id="reg-verif-wa-menor" class="btn btn--primary" style="width:100%;margin-top:8px;">💬 Confirmar por WhatsApp</button>
+                    <small id="reg-verif-wa-menor-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
                 </div>
                 <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos del responsable legal</div>
                 <div class="form-group">
@@ -970,6 +973,8 @@
                 <div class="form-group">
                     <label>Teléfono del responsable</label>
                     <input type="tel" id="reg-responsable-telefono" placeholder="7000-0000">
+                    <button type="button" id="reg-verif-wa-resp" class="btn btn--primary" style="width:100%;margin-top:8px;">💬 Confirmar por WhatsApp</button>
+                    <small id="reg-verif-wa-resp-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
                 </div>
                 <div class="form-group">
                     <label>Correo del responsable (opcional)</label>
@@ -985,6 +990,12 @@
             <div class="form-group">
                 <label id="register-email-label">Correo electrónico</label>
                 <input type="email" id="register-email" placeholder="tucorreo@ejemplo.com" required>
+                <button type="button" id="reg-verif-correo-enviar" class="btn btn--primary" style="width:100%;margin-top:8px;">📧 Enviar código</button>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <input type="text" id="reg-verif-correo-codigo" placeholder="Código de 6 números" inputmode="numeric" maxlength="6" style="flex:1;">
+                    <button type="button" id="reg-verif-correo-confirmar" class="btn btn--primary">Confirmar</button>
+                </div>
+                <small id="reg-verif-correo-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
             </div>
             <div class="form-group">
                 <label>DUI 🪪</label>
@@ -994,56 +1005,6 @@
             <div class="form-group">
                 <label>Contraseña</label>
                 <input type="password" id="register-password" placeholder="Mínimo 6 caracteres" required minlength="6">
-            </div>
-            <!-- VERIFICACIÓN obligatoria para crear cuenta (30-sep-2026) -->
-            <div id="register-verificacion" style="margin:12px 0;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
-                <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:4px;">🔒 Confirmá tus datos de contacto</div>
-                <div style="font-size:.76rem;color:#8a6b66;margin-bottom:10px;">Así evitamos cuentas falsas y te avisamos cuando compres.</div>
-
-                <!-- MAYOR: elige UN solo medio -->
-                <div class="form-group" id="reg-verif-mayor">
-                    <label>¿Cómo querés que te avisemos de tu compra?</label>
-                    <div style="display:flex;gap:14px;margin-top:4px;">
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem;">
-                            <input type="radio" name="reg-verif-medio" value="correo" checked onchange="toggleRegVerifMedio()"> 📧 Correo
-                        </label>
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem;">
-                            <input type="radio" name="reg-verif-medio" value="whatsapp" onchange="toggleRegVerifMedio()"> 📱 WhatsApp
-                        </label>
-                    </div>
-                </div>
-
-                <!-- CORREO (mayor si eligió correo · menor siempre) -->
-                <div class="form-group" id="reg-verif-correo-block">
-                    <label id="reg-verif-correo-label">📧 Tu correo</label>
-                    <button type="button" id="reg-verif-correo-enviar" class="btn btn--primary" style="width:100%;">Enviar código</button>
-                    <div style="display:flex;gap:8px;margin-top:8px;">
-                        <input type="text" id="reg-verif-correo-codigo" placeholder="Código de 6 números" inputmode="numeric" maxlength="6" style="flex:1;">
-                        <button type="button" id="reg-verif-correo-confirmar" class="btn btn--primary">Confirmar</button>
-                    </div>
-                    <small id="reg-verif-correo-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
-                </div>
-
-                <!-- WHATSAPP MAYOR -->
-                <div class="form-group" id="reg-verif-wa-block" style="display:none;">
-                    <label>📱 Tu WhatsApp</label>
-                    <button type="button" id="reg-verif-wa" class="btn btn--primary" style="width:100%;">💬 Confirmar por WhatsApp</button>
-                    <small id="reg-verif-wa-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
-                </div>
-
-                <!-- WHATSAPP MENOR: teléfono de la menor -->
-                <div class="form-group" id="reg-verif-wa-menor-block" style="display:none;">
-                    <label>📱 Teléfono de la menor</label>
-                    <button type="button" id="reg-verif-wa-menor" class="btn btn--primary" style="width:100%;">💬 Confirmar por WhatsApp</button>
-                    <small id="reg-verif-wa-menor-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
-                </div>
-
-                <!-- WHATSAPP RESPONSABLE -->
-                <div class="form-group" id="reg-verif-wa-resp-block" style="display:none;">
-                    <label>📱 Teléfono del responsable</label>
-                    <button type="button" id="reg-verif-wa-resp" class="btn btn--primary" style="width:100%;">💬 Confirmar por WhatsApp</button>
-                    <small id="reg-verif-wa-resp-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
-                </div>
             </div>
             <button type="submit" class="btn btn--primary btn--full" id="register-submit">Crear cuenta</button>
             <p class="auth-form__switch">¿Ya tenés cuenta? <a href="#" id="switch-to-login">Iniciar sesión</a></p>
@@ -1200,6 +1161,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930bienvenida"></script>
+<script src="scripts.js?v=20260930verifinline"></script>
 </body>
 </html>
