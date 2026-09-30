@@ -27,6 +27,13 @@ serve(async (req) => {
     if (tel.length !== 11) return json({ ok: false, motivo: 'telefono_invalido' }, 400);
     const nombre = String(b?.nombre || '').trim();
 
+    // Asocia el cupón a la CUENTA (user_id) si viene o si la encontramos por el teléfono.
+    let userId = b?.user_id ? String(b.user_id) : null;
+    if (!userId) {
+      const { data: perfil } = await supabase.from('profiles').select('id').eq('phone', tel).maybeSingle();
+      userId = perfil?.id || null;
+    }
+
     // Un solo cupón de bienvenida por teléfono.
     if (await bienvenidaYaUsada(tel)) return json({ ok: true, ya_usado: true });
 
@@ -35,6 +42,7 @@ serve(async (req) => {
 
     const { error: errCup } = await supabase.from('cupones').insert({
       codigo, valor: PORCENTAJE, tope: TOPE, cliente_telefono: tel,
+      user_id: userId,
       expira_en: expira, activo: true, acumulable: false, un_solo_uso: true,
       origen: 'bienvenida',
     });

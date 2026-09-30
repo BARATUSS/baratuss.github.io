@@ -113,11 +113,14 @@ Deno.serve(async (req) => {
     // ---------- LISTAR (Mis cupones) ----------
     if (accion === 'listar') {
       const tel = String(b.telefono || '').trim();
-      if (!tel) return json({ ok: false, error: 'falta_telefono' });
-      const { data, error } = await supabase.from('cupones')
+      const uid = b.user_id ? String(b.user_id) : null;
+      if (!tel && !uid) return json({ ok: false, error: 'falta_telefono' });
+      let q = supabase.from('cupones')
         .select('codigo, valor, tope, expira_en, usado_en, activo, origen, creado_en')
-        .eq('cliente_telefono', tel)
         .order('creado_en', { ascending: false });
+      if (uid) q = q.eq('user_id', uid);
+      else q = q.eq('cliente_telefono', tel);
+      const { data, error } = await q;
       if (error) return json({ ok: false, error: error.message });
       return json({ ok: true, cupones: data || [] });
     }

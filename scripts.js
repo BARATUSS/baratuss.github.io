@@ -236,7 +236,7 @@ async function registerUser(name, email, phone, dui, password, menor, username) 
 }
 
 // 🎁 Bienvenida (30-sep-2026): al crear la cuenta verificada, mandar el cupón de 10% por WhatsApp.
-async function enviarCuponBienvenida(tel, nombre) {
+async function enviarCuponBienvenida(tel, nombre, userId) {
     try {
         const r = await fetch(SUPABASE_URL + '/functions/v1/bienvenida-cupon', {
             method: 'POST',
@@ -245,7 +245,7 @@ async function enviarCuponBienvenida(tel, nombre) {
                 'apikey': SUPABASE_ANON_KEY,
                 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
             },
-            body: JSON.stringify({ telefono: tel, nombre: nombre || '' })
+            body: JSON.stringify({ telefono: tel, nombre: nombre || '', user_id: userId || null })
         });
         return await r.json();
     } catch (e) {
@@ -357,7 +357,7 @@ async function cargarMisCupones() {
         const r = await fetch(SUPABASE_URL + '/functions/v1/cupones', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
-            body: JSON.stringify({ accion: 'listar', telefono: tel })
+            body: JSON.stringify({ accion: 'listar', telefono: tel, user_id: currentUser?.id || null })
         });
         const d = await r.json().catch(() => ({}));
         const cupones = (d && d.ok && Array.isArray(d.cupones)) ? d.cupones : [];
@@ -1475,7 +1475,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     }
     
     // 🎁 Bienvenida: mandar el cupón de 10% por WhatsApp (al confirmar, no al esperar).
-    enviarCuponBienvenida(phone, name).catch(() => {});
+    const nuevoUserId = result?.data?.user?.id || null;
+    enviarCuponBienvenida(phone, name, nuevoUserId).catch(() => {});
     
     showToast('✅ Cuenta creada. Revisá tu correo para verificar.');
     showLoginForm();

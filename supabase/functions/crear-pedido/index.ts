@@ -14,6 +14,7 @@
 // ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verificacionActiva, telefonoVerificado, correoVerificado } from '../_shared/verificacion.ts';
+import { premiarReferidor } from '../_shared/referidos.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -440,6 +441,12 @@ Deno.serve(async (req) => {
       await supabase.from('orders').delete().eq('reference', referencia);
       return json({ ok: false, error: 'No pudimos aplicar el cupón. Probá de nuevo 🙏', motivo: 'cupon_no_aplicado' }, 409);
     }
+  }
+
+  // 🎁 PREMIO DE AMIGA (30-sep-2026): si se usó un código de amiga, la amiga que
+  // recomendó recibe su cupón de 10% (una sola vez por pedido). No bloquea la compra.
+  if (referidoCodigo) {
+    premiarReferidor(referidoCodigo, referencia, nombre);
   }
 
   // Aviso interno (Telegram) — opcional, silencioso si no está configurado

@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verificacionActiva, telefonoVerificado, correoVerificado, normalizarTel } from '../_shared/verificacion.ts'
+import { premiarReferidor } from '../_shared/referidos.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') || '',
@@ -404,6 +405,11 @@ serve(async (req) => {
             { onConflict: 'dato' },
           );
         } catch (_e) { /* no bloquea el pago */ }
+      }
+
+      // 🎁 PREMIO DE AMIGA (30-sep-2026): la amiga que recomendó recibe su cupón 10%.
+      if (referidoAplicado) {
+        premiarReferidor(referidoAplicado, ref, String(customerName || ''));
       }
 
       return new Response(JSON.stringify({ paymentUrl: payData.urlEnlace, reference: ref }), { headers: corsHeaders });
