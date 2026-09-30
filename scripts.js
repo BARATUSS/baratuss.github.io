@@ -3012,6 +3012,8 @@ async function wompiCheckout() {
             mapsUrl: mapsUrl,
             ...fac.datos,
             total: total,
+            descuento: descCuponTarjeta,
+            codigo: codigoAplicado ? codigoAplicado.codigo : null,
             metodo: 'tarjeta'
         }));
         
@@ -3066,6 +3068,8 @@ async function cashCheckout() {
     // NIVEL B: el total y la referencia definitivos los devuelve el servidor
     let total = Math.max(0, baseTotal + fee - descCupon);
     let ref = '';
+    let descuentoPedido = 0;   // 🎟️ descuento real del cupón (lo da el servidor)
+    let codigoPedido = null;   // 🎟️ código usado (cupón o amiga)
     
     showToast('🔄 Procesando pedido...');
     
@@ -3138,6 +3142,8 @@ async function cashCheckout() {
                 if (resp.ok && creado && creado.ok) {
                     ref = creado.reference;                 // ← la referencia la da el servidor
                     total = Number(creado.total || 0);      // ← y el total también
+                    descuentoPedido = Number(creado.descuento || 0);  // 🎟️ descuento real del cupón
+                    codigoPedido = creado.cupon_codigo || creado.referido_codigo || null;
                 } else {
                     const motivo = (creado && creado.motivo) || '';
                     const msg = motivo === 'sin_stock'
@@ -3257,6 +3263,8 @@ async function cashCheckout() {
             punto: punto,
             mapsUrl: null,
             total: total,
+            descuento: descuentoPedido,
+            codigo: codigoPedido,
             metodo: method,
             // Documento tributario elegido por el cliente (para el botón "Ver mi factura")
             ...fac.datos
@@ -3273,6 +3281,21 @@ function showTicket(data) {
     $('ticket-name').textContent = data.name + (data.phone ? ' · ' + data.phone : '');
     $('ticket-point').textContent = data.punto || 'Por coordinar';
     $('ticket-total').textContent = '$' + data.total.toFixed(2);
+
+    // 🎟️ Descuento del cupón (30-sep-2026): visible en el comprobante de compra
+    const descRow = $('ticket-descuento-row');
+    const descVal = $('ticket-descuento');
+    const descCod = $('ticket-cupon-codigo');
+    const desc = Number(data.descuento || 0);
+    if (descRow) {
+        if (desc > 0) {
+            descRow.style.display = '';
+            if (descVal) descVal.textContent = '−$' + desc.toFixed(2);
+            if (descCod) descCod.textContent = data.codigo ? '· ' + data.codigo : '';
+        } else {
+            descRow.style.display = 'none';
+        }
+    }
     
     // Items con código (id)
     const itemsHtml = (data.items || []).map(it => `
