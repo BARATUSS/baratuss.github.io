@@ -1080,6 +1080,16 @@ function addToCart(id, size) {
         existing = null;
     }
 
+    // 🛒 LÍMITE DE STOCK (30-sep-2026): no dejar sumar más unidades de las que hay.
+    // Antes se podía dar "Añadir" 3 veces a un producto con stock 1 y el carrito
+    // marcaba 3. Ahora se queda en el tope (contando todas las tallas) y avisa.
+    const stockDisp = Math.max(0, Number(product.stock) || 0);
+    const totalEnCarrito = cart.filter(i => i.id === id).reduce((s, i) => s + (i.qty || 0), 0);
+    if (totalEnCarrito >= stockDisp) {
+        showToast(stockDisp <= 0 ? '❌ Agotado' : '⚠️ Solo hay ' + stockDisp + ' de este producto');
+        return;
+    }
+
     if (existing) {
         existing.qty += 1;
         existing.reservadoHasta = ahora + reservaMs;
