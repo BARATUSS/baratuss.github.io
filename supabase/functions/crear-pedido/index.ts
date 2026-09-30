@@ -13,7 +13,7 @@
 //   'cotizar'      → calcula y devuelve el desglose SIN crear nada (para mostrar)
 // ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verificacionActiva, telefonoVerificado, correoVerificado, bienvenidaYaUsada } from '../_shared/verificacion.ts';
+import { verificacionActiva, telefonoVerificado, correoVerificado } from '../_shared/verificacion.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -288,16 +288,10 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // 🎁 10% DE BIENVENIDA (24-sep-2026)
-  // Regla de Cindy: solo en la 1ª compra de un teléfono VERIFICADO · no se
-  // acumula con cupón ni con referido (solo un descuento por pedido).
-  // ══════════════════════════════════════════════════════════════════════
+  // 🎁 10% DE BIENVENIDA (30-sep-2026): YA NO se aplica automático. Se entrega
+  // SOLO como CUPÓN (código BIENXXXXXX que se manda por WhatsApp al crear la
+  // cuenta verificada). El invitado NO recibe 10%. Sin descuento automático.
   let bienvenidaAplicada = false;
-  if (descuento === 0 && verifActiva && telVerificado && !(await bienvenidaYaUsada(telefono))) {
-    bienvenidaAplicada = true;
-    descuento = money(Math.min(subtotal * 0.10, 5));
-  }
 
   // ---------------------------------------------------------------- 4) ENVÍO
   // Puntos de BARATUSS = gratis · C807 = $1.00 (solo tarjeta, ya bloqueado arriba)

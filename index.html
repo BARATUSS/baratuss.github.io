@@ -656,15 +656,15 @@
                 <div id="checkout-medio" style="margin:12px 0;padding:12px 14px;background:#f3f6ff;border:1.5px solid #d0d9ff;border-radius:10px;">
                     <div style="font-size:.8rem;font-weight:700;color:#3a52a8;margin-bottom:8px;">🔐 ¿Por dónde querés confirmar tu compra?</div>
                     <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;">
-                        <input type="radio" name="verif-medio" value="correo" checked onchange="cambiarMedioVerificacion()"> 📧 Correo electrónico <span style="background:#3a52a8;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:999px;">Recomendado</span>
+                        <input type="radio" name="verif-medio" value="whatsapp" checked onchange="cambiarMedioVerificacion()"> 📱 WhatsApp <span style="background:#25D366;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:999px;">Recomendado</span>
                     </label>
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="radio" name="verif-medio" value="whatsapp" onchange="cambiarMedioVerificacion()"> 📱 WhatsApp
+                        <input type="radio" name="verif-medio" value="correo" onchange="cambiarMedioVerificacion()"> 📧 Correo electrónico
                     </label>
-                    <div style="margin-top:6px;font-size:.72rem;color:#5a6bb0;line-height:1.4;">El correo te llega siempre y al instante. 💗</div>
+                    <div style="margin-top:6px;font-size:.72rem;color:#5a6bb0;line-height:1.4;">Confirmamos tu WhatsApp para coordinar la entrega. 💗</div>
                 </div>
 
-                <!-- Correo para verificar (visible por defecto: el correo es el medio recomendado) -->
+                <!-- Correo para verificar (se muestra si elige "correo" como medio) -->
                 <div id="checkout-correo-verif-group" style="">
                     <div class="form-group">
                         <label>Tu correo</label>
@@ -1178,6 +1178,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930notas"></script>
+<script src="scripts.js?v=20260930fixinvitado"></script>
 </body>
 </html>

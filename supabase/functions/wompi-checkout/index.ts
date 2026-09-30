@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { verificacionActiva, telefonoVerificado, correoVerificado, bienvenidaYaUsada, normalizarTel } from '../_shared/verificacion.ts'
+import { verificacionActiva, telefonoVerificado, correoVerificado, normalizarTel } from '../_shared/verificacion.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') || '',
@@ -283,14 +283,10 @@ serve(async (req) => {
         }
       }
 
-      // 🎁 10% DE BIENVENIDA (24-sep-2026): solo en la 1ª compra de un teléfono
-      // VERIFICADO y sin cupón ni referido (no se acumula; regla de Cindy: un solo descuento).
+      // 🎁 10% DE BIENVENIDA (30-sep-2026): YA NO se aplica automático; se entrega
+      // SOLO como CUPÓN (código por WhatsApp al crear la cuenta). Invitado sin 10%.
       let bienvenidaAplicada = false;
       let bienvenidaDescuento = 0;
-      if (descuentoCupon === 0 && descuentoReferido === 0 && telVerificadoW && !(await bienvenidaYaUsada(telVerif))) {
-        bienvenidaAplicada = true;
-        bienvenidaDescuento = money(Math.min(subtotalProductos * 0.10, 5));
-      }
 
       // ===== TOTAL (calculado acá, jamás con el `total` del navegador) =====
       const totalFinal = money(Math.max(0, subtotalProductos + envio - descuentoCupon - descuentoReferido - bienvenidaDescuento));

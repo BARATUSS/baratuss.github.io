@@ -959,7 +959,7 @@ $('detail-buy-now').addEventListener('click', () => {
     }
     addToCart(detailProduct.id, detailSize);
     closeDetailModal();
-    openCheckoutModal();
+    openPagarGate();   // 30-sep-2026: "Comprar desde la foto" pasa por la puerta (cuenta/invitado), igual que el carrito
 });
 
 // ===== CART OPERATIONS =====
@@ -1885,18 +1885,15 @@ const HEADERS_PAGOS = {
 };
 
 // ===== 🎁 10% DE BIENVENIDA (display) — 24-sep-2026 =====
-// El servidor (crear-pedido / wompi-checkout) aplica el 10% de bienvenida sobre el
-// subtotal de productos, tope $5, SOLO si: verificación activa + teléfono verificado
-// + 1ª compra de ese teléfono + sin cupón ni referido. Acá replicamos el MISMO cálculo
-// para que el resumen muestre EXACTAMENTE lo que se cobra.
-//   · server: descuento = money(Math.min(subtotal * 0.10, 5))
-//   · money(n) = Math.round(n * 100) / 100
+// REGLA (30-sep-2026): el 10% de bienvenida YA NO se aplica solo. Ahora se entrega
+// únicamente como CUPÓN (código BIENXXXXXX que se manda por WhatsApp al CREAR la
+// cuenta verificada). El invitado NO recibe 10%. Por eso el descuento automático
+// queda desactivado: el único camino es el cupón que entra en el paso "Cupón".
+//   (El servidor también dejó de aplicar el 10% automático; ver crear-pedido/wompi-checkout.)
 let _bienvenida = { tel: '', aplica: false, consultado: false };
 
 function descuentoBienvenida(subtotal) {
-    if (!_bienvenida.aplica) return 0;
-    const bruto = Math.min(Number(subtotal || 0) * 0.10, 5);
-    return Math.round(bruto * 100) / 100;   // = money() del servidor
+    return 0;   // 🎁 sin descuento automático: el 10% es SOLO por cupón
 }
 
 // Consulta el estado del teléfono (verificado + si le toca el 10%). No revela de quién es.
@@ -1911,7 +1908,7 @@ async function consultarBienvenida(force) {
             body: JSON.stringify({ telefono: tel })
         });
         const d = await r.json().catch(() => ({}));
-        const aplica = !!(d && d.interruptor === 'activo' && d.telefono_verificado && d.puede_bienvenida);
+        const aplica = false;   // 🎁 10% solo por cupón: el descuento automático está desactivado
         _bienvenida = { tel, aplica, consultado: true };
     } catch (_e) {
         _bienvenida = { tel, aplica: false, consultado: true };
