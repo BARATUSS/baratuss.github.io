@@ -234,7 +234,26 @@ async function registerUser(name, email, phone, dui, password, menor) {
     return { data, needsVerification: true };
 }
 
-// ===== AUTH — Login =====
+// 🎁 Bienvenida (30-sep-2026): al crear la cuenta verificada, mandar el cupón de 10% por WhatsApp.
+async function enviarCuponBienvenida(tel, nombre) {
+    try {
+        const r = await fetch(SUPABASE_URL + '/functions/v1/bienvenida-cupon', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({ telefono: tel, nombre: nombre || '' })
+        });
+        return await r.json();
+    } catch (e) {
+        console.log('bienvenida-cupon', String(e));
+        return { ok: false };
+    }
+}
+
+// ===== AUTH — Login =====",
 async function loginUser(email, password) {
     const client = sb();
     if (!client) return { error: 'Supabase no conectado' };
@@ -1349,6 +1368,9 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
         showToast('❌ ' + result.error);
         return;
     }
+    
+    // 🎁 Bienvenida: mandar el cupón de 10% por WhatsApp (al confirmar, no al esperar).
+    enviarCuponBienvenida(phone, name).catch(() => {});
     
     showToast('✅ Cuenta creada. Revisá tu correo para verificar.');
     showLoginForm();
