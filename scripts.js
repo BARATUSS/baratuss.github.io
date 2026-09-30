@@ -1327,10 +1327,11 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 document.getElementById('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('register-submit');
-    const dui = normalizarDUI(document.getElementById('register-dui').value);
-    if (!dui) { showToast('🪪 Escribí tu DUI completo (9 dígitos, ej. 12345678-9)'); return; }
     // 👧 MENOR (30-sep-2026): validar la autorización si dijo que no es mayor de edad.
     const menor = datosRegMenor();
+    const duiEl = document.getElementById(menor ? 'register-dui-menor' : 'register-dui');
+    const dui = normalizarDUI(duiEl ? duiEl.value : '');
+    if (!dui) { showToast('🪪 Escribí el DUI completo (9 dígitos, ej. 12345678-9)'); return; }
     if (menor) {
         if (menor.menorNombre.length < 2) { showToast('👧 Escribí el nombre de la menor'); return; }
         if (!menor.menorFechaNac) { showToast('👧 Poné la fecha de nacimiento de la menor'); return; }
@@ -1345,7 +1346,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     // 🔒 VERIFICACIÓN (30-sep-2026): mayor un medio · menor correo + 2 teléfonos.
     const verif = await regVerificacionCompleta();
     if (!verif.ok) {
-        $('register-verificacion').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const target = $('register-email') || $('register-phone');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         showToast('🔒 Confirmá los datos de contacto para crear la cuenta');
         return;
     }

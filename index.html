@@ -935,6 +935,11 @@
                     <button type="button" id="reg-verif-wa" class="btn btn--primary" style="width:100%;margin-top:8px;">💬 Confirmar por WhatsApp</button>
                     <small id="reg-verif-wa-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
                 </div>
+                <div class="form-group">
+                    <label>DUI 🪪</label>
+                    <input type="text" id="register-dui" placeholder="12345678-9" inputmode="numeric" required>
+                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">Lo pedimos para verificar la identidad al entregarte el pedido. 🔒</small>
+                </div>
             </div>
 
             <!-- F-2 · MENOR DE EDAD (se muestra si dijo "No") -->
@@ -980,6 +985,11 @@
                     <label>Correo del responsable (opcional)</label>
                     <input type="email" id="reg-responsable-correo" placeholder="tucorreo@ejemplo.com">
                 </div>
+                <div class="form-group">
+                    <label>DUI de la menor 🪪</label>
+                    <input type="text" id="register-dui-menor" placeholder="12345678-9" inputmode="numeric" required>
+                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">Lo pedimos para verificar la identidad al entregarte el pedido. 🔒</small>
+                </div>
                 <label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;cursor:pointer;">
                     <input type="checkbox" id="reg-menor-autorizacion" style="margin-top:3px;">
                     <span style="font-size:.8rem;color:#5a4a47;line-height:1.4;">Soy el responsable legal de la menor y autorizo esta cuenta. 🔒</span>
@@ -996,11 +1006,6 @@
                     <button type="button" id="reg-verif-correo-confirmar" class="btn btn--primary">Confirmar</button>
                 </div>
                 <small id="reg-verif-correo-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
-            </div>
-            <div class="form-group">
-                <label>DUI 🪪</label>
-                <input type="text" id="register-dui" placeholder="12345678-9" inputmode="numeric" required>
-                <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">Lo pedimos para verificar la identidad al entregarte el pedido. 🔒</small>
             </div>
             <div class="form-group">
                 <label>Contraseña</label>
@@ -1161,6 +1166,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930verifinline"></script>
+<script src="scripts.js?v=20260930duiorden"></script>
 </body>
 </html>
