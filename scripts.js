@@ -200,7 +200,7 @@ function sb() {
 }
 
 // ===== AUTH — Register =====
-async function registerUser(name, email, phone, dui, password) {
+async function registerUser(name, email, phone, dui, password, menor) {
     const client = sb();
     if (!client) return { error: 'Supabase no conectado' };
     
@@ -219,7 +219,16 @@ async function registerUser(name, email, phone, dui, password) {
             phone,
             dui,
             address: '',
-            city: ''
+            city: '',
+            // 👧 MENOR EN CREAR CUENTA (30-sep-2026)
+            menor_de_edad: !!menor,
+            menor_nombre: menor ? menor.menorNombre : null,
+            menor_fecha_nac: menor ? menor.menorFechaNac : null,
+            responsable_nombre: menor ? menor.responsableNombre : null,
+            responsable_relacion: menor ? menor.responsableRelacion : null,
+            responsable_telefono: menor ? menor.responsableTelefono : null,
+            responsable_correo: menor ? menor.responsableCorreo : null,
+            autorizacion_estado: menor ? 'pendiente' : null
         });
     }
     return { data, needsVerification: true };
@@ -1301,6 +1310,16 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     const btn = document.getElementById('register-submit');
     const dui = normalizarDUI(document.getElementById('register-dui').value);
     if (!dui) { showToast('🪪 Escribí tu DUI completo (9 dígitos, ej. 12345678-9)'); return; }
+    // 👧 MENOR (30-sep-2026): validar la autorización si dijo que no es mayor de edad.
+    const menor = datosRegMenor();
+    if (menor) {
+        if (menor.menorNombre.length < 2) { showToast('👧 Escribí el nombre de la menor'); return; }
+        if (!menor.menorFechaNac) { showToast('👧 Poné la fecha de nacimiento de la menor'); return; }
+        if (menor.responsableNombre.length < 2) { showToast('👧 Escribí el nombre del responsable legal'); return; }
+        if (!menor.responsableRelacion) { showToast('👧 Elegí la relación del responsable'); return; }
+        if (!menor.responsableTelefono && !menor.responsableCorreo) { showToast('👧 Necesitamos teléfono o correo del responsable'); return; }
+        if (!menor.autorizacion) { showToast('👧 El responsable debe autorizar (marcá la casilla)'); return; }
+    }
     btn.disabled = true; btn.textContent = 'Creando cuenta...';
     
     const result = await registerUser(
@@ -1308,7 +1327,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
         document.getElementById('register-email').value,
         document.getElementById('register-phone').value,
         dui,
-        document.getElementById('register-password').value
+        document.getElementById('register-password').value,
+        menor
     );
     
     btn.disabled = false; btn.textContent = 'Crear cuenta';
@@ -1891,6 +1911,28 @@ function datosMenor() {
     return { esMenor, menorNombre, menorFechaNac, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion };
 }
 
+// 👧 MENOR EN CREAR CUENTA (30-sep-2026): pregunta "¿eres mayor?" y, si es menor, F-2.
+function toggleRegMenorForm() {
+    const esMenor = document.querySelector('input[name="reg-mayor-edad"]:checked')?.value === 'no';
+    const form = $('reg-menor-form');
+    if (form) form.style.display = esMenor ? '' : 'none';
+}
+
+function datosRegMenor() {
+    const esMenor = document.querySelector('input[name="reg-mayor-edad"]:checked')?.value === 'no';
+    if (!esMenor) return null;
+    return {
+        esMenor: true,
+        menorNombre: ($('reg-menor-nombre').value || '').trim(),
+        menorFechaNac: ($('reg-menor-fecha-nac').value || '').trim(),
+        responsableNombre: ($('reg-responsable-nombre').value || '').trim(),
+        responsableRelacion: ($('reg-responsable-relacion').value || '').trim(),
+        responsableTelefono: normalizarTelefono($('reg-responsable-telefono').value),
+        responsableCorreo: ($('reg-responsable-correo').value || '').trim(),
+        autorizacion: !!$('reg-menor-autorizacion').checked
+    };
+}
+
 function validarDatosCompra() {
     const nombre = $('checkout-name').value.trim();
     const tel = normalizarTelefono($('checkout-phone').value);
@@ -2082,8 +2124,8 @@ function terminarVerificacionWhatsApp() {
     if (estado) { estado.style.display = 'none'; estado.textContent = ''; }
     showToast('✅ ¡WhatsApp confirmado!');
     consultarBienvenida(true);   // 🎁 al quedar verificado, recalculamos si le toca el 10%
-    // Avanza solo: si sigue en el paso de contacto, continúa al pago.
-    if (checkoutPasoActual === 1) setTimeout(() => continuarPaso(1), 400);
+    // Avanza solo: si sigue en el paso de contacto, continúa al cupón.
+    if (checkoutPasoActual === 2) setTimeout(() => continuarPaso(2), 400);
 }
 
 // ===== MEDIO DE VERIFICACIÓN (24-sep-2026): invitado elige UN solo medio =====
@@ -2268,10 +2310,10 @@ function gateIrInvitado() {
 
 // ===== CHECKOUT PROGRESIVO (24-sep-2026) · 5 pasos colapsables =====
 const CHECKOUT_PASOS = [
+    { id: 'step-pago',      icono: '💳', titulo: 'Pago' },
     { id: 'step-entrega',   icono: '📦', titulo: 'Entrega' },
     { id: 'step-contacto',  icono: '💌', titulo: 'Contacto' },
     { id: 'step-cupon',     icono: '🎟️', titulo: 'Cupón' },
-    { id: 'step-pago',      icono: '💳', titulo: 'Pago' },
     { id: 'step-confirmar', icono: '🛍️', titulo: 'Confirmar' },
 ];
 let checkoutPasoActual = 0;
@@ -2347,47 +2389,48 @@ async function premarcarContacto() {
     const nombre = ($('checkout-name').value || '').trim();
     if (!tel || !nombre) return;
     if (await telefonoEstaVerificado(tel)) {
-        marcarCompletado(1, '💌 ' + nombre.split(' ')[0] + ' · ' + tel.slice(3, 7) + '-' + tel.slice(7));
+        marcarCompletado(2, '💌 ' + nombre.split(' ')[0] + ' · ' + tel.slice(3, 7) + '-' + tel.slice(7));
     }
 }
 
 function continuarPaso(i) {
     if (i === 0) {
-        // ENTREGA: siempre hay una opción con valor por defecto (punto o C807)
-        const dm = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
-        const punto = dm === 'c807' ? ($('checkout-c807-point')?.value || 'Agencia C807') : ($('checkout-point')?.value || 'Punto BARATUSS');
-        marcarCompletado(0, '📦 ' + (dm === 'c807' ? 'Agencia C807 · ' + punto : punto));
+        // PAGO (30-sep-2026): PRIMER paso, como pide el documento. Se elige el método
+        // antes que nada; según el método se habilita/bloquea C807 en Entrega.
+        const pm = document.querySelector('input[name="pay-method"]:checked')?.value || 'tarjeta';
+        marcarCompletado(0, pm === 'tarjeta' ? '💳 Tarjeta (Wompi)' : (pm === 'transferencia' ? '💸 Transferencia' : '💵 Efectivo'));
         irAPaso(1);
-        updateCheckoutUI();   // C807 solo con tarjeta; al elegir efectivo se fuerza punto
+        updateCheckoutUI();
         return;
     }
     if (i === 1) {
-        // CONTACTO: validar nombre + teléfono y verificar WhatsApp si hace falta
+        // ENTREGA: siempre hay una opción con valor por defecto (punto o C807)
+        const dm = document.querySelector('input[name="delivery-method"]:checked')?.value || 'punto';
+        const punto = dm === 'c807' ? ($('checkout-c807-point')?.value || 'Agencia C807') : ($('checkout-point')?.value || 'Punto BARATUSS');
+        marcarCompletado(1, '📦 ' + (dm === 'c807' ? 'Agencia C807 · ' + punto : punto));
+        irAPaso(2);
+        updateCheckoutUI();
+        return;
+    }
+    if (i === 2) {
+        // CONTACTO: validar nombre + teléfono + DUI + menor y verificar si hace falta
         const datos = validarDatosCompra();
-        if (!datos) { irAPaso(1); return; }
+        if (!datos) { irAPaso(2); return; }
         garantizarVerificacion().then(ok => {
             if (ok) {
-                marcarCompletado(1, '💌 ' + datos.nombre.split(' ')[0] + ' · ' + datos.tel.slice(3, 7) + '-' + datos.tel.slice(7));
+                marcarCompletado(2, '💌 ' + datos.nombre.split(' ')[0] + ' · ' + datos.tel.slice(3, 7) + '-' + datos.tel.slice(7));
                 consultarBienvenida(true);   // 🎁 teléfono verificado → refresca el 10% si aplica
-                irAPaso(2);
+                irAPaso(3);
             } else {
-                irAPaso(1);   // el bloque de verificación queda visible dentro del paso
+                irAPaso(2);   // el bloque de verificación queda visible dentro del paso
             }
         });
         return;
     }
-    if (i === 2) {
+    if (i === 3) {
         // CUPÓN: opcional — se aplica/omite sin bloquear. Si no es cupón, el
         // servidor lo clasifica (referido) al confirmar.
-        marcarCompletado(2, codigoEnviado() ? '🎟️ ' + codigoEnviado() : 'Sin cupón');
-        irAPaso(3);
-        updateCheckoutUI();
-        return;
-    }
-    if (i === 3) {
-        // PAGO: método preseleccionado (tarjeta)
-        const pm = document.querySelector('input[name="pay-method"]:checked')?.value || 'tarjeta';
-        marcarCompletado(3, pm === 'tarjeta' ? '💳 Tarjeta (Wompi)' : (pm === 'transferencia' ? '💸 Transferencia' : '💵 Efectivo'));
+        marcarCompletado(3, codigoEnviado() ? '🎟️ ' + codigoEnviado() : 'Sin cupón');
         irAPaso(4);
         renderResumenFinal();
         updateCheckoutUI();
@@ -2427,7 +2470,7 @@ document.querySelectorAll('.checkout-step__continue').forEach(btn => {
     btn.addEventListener('click', () => continuarPaso(Number(btn.getAttribute('data-paso'))));
 });
 const _omitirCupon = $('cupon-omitir');
-if (_omitirCupon) _omitirCupon.addEventListener('click', (e) => { e.preventDefault(); continuarPaso(2); });
+if (_omitirCupon) _omitirCupon.addEventListener('click', (e) => { e.preventDefault(); continuarPaso(3); });
 
 function openCheckoutModal() {
     // La reserva de 5 minutos se renueva cada vez que abre el checkout

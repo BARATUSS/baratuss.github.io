@@ -401,10 +401,66 @@
         <!-- Barra de progreso de los 5 pasos -->
         <div class="checkout-progress" id="checkout-progress"></div>
 
-        <!-- ================= PASO 1 · 📦 ENTREGA ================= -->
-        <section class="checkout-step" id="step-entrega" data-paso="0">
+        <!-- ================= PASO 1 · 💳 PAGO ================= -->
+        <section class="checkout-step" id="step-pago" data-paso="0">
             <button type="button" class="checkout-step__head" onclick="editarPaso(0)">
                 <span class="checkout-step__num">1</span>
+                <span class="checkout-step__titulo">💳 Pago</span>
+                <span class="checkout-step__resumen"></span>
+                <span class="checkout-step__estado">Elegir</span>
+            </button>
+            <div class="checkout-step__body">
+                <!-- PLAN 2 (19-sep-2026): aviso de pago adelantado (solo si es reincidente) -->
+                <div id="pago-adelantado-aviso" style="display:none;background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:.84rem;color:#8a5a1f;line-height:1.5;">
+                    💳 <b>Esta compra va con pago adelantado (tarjeta)</b><br>
+                    Como tuvimos un par de entregas que no se retiraron, te pedimos completar el pago al hacer el pedido 💛
+                </div>
+                <div class="checkout-options">
+                    <label class="checkout-option">
+                        <input type="radio" name="pay-method" value="tarjeta" checked>
+                        <div class="checkout-option__box">
+                            <span class="checkout-option__icon">💳</span>
+                            <div>
+                                <strong>Tarjeta (Wompi)</strong>
+                                <small>Crédito, débito o puntos Agrícola. Pago seguro online.</small>
+                            </div>
+                        </div>
+                    </label>
+                    <label class="checkout-option">
+                        <input type="radio" name="pay-method" value="efectivo">
+                        <div class="checkout-option__box">
+                            <span class="checkout-option__icon">💵</span>
+                            <div>
+                                <strong>Efectivo</strong>
+                                <small>Pagás al retirar en los puntos de BARATUSS ✅ <em style="color:#a08a86;">(no aplica para envíos por agencia — esos van con tarjeta)</em></small>
+                            </div>
+                        </div>
+                    </label>
+                    <label class="checkout-option">
+                        <input type="radio" name="pay-method" value="transferencia">
+                        <div class="checkout-option__box">
+                            <span class="checkout-option__icon">💸</span>
+                            <div>
+                                <strong>Transferencia</strong>
+                                <small>Transferí y te confirmamos cuando verifiquemos el pago ✅ <em style="color:#a08a86;">(solo retiro en los puntos de BARATUSS)</em></small>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+                <!-- Aviso aprobado de las 48 h -->
+                <div style="background:#f7f7ff;border:1.5px solid #e3e3f7;border-radius:12px;padding:11px 13px;margin-top:12px;font-size:.8rem;color:#5b5b7a;line-height:1.5;">
+                    ⏳ Si elegís tarjeta y el pago no se completa, te guardamos el pedido <b>48 h</b>. Te escribimos una vez para
+                    ayudarte y, pasado ese tiempo, el producto vuelve a la tienda.
+                </div>
+
+                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="0">Continuar →</button>
+            </div>
+        </section>
+
+        <!-- ================= PASO 2 · 📦 ENTREGA ================= -->
+        <section class="checkout-step" id="step-entrega" data-paso="1">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(1)">
+                <span class="checkout-step__num">2</span>
                 <span class="checkout-step__titulo">📦 Entrega</span>
                 <span class="checkout-step__resumen"></span>
                 <span class="checkout-step__estado">Elegir</span>
@@ -509,14 +565,14 @@
                     </small>
                 </div>
 
-                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="0">Continuar →</button>
+                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="1">Continuar →</button>
             </div>
         </section>
 
-        <!-- ================= PASO 2 · 💌 CONTACTO (verificación adentro) ================= -->
-        <section class="checkout-step" id="step-contacto" data-paso="1">
-            <button type="button" class="checkout-step__head" onclick="editarPaso(1)">
-                <span class="checkout-step__num">2</span>
+        <!-- ================= PASO 3 · 💌 CONTACTO (verificación adentro) ================= -->
+        <section class="checkout-step" id="step-contacto" data-paso="2">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(2)">
+                <span class="checkout-step__num">3</span>
                 <span class="checkout-step__titulo">💌 Contacto</span>
                 <span class="checkout-step__resumen"></span>
                 <span class="checkout-step__estado">Completar</span>
@@ -678,14 +734,14 @@
                     </small>
                 </details>
 
-                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="1">Continuar →</button>
+                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="2">Continuar →</button>
             </div>
         </section>
 
-        <!-- ================= PASO 3 · 🎟️ CUPÓN (opcional) ================= -->
-        <section class="checkout-step" id="step-cupon" data-paso="2">
-            <button type="button" class="checkout-step__head" onclick="editarPaso(2)">
-                <span class="checkout-step__num">3</span>
+        <!-- ================= PASO 4 · 🎟️ CUPÓN (opcional) ================= -->
+        <section class="checkout-step" id="step-cupon" data-paso="3">
+            <button type="button" class="checkout-step__head" onclick="editarPaso(3)">
+                <span class="checkout-step__num">4</span>
                 <span class="checkout-step__titulo">🎟️ Cupón</span>
                 <span class="checkout-step__resumen"></span>
                 <span class="checkout-step__estado">Opcional</span>
@@ -709,62 +765,6 @@
                 <div style="text-align:right;margin-bottom:4px;">
                     <a href="#" id="cupon-omitir" style="font-size:.8rem;color:#8a6b66;text-decoration:underline;">Omitir →</a>
                 </div>
-                <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="2">Continuar →</button>
-            </div>
-        </section>
-
-        <!-- ================= PASO 4 · 💳 PAGO ================= -->
-        <section class="checkout-step" id="step-pago" data-paso="3">
-            <button type="button" class="checkout-step__head" onclick="editarPaso(3)">
-                <span class="checkout-step__num">4</span>
-                <span class="checkout-step__titulo">💳 Pago</span>
-                <span class="checkout-step__resumen"></span>
-                <span class="checkout-step__estado">Elegir</span>
-            </button>
-            <div class="checkout-step__body">
-                <!-- PLAN 2 (19-sep-2026): aviso de pago adelantado (solo si es reincidente) -->
-                <div id="pago-adelantado-aviso" style="display:none;background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;padding:11px 13px;margin-bottom:12px;font-size:.84rem;color:#8a5a1f;line-height:1.5;">
-                    💳 <b>Esta compra va con pago adelantado (tarjeta)</b><br>
-                    Como tuvimos un par de entregas que no se retiraron, te pedimos completar el pago al hacer el pedido 💛
-                </div>
-                <div class="checkout-options">
-                    <label class="checkout-option">
-                        <input type="radio" name="pay-method" value="tarjeta" checked>
-                        <div class="checkout-option__box">
-                            <span class="checkout-option__icon">💳</span>
-                            <div>
-                                <strong>Tarjeta (Wompi)</strong>
-                                <small>Crédito, débito o puntos Agrícola. Pago seguro online.</small>
-                            </div>
-                        </div>
-                    </label>
-                    <label class="checkout-option">
-                        <input type="radio" name="pay-method" value="efectivo">
-                        <div class="checkout-option__box">
-                            <span class="checkout-option__icon">💵</span>
-                            <div>
-                                <strong>Efectivo</strong>
-                                <small>Pagás al retirar en los puntos de BARATUSS ✅ <em style="color:#a08a86;">(no aplica para envíos por agencia — esos van con tarjeta)</em></small>
-                            </div>
-                        </div>
-                    </label>
-                    <label class="checkout-option">
-                        <input type="radio" name="pay-method" value="transferencia">
-                        <div class="checkout-option__box">
-                            <span class="checkout-option__icon">💸</span>
-                            <div>
-                                <strong>Transferencia</strong>
-                                <small>Transferí y te confirmamos cuando verifiquemos el pago ✅ <em style="color:#a08a86;">(solo retiro en los puntos de BARATUSS)</em></small>
-                            </div>
-                        </div>
-                    </label>
-                </div>
-                <!-- Aviso aprobado de las 48 h -->
-                <div style="background:#f7f7ff;border:1.5px solid #e3e3f7;border-radius:12px;padding:11px 13px;margin-top:12px;font-size:.8rem;color:#5b5b7a;line-height:1.5;">
-                    ⏳ Si elegís tarjeta y el pago no se completa, te guardamos el pedido <b>48 h</b>. Te escribimos una vez para
-                    ayudarte y, pasado ese tiempo, el producto vuelve a la tienda.
-                </div>
-
                 <button type="button" class="btn btn--primary btn--full checkout-step__continue" data-paso="3">Continuar →</button>
             </div>
         </section>
@@ -931,6 +931,57 @@
                 <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">Lo pedimos para verificar tu identidad al entregarte el pedido. 🔒</small>
             </div>
             <div class="form-group">
+                <label>¿Eres mayor de edad?</label>
+                <div style="display:flex;gap:14px;margin-top:4px;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.9rem;">
+                        <input type="radio" name="reg-mayor-edad" value="si" checked onchange="toggleRegMenorForm()"> Sí
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.9rem;">
+                        <input type="radio" name="reg-mayor-edad" value="no" onchange="toggleRegMenorForm()"> No
+                    </label>
+                </div>
+                <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">Si sos menor, necesitamos la autorización de tu responsable legal.</small>
+            </div>
+            <div id="reg-menor-form" style="display:none;margin:12px 0;padding:14px;background:#fff7f5;border:1.5px solid #ffd9d2;border-radius:14px;">
+                <div style="font-weight:700;font-size:.92rem;color:#b9453a;margin-bottom:6px;">👧 Compra de menor de edad</div>
+                <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos de la menor</div>
+                <div class="form-group">
+                    <label>Nombre completo de la menor</label>
+                    <input type="text" id="reg-menor-nombre" placeholder="Nombre completo">
+                </div>
+                <div class="form-group">
+                    <label>Fecha de nacimiento</label>
+                    <input type="date" id="reg-menor-fecha-nac">
+                </div>
+                <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos del responsable legal</div>
+                <div class="form-group">
+                    <label>Nombre completo del responsable</label>
+                    <input type="text" id="reg-responsable-nombre" placeholder="Nombre completo">
+                </div>
+                <div class="form-group">
+                    <label>Relación con la menor</label>
+                    <select id="reg-responsable-relacion">
+                        <option value="">Elegí una opción</option>
+                        <option value="madre">Madre</option>
+                        <option value="padre">Padre</option>
+                        <option value="tutor">Tutor/a</option>
+                        <option value="representante">Representante legal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Teléfono del responsable</label>
+                    <input type="tel" id="reg-responsable-telefono" placeholder="7000-0000">
+                </div>
+                <div class="form-group">
+                    <label>Correo del responsable (opcional)</label>
+                    <input type="email" id="reg-responsable-correo" placeholder="tucorreo@ejemplo.com">
+                </div>
+                <label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;cursor:pointer;">
+                    <input type="checkbox" id="reg-menor-autorizacion" style="margin-top:3px;">
+                    <span style="font-size:.8rem;color:#5a4a47;line-height:1.4;">Soy el responsable legal de la menor y autorizo esta cuenta. 🔒</span>
+                </label>
+            </div>
+            <div class="form-group">
                 <label>Contraseña</label>
                 <input type="password" id="register-password" placeholder="Mínimo 6 caracteres" required minlength="6">
             </div>
@@ -1089,6 +1140,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930dui"></script>
+<script src="scripts.js?v=20260930reorden"></script>
 </body>
 </html>
