@@ -891,6 +891,7 @@ ul { list-style: none; }
 }
 .cart-item__remove:hover { color: var(--accent); }
 .cart-sidebar__footer {
+    flex-shrink: 0;
     padding: 24px;
     border-top: 1px solid var(--gray-100);
 }
