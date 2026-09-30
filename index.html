@@ -936,6 +936,17 @@
                     <small id="reg-verif-wa-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
                 </div>
                 <div class="form-group">
+                    <label>Correo electrónico</label>
+                    <input type="email" id="register-email" placeholder="tucorreo@ejemplo.com" required>
+                    <button type="button" id="reg-verif-correo-enviar" class="btn btn--primary" style="width:100%;margin-top:8px;">📧 Enviar código</button>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <input type="text" id="reg-verif-correo-codigo" placeholder="Código de 6 números" inputmode="numeric" maxlength="6" style="flex:1;">
+                        <button type="button" id="reg-verif-correo-confirmar" class="btn btn--primary">Confirmar</button>
+                    </div>
+                    <small id="reg-verif-correo-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
+                    <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">📲 Al que confirmes (teléfono o correo) te avisaremos de cada compra. Con uno alcanza.</small>
+                </div>
+                <div class="form-group">
                     <label>DUI 🪪</label>
                     <input type="text" id="register-dui" placeholder="12345678-9" inputmode="numeric" required>
                     <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">Lo pedimos para verificar la identidad al entregarte el pedido. 🔒</small>
@@ -959,6 +970,17 @@
                     <input type="tel" id="reg-menor-telefono" placeholder="7000-0000">
                     <button type="button" id="reg-verif-wa-menor" class="btn btn--primary" style="width:100%;margin-top:8px;">💬 Confirmar por WhatsApp</button>
                     <small id="reg-verif-wa-menor-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
+                </div>
+                <div class="form-group">
+                    <label>Correo de la menor</label>
+                    <input type="email" id="register-email-menor" placeholder="tucorreo@ejemplo.com" required>
+                    <button type="button" id="reg-verif-correo-enviar-menor" class="btn btn--primary" style="width:100%;margin-top:8px;">📧 Enviar código</button>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <input type="text" id="reg-verif-correo-codigo-menor" placeholder="Código de 6 números" inputmode="numeric" maxlength="6" style="flex:1;">
+                        <button type="button" id="reg-verif-correo-confirmar-menor" class="btn btn--primary">Confirmar</button>
+                    </div>
+                    <small id="reg-verif-correo-msg-menor" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
+                    <small style="display:block;margin-top:6px;font-size:.72rem;color:#8a6b66;">📲 Nos comunicaremos con la menor por este teléfono y correo también. 🔑 Con este correo ingresará a su cuenta.</small>
                 </div>
                 <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos del responsable legal</div>
                 <div class="form-group">
@@ -996,17 +1018,7 @@
                 </label>
             </div>
 
-            <!-- COMPARTIDO (correo, DUI, contraseña) -->
-            <div class="form-group">
-                <label id="register-email-label">Correo electrónico</label>
-                <input type="email" id="register-email" placeholder="tucorreo@ejemplo.com" required>
-                <button type="button" id="reg-verif-correo-enviar" class="btn btn--primary" style="width:100%;margin-top:8px;">📧 Enviar código</button>
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <input type="text" id="reg-verif-correo-codigo" placeholder="Código de 6 números" inputmode="numeric" maxlength="6" style="flex:1;">
-                    <button type="button" id="reg-verif-correo-confirmar" class="btn btn--primary">Confirmar</button>
-                </div>
-                <small id="reg-verif-correo-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
-            </div>
+            <!-- COMPARTIDO (contraseña) -->
             <div class="form-group">
                 <label>Contraseña</label>
                 <input type="password" id="register-password" placeholder="Mínimo 6 caracteres" required minlength="6">
@@ -1166,6 +1178,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930duiorden"></script>
+<script src="scripts.js?v=20260930notas"></script>
 </body>
 </html>

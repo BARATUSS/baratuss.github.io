@@ -1357,7 +1357,7 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     const phone = regTelefono();
     const result = await registerUser(
         name,
-        document.getElementById('register-email').value,
+        regCorreo(),
         phone,
         dui,
         document.getElementById('register-password').value,
@@ -1382,6 +1382,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
 // 🔒 Verificación al crear cuenta (30-sep-2026): conecta los botones.
 $('reg-verif-correo-enviar').addEventListener('click', regVerificarCorreo);
 $('reg-verif-correo-confirmar').addEventListener('click', regConfirmarCorreo);
+$('reg-verif-correo-enviar-menor').addEventListener('click', regVerificarCorreoMenor);
+$('reg-verif-correo-confirmar-menor').addEventListener('click', regConfirmarCorreoMenor);
 $('reg-verif-wa').addEventListener('click', regVerificarWhatsApp);
 $('reg-verif-wa-menor').addEventListener('click', regVerificarWhatsAppMenor);
 $('reg-verif-wa-resp').addEventListener('click', regVerificarWhatsAppResponsable);
@@ -1961,10 +1963,8 @@ function toggleRegMenorForm() {
     const f2 = $('reg-f2');
     if (f1) f1.style.display = esMenor ? 'none' : '';
     if (f2) f2.style.display = esMenor ? '' : 'none';
-
-    // 🔒 La verificación va pegada a cada campo (teléfono/correo); solo cambia la etiqueta del correo.
-    const emailLabel = $('register-email-label');
-    if (emailLabel) emailLabel.textContent = esMenor ? 'Correo de la menor' : 'Correo electrónico';
+    // La verificación y el correo van pegados a cada campo (F-1 o F-2),
+    // así que al mostrar/ocultar F-1/F-2 ya queda todo en su lugar.
 }
 
 function datosRegMenor() {
@@ -1993,18 +1993,20 @@ function regTelefono() {
     return normalizarTelefono(menor ? $('reg-menor-telefono').value : $('register-phone').value);
 }
 function regCorreo() {
-    return ($('register-email').value || '').trim().toLowerCase();
+    const menor = datosRegMenor();
+    const el = $(menor ? 'register-email-menor' : 'register-email');
+    return (el ? (el.value || '') : '').trim().toLowerCase();
 }
 
-async function regVerificarCorreo() {
-    const correo = regCorreo();
+async function regVerificarCorreoTarget(emailInputId, enviarId, codigoId, confirmarId, msgId) {
+    const correo = ($(emailInputId).value || '').trim().toLowerCase();
     if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) {
-        $('reg-verif-correo-msg').textContent = '✏️ Escribí bien tu correo arriba 👆';
+        $(msgId).textContent = '✏️ Escribí bien tu correo arriba 👆';
         return;
     }
-    const btn = $('reg-verif-correo-enviar');
+    const btn = $(enviarId);
     btn.disabled = true;
-    $('reg-verif-correo-msg').textContent = '📨 Mandándote el código…';
+    $(msgId).textContent = '📨 Mandándote el código…';
     try {
         const r = await fetch(VERIF_CORREO_ENVIAR_URL, {
             method: 'POST', headers: HEADERS_PAGOS,
@@ -2012,27 +2014,27 @@ async function regVerificarCorreo() {
         });
         const d = await r.json().catch(() => ({}));
         if (d && d.ok) {
-            $('reg-verif-correo-msg').textContent = '📬 ¡Listo! Te mandamos un código de 6 números a tu correo.';
+            $(msgId).textContent = '📬 ¡Listo! Te mandamos un código de 6 números a tu correo.';
         } else {
             const m = d && d.motivo;
-            if (m === 'cooldown') $('reg-verif-correo-msg').textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otro.';
-            else if (m === 'limite_envios' || m === 'limite_ip') $('reg-verif-correo-msg').textContent = '⏳ Pediste muchos códigos. Esperá un rato.';
-            else if (m === 'sin_credenciales') $('reg-verif-correo-msg').textContent = '😕 El envío de correo no está disponible ahora. Escribile a Cindy 💗';
-            else $('reg-verif-correo-msg').textContent = '😕 No pudimos mandar el código. Probá de nuevo.';
+            if (m === 'cooldown') $(msgId).textContent = '⏳ Esperá ' + (d.segundos_reenvio || 30) + ' segundos para pedir otro.';
+            else if (m === 'limite_envios' || m === 'limite_ip') $(msgId).textContent = '⏳ Pediste muchos códigos. Esperá un rato.';
+            else if (m === 'sin_credenciales') $(msgId).textContent = '😕 El envío de correo no está disponible ahora. Escribile a Cindy 💗';
+            else $(msgId).textContent = '😕 No pudimos mandar el código. Probá de nuevo.';
         }
     } catch (_e) {
-        $('reg-verif-correo-msg').textContent = '😕 Error de conexión. Probá de nuevo.';
+        $(msgId).textContent = '😕 Error de conexión. Probá de nuevo.';
     } finally {
         btn.disabled = false;
     }
 }
 
-async function regConfirmarCorreo() {
-    const correo = regCorreo();
-    const codigo = ($('reg-verif-correo-codigo').value || '').replace(/\D/g, '');
+async function regConfirmarCorreoTarget(emailInputId, codigoId, confirmarId, msgId) {
+    const correo = ($(emailInputId).value || '').trim().toLowerCase();
+    const codigo = ($(codigoId).value || '').replace(/\D/g, '');
     if (codigo.length !== 6) { showToast('✏️ Escribí los 6 números del código'); return; }
     if (!correo) { showToast('📧 Escribí primero tu correo'); return; }
-    const btn = $('reg-verif-correo-confirmar');
+    const btn = $(confirmarId);
     btn.disabled = true;
     try {
         const r = await fetch(VERIF_CORREO_CONFIRMAR_URL, {
@@ -2041,25 +2043,30 @@ async function regConfirmarCorreo() {
         });
         const d = await r.json().catch(() => ({}));
         if (d && d.ok) {
-            $('reg-verif-correo-msg').textContent = '🎉 ¡Correo confirmado!';
-            $('reg-verif-correo-msg').style.color = '#1a7f4b';
-            $('reg-verif-correo-codigo').value = '';
+            $(msgId).textContent = '🎉 ¡Correo confirmado!';
+            $(msgId).style.color = '#1a7f4b';
+            $(codigoId).value = '';
             showToast('✅ ¡Correo confirmado!');
         } else {
             const m = d && d.motivo;
-            if (m === 'incorrecto') $('reg-verif-correo-msg').textContent = '🤔 Código incorrecto. Te quedan ' + (d.intentos_restantes || 0) + ' intentos.';
-            else if (m === 'expirado') $('reg-verif-correo-msg').textContent = '⏰ Código vencido. Pedí uno nuevo.';
-            else if (m === 'demasiados_intentos') $('reg-verif-correo-msg').textContent = '🙈 Muchos intentos. Pedí un código nuevo.';
-            else if (m === 'sin_codigo') $('reg-verif-correo-msg').textContent = '🤔 Primero tocá "Enviar código".';
-            else $('reg-verif-correo-msg').textContent = '😕 No pudimos confirmar. Probá de nuevo.';
-            $('reg-verif-correo-codigo').value = '';
+            if (m === 'incorrecto') $(msgId).textContent = '🤔 Código incorrecto. Te quedan ' + (d.intentos_restantes || 0) + ' intentos.';
+            else if (m === 'expirado') $(msgId).textContent = '⏰ Código vencido. Pedí uno nuevo.';
+            else if (m === 'demasiados_intentos') $(msgId).textContent = '🙈 Muchos intentos. Pedí un código nuevo.';
+            else if (m === 'sin_codigo') $(msgId).textContent = '🤔 Primero tocá "Enviar código".';
+            else $(msgId).textContent = '😕 No pudimos confirmar. Probá de nuevo.';
+            $(codigoId).value = '';
         }
     } catch (_e) {
-        $('reg-verif-correo-msg').textContent = '😕 Error de conexión. Probá de nuevo.';
+        $(msgId).textContent = '😕 Error de conexión. Probá de nuevo.';
     } finally {
         btn.disabled = false;
     }
 }
+
+function regVerificarCorreo() { regVerificarCorreoTarget('register-email', 'reg-verif-correo-enviar', 'reg-verif-correo-codigo', 'reg-verif-correo-confirmar', 'reg-verif-correo-msg'); }
+function regConfirmarCorreo() { regConfirmarCorreoTarget('register-email', 'reg-verif-correo-codigo', 'reg-verif-correo-confirmar', 'reg-verif-correo-msg'); }
+function regVerificarCorreoMenor() { regVerificarCorreoTarget('register-email-menor', 'reg-verif-correo-enviar-menor', 'reg-verif-correo-codigo-menor', 'reg-verif-correo-confirmar-menor', 'reg-verif-correo-msg-menor'); }
+function regConfirmarCorreoMenor() { regConfirmarCorreoTarget('register-email-menor', 'reg-verif-correo-codigo-menor', 'reg-verif-correo-confirmar-menor', 'reg-verif-correo-msg-menor'); }
 
 let _pollRegWA = null;
 async function regVerificarWhatsAppTarget(telInputId, btnId, msgId, nombreId) {
