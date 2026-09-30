@@ -407,10 +407,8 @@ serve(async (req) => {
         } catch (_e) { /* no bloquea el pago */ }
       }
 
-      // 🎁 PREMIO DE AMIGA (30-sep-2026): la amiga que recomendó recibe su cupón 10%.
-      if (referidoAplicado) {
-        premiarReferidor(referidoAplicado, ref, String(customerName || ''));
-      }
+      // (El premio de amiga se otorga en el WEBHOOK, al aprobarse el pago — no acá,
+      //  para no premiar un checkout de tarjeta que nunca se completa.)
 
       return new Response(JSON.stringify({ paymentUrl: payData.urlEnlace, reference: ref }), { headers: corsHeaders });
     }
@@ -450,6 +448,17 @@ serve(async (req) => {
               await supabase.rpc('usar_cupon', { p_codigo: oc.cupon_codigo, p_reference: ref });
             }
           } catch (eCup) { console.log('error cupon webhook', String(eCup)); }
+
+          // 🎁 PREMIO DE AMIGA (30-sep-2026): al APROBARSE el pago, la amiga que
+          // recomendó recibe su cupón de 10% (una sola vez por pedido). Así no se
+          // premia un checkout de tarjeta que nunca se completó.
+          try {
+            const { data: refOrder } = await supabase.from('orders')
+              .select('referido_por_codigo, customer_name').eq('reference', ref).maybeSingle();
+            if (refOrder?.referido_por_codigo) {
+              premiarReferidor(String(refOrder.referido_por_codigo), ref, String(refOrder.customer_name || ''));
+            }
+          } catch (eRef) { console.log('error premio referido webhook', String(eRef)); }
 
           // ===== FASE 1 ENTREGAS: alta de despachos al aprobarse el pago =====
           // (un registro por producto — cada uno es un paquete a preparar/entregar)
