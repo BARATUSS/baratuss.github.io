@@ -1428,12 +1428,29 @@ function renderDespachos() {
             ? '<button class="admin-btn admin-btn--primary" style="padding:5px 10px;font-size:.72rem;width:auto;" onclick="avanzarDespacho(' + d.id + ')">' + ESTADOS_LABEL[next] + '</button>'
             : '<span style="color:#27ae60;">✔</span>';
         // 📦 ENTREGADO DIRECTO (2026-09-19): un solo toque entrega TODO el pedido y registra la
-        // venta (antes había que avanzar estado por estado, y Cindy no encontraba cómo marcarlo).
-        const btnEntregar = (estado !== 'entregado' && estado !== 'cancelado')
-            ? '<button class="admin-btn admin-btn--primary" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
-              + 'title="Marcar TODO el pedido como entregado y registrar la venta en finanzas" '
-              + 'onclick="entregarTodo(\'' + (d.order_reference || '') + '\')">📦 Entregado</button>'
-            : '';
+        // venta. Para C807 (agencia→agencia) hay DOS botones (30-sep-2026): "Entregado a la
+        // agencia" (NO registra venta, el paquete va en tránsito) y "Entregado a la persona"
+        // (la clienta ya lo recibió → registra la venta). Cindy pidió ambos explícitamente.
+        const esC807 = salidaKey(d.destino) === 'c807';
+        let btnEntregar = '';
+        if (estado !== 'entregado' && estado !== 'cancelado') {
+            const refE = String(d.order_reference || '');
+            if (esC807) {
+                const btnAgencia = (estado !== 'salio')
+                    ? '<button class="admin-btn admin-btn--ghost" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+                      + 'title="Entregado a la AGENCIA C807 (en tránsito). NO registra la venta." '
+                      + 'onclick="entregarAgencia(\'' + refE + '\')">📦 Entregado a agencia</button>'
+                    : '';
+                btnEntregar = btnAgencia
+                    + '<button class="admin-btn admin-btn--primary" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+                    + 'title="Entregado a la PERSONA (la clienta ya lo recibió). Registra la venta en finanzas." '
+                    + 'onclick="entregarTodo(\'' + refE + '\')">✅ Entregado a persona</button>';
+            } else {
+                btnEntregar = '<button class="admin-btn admin-btn--primary" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
+                    + 'title="Marcar TODO el pedido como entregado y registrar la venta en finanzas" '
+                    + 'onclick="entregarTodo(\'' + refE + '\')">📦 Entregado</button>';
+            }
+        }
         // 🚫 Cancelación por enojo (efectivo): devuelve el stock, disculpa al cliente y cupón 45% automático
         const btnEnojo = (estado !== 'entregado' && estado !== 'cancelado')
             ? '<button class="admin-btn admin-btn--danger" style="padding:5px 8px;font-size:.7rem;width:auto;margin-left:4px;" '
@@ -1707,7 +1724,35 @@ async function entregarTodo(ref) {
     cargarBadgeContingencias();
 }
 
-// Avanzar estado logístico (acción manual, nunca automática)
+// 📦 ENTREGADO A LA AGENCIA C807 (30-sep-2026): marca que el paquete se entregó a la agencia
+// (va en tránsito), pero NO registra la venta. La venta se registra recién cuando Cindy lo
+// marque "Entregado a la persona" (entregarTodo → rpc/entregar_pedido).
+async function entregarAgencia(ref) {
+    if (!ref) return;
+    if (!confirm('¿Marcar el pedido ' + ref + ' como ENTREGADO A LA AGENCIA C807?\n\n'
+        + 'Se registra que ya lo entregaste a la agencia (en tránsito).\n'
+        + 'La venta se registra recién al marcarlo "Entregado a la persona".')) return;
+    try {
+        const deEste = despachos.filter(d =>
+            d.order_reference === ref
+            && salidaKey(d.destino) === 'c807'
+            && !['salio', 'entregado', 'cancelado', 'no-retirado', 'vencido'].includes(d.estado_logistico));
+        if (!deEste.length) {
+            showToast('ℹ️ Ya está en la agencia o no hay despachos C807 en este pedido');
+            loadDespachos();
+            return;
+        }
+        for (const d of deEste) {
+            await api('PATCH', 'despachos?id=eq.' + d.id, { estado_logistico: 'salio', updated_at: new Date().toISOString() });
+        }
+        showToast('📦 Entregado a la agencia C807 · la venta se registra al entregarlo a la persona');
+    } catch (e) {
+        if (e.status === 401) { showToast('🔒 Tu sesión expiró — volvé a entrar al panel'); return; }
+        showToast('❌ No se pudo marcar: ' + e.message);
+        return;
+    }
+    loadDespachos();
+}
 async function avanzarDespacho(id) {
     const d = despachos.find(x => x.id === id);
     if (!d) return;
