@@ -2050,15 +2050,16 @@ function normalizarDUI(v) {
 // 👧 MENOR DE EDAD (30-sep-2026): lee el formulario y devuelve los datos (o null si no es menor).
 function toggleMenorForm() {
     const esMenor = document.querySelector('input[name="menor-edad"]:checked')?.value === 'si';
-    const form = $('checkout-menor-form');
-    if (form) form.style.display = esMenor ? '' : 'none';
-    // 🪪 Para menor, el DUI que se pide es del RESPONSABLE (una menor no tiene DUI).
-    const lbl = $('checkout-dui-label');
-    const hint = $('checkout-dui-hint');
-    if (lbl) lbl.textContent = esMenor ? 'DUI del responsable 🪪' : 'Tu DUI 🪪';
-    if (hint) hint.textContent = esMenor
-        ? '🔒 Lo usamos para verificar la identidad del responsable al entregarte el pedido.'
-        : '🔒 Lo usamos para verificar tu identidad al entregarte el pedido.';
+    const mayor = $('checkout-mayor-form');
+    const menor = $('checkout-menor-form');
+    if (mayor) mayor.style.display = esMenor ? 'none' : '';
+    if (menor) menor.style.display = esMenor ? '' : 'none';
+    // 👧 Para menor, el DUI pedido es del responsable (una menor no tiene DUI) y
+    // los teléfonos se confirman con los botones del formulario (sin "medio de verificación").
+    const medio = $('checkout-medio');
+    if (medio) medio.style.display = esMenor ? 'none' : '';
+    const correoVerif = $('checkout-correo-verif-group');
+    if (correoVerif) correoVerif.style.display = esMenor ? 'none' : '';
 }
 
 function datosMenor() {
@@ -2293,19 +2294,28 @@ async function regVerificacionCompleta() {
 }
 
 function validarDatosCompra() {
-    const nombre = $('checkout-name').value.trim();
-    const tel = normalizarTelefono($('checkout-phone').value);
-    if (!nombre) { showToast('📝 Escribí tu nombre'); return null; }
+    const menor = datosMenor();
+    let nombre, tel, dui;
+    if (menor) {
+        // 👧 Menor: la identidad del pedido es la menor; el DUI es del responsable.
+        nombre = menor.menorNombre;
+        tel = menor.menorTelefono;
+        dui = normalizarDUI($('checkout-dui-responsable').value);
+    } else {
+        nombre = $('checkout-name').value.trim();
+        tel = normalizarTelefono($('checkout-phone').value);
+        dui = normalizarDUI($('checkout-dui').value);
+    }
+    if (!nombre) { showToast('📝 Escribí el nombre'); return null; }
     if (!tel) {
-        showToast('📱 Escribí tu teléfono de 8 dígitos (ej. 7000-0000)');
+        showToast('📱 Escribí el teléfono de 8 dígitos (ej. 7000-0000)');
         mostrarAvisoTel('❌ Ese número no parece correcto — escribilo así: 7000-0000', false);
         return null;
     }
     mostrarAvisoTel('✅ Te escribiremos al ' + tel.slice(3, 7) + '-' + tel.slice(7), true);
     // 🪪 DUI OBLIGATORIO (30-sep-2026)
-    const dui = normalizarDUI($('checkout-dui').value);
-    if (!dui) { showToast('🪪 Escribí tu DUI completo (9 dígitos, ej. 12345678-9)'); return null; }
-    const medio = medioVerificacion();
+    if (!dui) { showToast('🪪 Escribí el DUI completo (9 dígitos, ej. 12345678-9)'); return null; }
+    const medio = menor ? 'whatsapp' : medioVerificacion();
     let correo = null;
     if (medio === 'correo') {
         correo = ($('checkout-verif-email').value || '').trim().toLowerCase();
@@ -2315,7 +2325,6 @@ function validarDatosCompra() {
         }
     }
     // 👧 MENOR DE EDAD (30-sep-2026): validar la autorización si es menor.
-    const menor = datosMenor();
     if (menor) {
         if (menor.menorNombre.length < 2) { showToast('👧 Escribí el nombre de la menor'); return null; }
         if (!menor.menorFechaNac) { showToast('👧 Poné la fecha de nacimiento de la menor'); return null; }
@@ -2609,6 +2618,7 @@ async function garantizarVerificacion() {
             showToast('👧 Confirmá el WhatsApp del responsable para seguir 💗');
             return false;
         }
+        return true;   // 👧 para menor alcanza con los dos teléfonos confirmados
     }
     const medio = medioVerificacion();
     if (medio === 'correo') {
