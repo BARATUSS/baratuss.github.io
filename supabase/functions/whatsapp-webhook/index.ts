@@ -203,6 +203,270 @@ async function enviarWALista(telefono: string, nombre: string): Promise<boolean>
   } catch (_e) { return false; }
 }
 
+// ===== MENÚ PRINCIPAL DUDU (30-sep-2026, doc "MENÚ PRINCIPAL — DUDU / BARATUSS") =====
+// Cuando un cliente escribe SIN un pedido activo, se le orienta con este menú o se responde
+// su consulta directa (intención clara). Todo se consulta de Supabase/config, nunca se inventa.
+const SITIO_WEB = 'https://baratuss.github.io';
+const MENU_PRINCIPAL = '👋 ¡Hola! Soy Dudu, asistente de Baratuss. ¿En qué puedo ayudarte?\n\n'
+  + '1. 🛍️ Comprar / ver productos\n'
+  + '2. 📦 Entregas y pedidos\n'
+  + '3. 💳 Pagos y facturación\n'
+  + '4. 🔄 Cambios y devoluciones\n'
+  + '5. 🎁 Promociones y cupones\n'
+  + '6. 👩🏻 Hablar con Cindy\n\n'
+  + 'Responde con el *número de la opción* que necesitas.';
+
+const METODOS_PAGO = 'Podés pagar de 3 formas 💳:\n\n'
+  + '· *Efectivo* al retirar tu pedido\n'
+  + '· *Tarjeta* en la web al hacer tu compra\n'
+  + '· *Transferencia* (te confirmamos al verificarla)\n\n'
+  + 'Los pedidos por agencia C807 se pagan solo con tarjeta.';
+
+const POLITICA_DEVOLUCION = 'Te cuento cómo funcionan los cambios y devoluciones 💛:\n\n'
+  + '· Si *el error fue nuestro* (producto dañado, incorrecto o no llegó): te lo cambiamos '
+  + 'o te devolvemos tu dinero + un cupón de disculpa.\n'
+  + '· Si *no te queda la talla*: lo cambiamos por otra talla si hay stock (vos pagás el envío).\n'
+  + '· Tenés hasta *3 días* después de la entrega para pedir cambio o devolución.';
+
+const PROMOCIONES_ACTIVAS = '🎁 Promociones vigentes:\n\n'
+  + '· *10% de bienvenida* en tu primera compra al crear tu cuenta verificada 🎉\n'
+  + '· *Programa de amigas*: usá el código de una amiga y las dos ganan *10%* 💕\n'
+  + '· Envío por agencia C807 a *+$1.00* (solo con tarjeta)\n'
+  + '· Retiro en punto BARATUSS *gratis*\n\n'
+  + 'También hay cupones de descuento (10%, 20%, 30% o 45%) que te mandamos por WhatsApp cuando aplican. 💛';
+
+const PUNTOS_ENTREGA = 'Paseo El Carmen · C.C. La Skina · Casa Matriz (Santa Tecla) · Plaza Merliot · Metrocentro (martes tarde)';
+
+type MenuIntent = 'menu' | 'shop' | 'producto' | 'pedido' | 'entrega' | 'pago' | 'factura' | 'devolucion' | 'promociones' | 'humano' | 'cambio';
+
+function _incluye(t: string, palabras: string[]): boolean {
+  return palabras.some(p => t.includes(p));
+}
+
+function clasificarMenu(texto: string, idBoton = ''): MenuIntent {
+  const t = ((idBoton || '') + ' ' + (texto || '')).toLowerCase().trim();
+
+  // Botón interactivo del menú (lista)
+  if (idBoton.startsWith('menu_')) {
+    const n = idBoton.slice(5);
+    if (n === '1') return 'shop';
+    if (n === '2') return 'entrega';
+    if (n === '3') return 'pago';
+    if (n === '4') return 'devolucion';
+    if (n === '5') return 'promociones';
+    if (n === '6') return 'humano';
+    return 'menu';
+  }
+
+  // Volver al menú
+  if (t === '0' || t === 'menu' || t === 'menú' || t === 'menú principal') return 'menu';
+
+  // Opciones numéricas del menú (1..6): el menú dice "responde con el número"
+  const mNum = t.match(/^(?:opci[oó]n\s*)?([1-6])\.?$/);
+  if (mNum) {
+    const n = mNum[1];
+    if (n === '1') return 'shop';
+    if (n === '2') return 'entrega';
+    if (n === '3') return 'pago';
+    if (n === '4') return 'devolucion';
+    if (n === '5') return 'promociones';
+    if (n === '6') return 'humano';
+  }
+
+  // 6 · Hablar con Cindy (solo el número)
+  if (_incluye(t, ['hablar con cindy', 'con cindy', 'la dueña', 'la duena', 'encargad', 'gerente',
+    'dueñ', 'humano', 'una persona', 'con un agente', 'atencion', 'atención'])) return 'humano';
+
+  // 4 · Devolución / cambio de producto
+  if (_incluye(t, ['devolu', 'devolver', 'reembolso', 'quebrado', 'dañado', 'danado', 'roto',
+    'defectuoso', 'no me quedó', 'no me quedo', 'talla incorrecta', 'producto diferente',
+    'recibí mal', 'recibi mal', 'vino mal'])) return 'devolucion';
+
+  // 3 · Factura / CCF
+  if (_incluye(t, ['factura', 'ccf', 'crédito fiscal', 'credito fiscal'])) return 'factura';
+
+  // 5 · Promociones / cupones
+  if (_incluye(t, ['promo', 'descuento', 'cupón', 'cupon', 'código de descuento',
+    'codigo de descuento', 'oferta', 'rebaja', 'promoción', 'promocion'])) return 'promociones';
+
+  // 3 · Métodos de pago
+  if (_incluye(t, ['pago', 'pagar', 'tarjeta', 'efectivo', 'transferencia', 'método de pago',
+    'metodo de pago', 'como pago', 'cómo pago', 'con que pago', 'con qué pago'])) return 'pago';
+
+  // 1 · Comprar / ver productos → sitio web
+  if (_incluye(t, ['comprar', 'ver productos', 'ver ropa', 'catálogo', 'catalogo', 'tienda',
+    'sitio web', 'página', 'pagina', 'colección', 'coleccion'])) return 'shop';
+
+  // Cambio de ENTREGA (solo si el "cambiar" es claramente de entrega)
+  const esCambioEntrega = _incluye(t, ['reprogram', 'otro dia', 'otro día', 'moveme', 'pasemos',
+    'no llego', 'mejor otro', 'no voy', 'no puedo', 'ventana', 'cambiar la entrega',
+    'cambiar mi entrega', 'cambiar el día', 'cambiar el dia', 'cambiar mi pedido']);
+  if (esCambioEntrega) return 'cambio';
+  // "cambiar/cambio" sin contexto de entrega → cambio de PRODUCTO (devolución)
+  if (_incluye(t, ['cambiar', 'cambio', 'necesito cambiar'])) return 'devolucion';
+
+  // 2 · Estado del pedido
+  if (_incluye(t, ['pedido', 'donde esta', 'dónde está', 'donde esta mi', 'estado de mi',
+    'cuando llega', 'cuándo llega', 'mi orden', 'mi compra', 'que paso con', 'qué pasó con',
+    'cuando me llega', 'cuándo me llega'])) return 'pedido';
+
+  // 2 · Entrega (puntos / horarios / costo)
+  if (_incluye(t, ['envío', 'envio', 'punto', 'puntos', 'entrega', 'costo', 'retiro',
+    'recoger', 'horario', 'lugar', 'a donde', 'adonde', 'c807'])) return 'entrega';
+
+  // 1 · Producto específico (stock / talla / precio)
+  if (_incluye(t, ['talla', 'tallas', 'precio', 'cuánto', 'cuanto', 'stock', 'disponible',
+    'tienen', 'tenés', 'tenes'])) return 'producto';
+
+  // Saludo / ayuda / duda / opciones o intención poco clara → menú
+  return 'menu';
+}
+
+async function telefonoCindy(): Promise<string> {
+  try {
+    const { data } = await supabase.from('config_operativa')
+      .select('valor').eq('clave', 'contacto_hablar_con').maybeSingle();
+    const v = String((data as any)?.valor || '').replace(/\D/g, '');
+    if (v.length === 8) return '+503 ' + v.slice(0, 4) + '-' + v.slice(4);
+    if (v.length === 11 && v.startsWith('503')) return '+503 ' + v.slice(3, 7) + '-' + v.slice(7);
+    return '+503 7662-6575';
+  } catch (_e) { return '+503 7662-6575'; }
+}
+
+async function estadoPedido(tNorm: string): Promise<string> {
+  try {
+    const { data } = await supabase.from('orders')
+      .select('reference, status')
+      .ilike('customer_phone', '%' + tNorm.slice(-8) + '%')
+      .order('id', { ascending: false }).limit(1);
+    if (data && data.length) {
+      const o = data[0] as any;
+      return 'Tu pedido *' + (o.reference || '') + '* está *' + (o.status || 'en proceso') +
+        '*. ¿Necesitás algo más? 😊';
+    }
+    return 'No encontré pedidos con ese número. Si ya compraste, pasame el *código de tu pedido* '
+      + '(ej. BRT-1024) y te doy el estado al toque 😊';
+  } catch (_e) {
+    return 'Pasame el *código de tu pedido* (ej. BRT-1024) y te doy el estado al toque 😊';
+  }
+}
+
+async function infoProducto(texto: string): Promise<string> {
+  const stop = new Set(['hola', 'buenas', 'buenos', 'tienen', 'tenes', 'tenés', 'tiene', 'hay',
+    'quiero', 'busco', 'busca', 'estoy', 'para', 'como', 'cómo', 'cuanto', 'cuánto', 'cuesta',
+    'precio', 'precios', 'stock', 'disponible', 'disponibles', 'talla', 'tallas', 'color',
+    'colores', 'necesito', 'me', 'el', 'la', 'los', 'las', 'un', 'una', 'de', 'en', 'y', 'o',
+    'si', 'no', 'mas', 'más', 'favor', 'por', 'fav', 'q', 'x', 'porfa']);
+  const palabras = (texto || '').toLowerCase().replace(/[¿?!.,]/g, ' ').split(/\s+/)
+    .filter(w => w.length >= 4 && !stop.has(w));
+  if (!palabras.length) {
+    return '¡Hola! 😊 Contame qué producto te interesa (nombre o foto) y te confirmo '
+      + 'disponibilidad, tallas y colores al toque.';
+  }
+  try {
+    const { data } = await supabase.from('inventory')
+      .select('name, sale_price, stock, sizes, colors')
+      .eq('active', true)
+      .ilike('name', '%' + palabras[0] + '%')
+      .limit(5);
+    if (data && data.length) {
+      const lineas = (data as any[]).map(p => {
+        const precio = p.sale_price != null ? '$' + Number(p.sale_price).toFixed(2) : 'consultar';
+        const partes = ['*' + String(p.name).trim() + '* — ' + precio];
+        if (p.sizes) partes.push('tallas: ' + String(p.sizes));
+        if (p.colors) partes.push('colores: ' + String(p.colors));
+        partes.push('disponibles: ' + (p.stock ?? 0));
+        return '· ' + partes.join(' · ');
+      });
+      return '¡Hola! 😊 Esto encontré:\n\n' + lineas.join('\n') +
+        '\n\n¿Te lo reservo? Hacemos retiro en punto BARATUSS (gratis) o envío por C807 (+$1.00).';
+    }
+    return '¡Hola! 😊 Contame qué producto te interesa (nombre o foto) y te confirmo '
+      + 'disponibilidad, tallas y colores al toque.';
+  } catch (_e) {
+    return '¡Hola! 😊 Contame qué producto te interesa (nombre o foto) y te confirmo '
+      + 'disponibilidad, tallas y colores al toque.';
+  }
+}
+
+async function responderMenu(intent: MenuIntent, tel: string, texto: string): Promise<string | null> {
+  const tNorm = String(tel).replace(/\D/g, '');
+
+  if (intent === 'shop') {
+    return '¡Claro! 🛍️ Podés ver todo nuestro catálogo y comprar en línea acá:\n\n' + SITIO_WEB;
+  }
+  if (intent === 'humano') {
+    return 'Puedes comunicarte directamente con Cindy al:\n\n*' + (await telefonoCindy()) + '*';
+  }
+  if (intent === 'factura') {
+    return 'Puedes solicitar tu factura dentro de las primeras *48 horas* después de tu compra.\n\n'
+      + 'Envianos el *correo electrónico* donde deseas recibirla 📧';
+  }
+  if (intent === 'devolucion') {
+    return POLITICA_DEVOLUCION + '\n\n¿Querés que te contacte directamente con Cindy? 📞 *'
+      + (await telefonoCindy()) + '*';
+  }
+  if (intent === 'promociones') return PROMOCIONES_ACTIVAS;
+  if (intent === 'pago') return METODOS_PAGO;
+  if (intent === 'entrega') {
+    return '¡Hola! 😊 Retiro en punto BARATUSS es *gratis*. También hay envío por agencia C807 por '
+      + '*+$1.00* (solo pagando con tarjeta).\n\nPuntos de retiro: ' + PUNTOS_ENTREGA +
+      '\n\n¿Querés saber el *estado de tu pedido*? Pasame el código (ej. BRT-1024) y te digo al toque. '
+      + '¿Qué te queda más cómodo?';
+  }
+  if (intent === 'pedido') return await estadoPedido(tNorm);
+  if (intent === 'producto') return await infoProducto(texto);
+  // 'cambio' se maneja aparte (enviarWALista); 'menu' y cualquier otro → menú principal
+  return MENU_PRINCIPAL;
+}
+
+// Registro detallado de cada interacción del menú (en vez de avisar a Telegram por cada click).
+async function registrarClick(telefono: string, texto: string, intent: string, respuesta: string, tipo: string) {
+  try {
+    await supabase.from('dudu_menu_log').insert({
+      telefono, texto, intent, respuesta, tipo_respuesta: tipo
+    });
+  } catch (_e) { /* silencioso */ }
+}
+
+// Menú principal como LISTA interactiva (botones) — más claro que pedir que escriban un número.
+async function enviarMenuPrincipal(telefono: string): Promise<boolean> {
+  const rows = [
+    { id: 'menu_1', title: 'Comprar productos', description: 'Ver el catálogo y comprar en línea' },
+    { id: 'menu_2', title: 'Entregas y pedidos', description: 'Puntos de retiro y estado de tu pedido' },
+    { id: 'menu_3', title: 'Pagos y facturación', description: 'Cómo pagar y solicitar factura' },
+    { id: 'menu_4', title: 'Cambios y devoluciones', description: 'Política de cambios y devoluciones' },
+    { id: 'menu_5', title: 'Promociones', description: 'Ofertas y cupones vigentes' },
+    { id: 'menu_6', title: 'Hablar con Cindy', description: 'Atención directa con Cindy' }
+  ];
+  try {
+    const r = await fetch('https://graph.facebook.com/v21.0/' + PHONE_ID + '/messages', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + WA_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', to: telefono, type: 'interactive',
+        interactive: {
+          type: 'list',
+          header: { type: 'text', text: 'BARATUSS 💛' },
+          body: { text: '¡Hola! Soy Dudu, tu asistente de Baratuss. Elegí una opción:' },
+          footer: { text: 'Menú principal' },
+          action: { button: 'Ver opciones', sections: [{ title: '¿En qué te ayudo?', rows }] }
+        }
+      })
+    });
+    const d = await r.json();
+    if (d?.messages?.[0]?.id) {
+      await guardarSaliente(telefono, 'MENÚ PRINCIPAL (lista interactiva)', d.messages[0].id, 'interactive');
+      return true;
+    }
+    if (d?.error) {
+      await avisarTelegram('⚠️ NO SE PUDO ENVIAR EL MENÚ\n\nA: +' + telefono +
+        '\nMotivo: ' + (d.error.title || '') + ' — ' + (d.error.message || ''));
+    }
+    return false;
+  } catch (_e) { return false; }
+}
+
 serve(async (req) => {
   const url = new URL(req.url);
 
@@ -271,13 +535,13 @@ serve(async (req) => {
             const ts = msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : null;
             const ult8 = tel.slice(-8);
 
-            // ANTI-ABUSO: máximo 10 mensajes por hora por cliente (protege el sistema)
+            // ANTI-ABUSO: máximo 20 mensajes por hora por cliente (protege el sistema)
             try {
               const hace1h = new Date(Date.now() - 3600000).toISOString();
               const { count } = await supabase.from('wa_mensajes')
                 .select('id', { count: 'exact', head: true })
                 .eq('telefono', tel).eq('direccion', 'entrante').gte('wa_timestamp', hace1h);
-              if ((count || 0) > 10) {
+              if ((count || 0) > 20) {
                 await avisarTelegram('⚠️ EXCESO DE MENSAJES DE UN CLIENTE\n\nNúmero: +' + tel +
                   '\nMensajes en la última hora: ' + count + '\n(No se respondió automáticamente)');
                 errores++;
@@ -467,12 +731,32 @@ serve(async (req) => {
             } catch (eCont) { console.log('error bloque contingencias', String(eCont)); }
 
             if (!desp) {
-              await avisarTelegram('📩 MENSAJE DE WHATSAPP (sin pedido asociado)\n\nDe: +' + tel + '\nMensaje: "' + texto + '"');
-              // Aunque no haya pedido, si pide cambiar le mostramos las ventanas (no lo dejamos sin respuesta)
+              // ===== MENÚ PRINCIPAL DUDU (30-sep-2026) =====
+              // Cliente sin pedido activo: se orienta con el menú o se responde su consulta directa.
+              // Cada interacción se registra en dudu_menu_log (sin avisar a Telegram por cada click).
               const idSinPedido = msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || '';
-              if (clasificar(texto, idSinPedido) === 'cambio') {
+              const intent = clasificarMenu(texto, idSinPedido);
+
+              // 'cambio' (cambio de ENTREGA) mantiene el flujo de ventanas ya existente
+              if (intent === 'cambio') {
+                await registrarClick(tel, texto, intent, 'menú de ventanas', 'ventanas');
                 await enviarWALista(tel, 'cliente');
+                continue;
               }
+
+              // 'menu' → lista interactiva (botones); si no se puede, texto plano
+              if (intent === 'menu') {
+                const okLista = await enviarMenuPrincipal(tel);
+                if (!okLista) await responderWhatsApp(tel, MENU_PRINCIPAL);
+                if (okLista) respondidos++;
+                await registrarClick(tel, texto, intent, 'menú principal', 'menu');
+                continue;
+              }
+
+              const respuesta = await responderMenu(intent, tel, texto);
+              const ok = respuesta ? await responderWhatsApp(tel, respuesta) : false;
+              if (ok) respondidos++;
+              await registrarClick(tel, texto, intent, respuesta || '', 'texto');
               continue;
             }
 
