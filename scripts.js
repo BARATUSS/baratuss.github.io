@@ -2052,6 +2052,13 @@ function toggleMenorForm() {
     const esMenor = document.querySelector('input[name="menor-edad"]:checked')?.value === 'si';
     const form = $('checkout-menor-form');
     if (form) form.style.display = esMenor ? '' : 'none';
+    // 🪪 Para menor, el DUI que se pide es del RESPONSABLE (una menor no tiene DUI).
+    const lbl = $('checkout-dui-label');
+    const hint = $('checkout-dui-hint');
+    if (lbl) lbl.textContent = esMenor ? 'DUI del responsable 🪪' : 'Tu DUI 🪪';
+    if (hint) hint.textContent = esMenor
+        ? '🔒 Lo usamos para verificar la identidad del responsable al entregarte el pedido.'
+        : '🔒 Lo usamos para verificar tu identidad al entregarte el pedido.';
 }
 
 function datosMenor() {
@@ -2059,12 +2066,13 @@ function datosMenor() {
     if (!esMenor) return null;
     const menorNombre = ($('menor-nombre').value || '').trim();
     const menorFechaNac = ($('menor-fecha-nac').value || '').trim();
+    const menorTelefono = normalizarTelefono($('menor-telefono').value);
     const responsableNombre = ($('responsable-nombre').value || '').trim();
     const responsableRelacion = ($('responsable-relacion').value || '').trim();
     const responsableTelefono = normalizarTelefono($('responsable-telefono').value);
     const responsableCorreo = ($('responsable-correo').value || '').trim();
     const autorizacion = !!$('menor-autorizacion').checked;
-    return { esMenor, menorNombre, menorFechaNac, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion };
+    return { esMenor, menorNombre, menorFechaNac, menorTelefono, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion };
 }
 
 // 👧 MENOR EN CREAR CUENTA (30-sep-2026): 1ª pregunta "¿eres mayor?"; según respuesta, F-1 o F-2.
@@ -2219,6 +2227,9 @@ async function regVerificarWhatsAppTarget(telInputId, btnId, msgId, nombreId) {
 function regVerificarWhatsApp() { regVerificarWhatsAppTarget('register-phone', 'reg-verif-wa', 'reg-verif-wa-msg', 'register-name'); }
 function regVerificarWhatsAppMenor() { regVerificarWhatsAppTarget('reg-menor-telefono', 'reg-verif-wa-menor', 'reg-verif-wa-menor-msg', 'reg-menor-nombre'); }
 function regVerificarWhatsAppResponsable() { regVerificarWhatsAppTarget('reg-responsable-telefono', 'reg-verif-wa-resp', 'reg-verif-wa-resp-msg', 'reg-responsable-nombre'); }
+// 👧 MENOR COMO INVITADO (30-sep-2026): verificar teléfono de la menor y del responsable.
+function verificarWhatsAppMenor() { regVerificarWhatsAppTarget('menor-telefono', 'menor-verif-wa', 'menor-verif-wa-msg', 'menor-nombre'); }
+function verificarWhatsAppResponsable() { regVerificarWhatsAppTarget('responsable-telefono', 'responsable-verif-wa', 'responsable-verif-wa-msg', 'responsable-nombre'); }
 
 function regPollWhatsAppTarget(tel, msgId) {
     if (_pollRegWA) clearInterval(_pollRegWA);
@@ -2308,9 +2319,10 @@ function validarDatosCompra() {
     if (menor) {
         if (menor.menorNombre.length < 2) { showToast('👧 Escribí el nombre de la menor'); return null; }
         if (!menor.menorFechaNac) { showToast('👧 Poné la fecha de nacimiento de la menor'); return null; }
+        if (!menor.menorTelefono) { showToast('👧 Escribí el teléfono de la menor'); return null; }
         if (menor.responsableNombre.length < 2) { showToast('👧 Escribí el nombre del responsable legal'); return null; }
         if (!menor.responsableRelacion) { showToast('👧 Elegí la relación del responsable'); return null; }
-        if (!menor.responsableTelefono && !menor.responsableCorreo) { showToast('👧 Necesitamos teléfono o correo del responsable'); return null; }
+        if (!menor.responsableTelefono) { showToast('👧 Escribí el teléfono del responsable'); return null; }
         if (!menor.autorizacion) { showToast('👧 El responsable debe autorizar la compra (marcá la casilla)'); return null; }
     }
     return { nombre, tel, dui, preferido: medio, correo, menor };
@@ -2584,6 +2596,20 @@ async function confirmarCodigoCorreo() {
 }
 
 async function garantizarVerificacion() {
+    // 👧 MENOR (30-sep-2026): verificar también el teléfono de la menor y del responsable.
+    const _menor = datosMenor();
+    if (_menor) {
+        const _telMenor = normalizarTelefono($('menor-telefono').value);
+        const _telResp = normalizarTelefono($('responsable-telefono').value);
+        if (_telMenor && !(await telefonoEstaVerificado(_telMenor))) {
+            showToast('👧 Confirmá el WhatsApp de la menor para seguir 💗');
+            return false;
+        }
+        if (_telResp && !(await telefonoEstaVerificado(_telResp))) {
+            showToast('👧 Confirmá el WhatsApp del responsable para seguir 💗');
+            return false;
+        }
+    }
     const medio = medioVerificacion();
     if (medio === 'correo') {
         const correo = ($('checkout-verif-email').value || '').trim().toLowerCase();
@@ -2990,6 +3016,7 @@ async function wompiCheckout() {
                 menorDeEdad: datos.menor ? true : false,
                 menorNombre: datos.menor ? datos.menor.menorNombre : null,
                 menorFechaNac: datos.menor ? datos.menor.menorFechaNac : null,
+                menorTelefono: datos.menor ? (datos.menor.menorTelefono || null) : null,
                 responsableNombre: datos.menor ? datos.menor.responsableNombre : null,
                 responsableRelacion: datos.menor ? datos.menor.responsableRelacion : null,
                 responsableTelefono: datos.menor ? (datos.menor.responsableTelefono || null) : null,
@@ -3119,6 +3146,7 @@ async function cashCheckout() {
                                 menor_de_edad: true,
                                 menor_nombre: datos.menor.menorNombre,
                                 menor_fecha_nac: datos.menor.menorFechaNac,
+                                menor_telefono: datos.menor.menorTelefono || null,
                                 responsable_nombre: datos.menor.responsableNombre,
                                 responsable_relacion: datos.menor.responsableRelacion,
                                 responsable_telefono: datos.menor.responsableTelefono || null,

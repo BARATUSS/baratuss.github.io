@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
   const esMenor = !!cli.menor_de_edad;
   const menorNombre = String(cli.menor_nombre || '').trim();
   const menorFechaNac = String(cli.menor_fecha_nac || '').trim();
+  const menorTelefono = normalizarTelefono(String(cli.menor_telefono || ''));
   const responsableNombre = String(cli.responsable_nombre || '').trim();
   const responsableRelacion = String(cli.responsable_relacion || '').trim();
   const responsableTelefono = normalizarTelefono(String(cli.responsable_telefono || ''));
@@ -132,9 +133,10 @@ Deno.serve(async (req) => {
   if (esMenor) {
     if (menorNombre.length < 2) return json({ ok: false, error: 'Falta el nombre de la menor' }, 400);
     if (!menorFechaNac) return json({ ok: false, error: 'Falta la fecha de nacimiento de la menor' }, 400);
+    if (!menorTelefono) return json({ ok: false, error: 'Falta el teléfono de la menor' }, 400);
     if (responsableNombre.length < 2) return json({ ok: false, error: 'Falta el nombre del responsable legal' }, 400);
     if (!['madre', 'padre', 'tutor', 'representante'].includes(responsableRelacion)) return json({ ok: false, error: 'Elegí la relación del responsable con la menor' }, 400);
-    if (!responsableTelefono && !responsableCorreo) return json({ ok: false, error: 'Necesitamos teléfono o correo del responsable legal' }, 400);
+    if (!responsableTelefono) return json({ ok: false, error: 'Falta el teléfono del responsable legal' }, 400);
     if (!autoriza) return json({ ok: false, error: 'El responsable legal debe autorizar la compra' }, 400);
   }
 
@@ -364,6 +366,7 @@ Deno.serve(async (req) => {
     menor_de_edad: esMenor,
     menor_nombre: esMenor ? menorNombre : null,
     menor_fecha_nac: esMenor ? menorFechaNac : null,
+    menor_telefono: esMenor ? menorTelefono : null,
     responsable_nombre: esMenor ? responsableNombre : null,
     responsable_relacion: esMenor ? responsableRelacion : null,
     responsable_telefono: esMenor ? responsableTelefono : null,

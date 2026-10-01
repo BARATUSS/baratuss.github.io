@@ -592,9 +592,9 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Tu DUI 🪪</label>
+                    <label id="checkout-dui-label">Tu DUI 🪪</label>
                     <input type="text" id="checkout-dui" placeholder="12345678-9" inputmode="numeric" required>
-                    <small style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">🔒 Lo usamos para verificar tu identidad al entregarte el pedido.</small>
+                    <small id="checkout-dui-hint" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;">🔒 Lo usamos para verificar tu identidad al entregarte el pedido.</small>
                 </div>
 
                 <!-- 👧 MENOR DE EDAD (30-sep-2026): autorización del responsable legal -->
@@ -622,6 +622,12 @@
                         <label>Fecha de nacimiento</label>
                         <input type="date" id="menor-fecha-nac">
                     </div>
+                    <div class="form-group">
+                        <label>Teléfono de la menor</label>
+                        <input type="tel" id="menor-telefono" placeholder="7000-0000">
+                        <button type="button" id="menor-verif-wa" class="btn btn--primary" style="width:100%;margin-top:8px;" onclick="verificarWhatsAppMenor()">💬 Confirmar por WhatsApp</button>
+                        <small id="menor-verif-wa-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
+                    </div>
                     <div style="font-weight:600;font-size:.8rem;color:#5a4a47;margin:10px 0 4px;">Datos del responsable legal</div>
                     <div class="form-group">
                         <label>Nombre completo del responsable</label>
@@ -640,6 +646,8 @@
                     <div class="form-group">
                         <label>Teléfono del responsable</label>
                         <input type="tel" id="responsable-telefono" placeholder="7000-0000">
+                        <button type="button" id="responsable-verif-wa" class="btn btn--primary" style="width:100%;margin-top:8px;" onclick="verificarWhatsAppResponsable()">💬 Confirmar por WhatsApp</button>
+                        <small id="responsable-verif-wa-msg" style="display:block;margin-top:6px;font-size:.74rem;color:#8a6b66;"></small>
                     </div>
                     <div class="form-group">
                         <label>Correo del responsable (opcional)</label>
@@ -1212,6 +1220,6 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="scripts.js?v=20260930stock"></script>
+<script src="scripts.js?v=20260930menor"></script>
 </body>
 </html>

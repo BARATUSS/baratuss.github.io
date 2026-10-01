@@ -130,7 +130,7 @@ serve(async (req) => {
       const { items, userId, deliveryType, deliveryPoint, customerName, customerPhone, token: tokenCliente,
               facturaTipo, facturaNombre, facturaNit, facturaNrc, facturaGiro, facturaDireccion, customerEmail, facturaPorCorreo, facturaPorWhatsapp,
               contactoPreferido, codigo, sesionToken, cuponCodigo, dui,
-              menorDeEdad, menorNombre, menorFechaNac, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion } = await req.json();
+              menorDeEdad, menorNombre, menorFechaNac, menorTelefono, responsableNombre, responsableRelacion, responsableTelefono, responsableCorreo, autorizacion } = await req.json();
       if (!items?.length) return new Response(JSON.stringify({ error: 'Carrito vacio' }), { status: 400, headers: corsHeaders });
 
       // 🪪 DUI OBLIGATORIO (30-sep-2026): se usa para verificar la identidad al entregar.
@@ -141,6 +141,7 @@ serve(async (req) => {
       const esMenorC = !!menorDeEdad;
       const mNombre = String(menorNombre || '').trim();
       const mFechaNac = String(menorFechaNac || '').trim();
+      const mTelefono = normalizarTel(String(menorTelefono || ''));
       const rNombre = String(responsableNombre || '').trim();
       const rRelacion = String(responsableRelacion || '').trim();
       const rTelefono = normalizarTel(String(responsableTelefono || ''));
@@ -148,9 +149,10 @@ serve(async (req) => {
       if (esMenorC) {
         if (mNombre.length < 2) return new Response(JSON.stringify({ error: 'Falta el nombre de la menor' }), { status: 400, headers: corsHeaders });
         if (!mFechaNac) return new Response(JSON.stringify({ error: 'Falta la fecha de nacimiento de la menor' }), { status: 400, headers: corsHeaders });
+        if (!mTelefono) return new Response(JSON.stringify({ error: 'Falta el teléfono de la menor' }), { status: 400, headers: corsHeaders });
         if (rNombre.length < 2) return new Response(JSON.stringify({ error: 'Falta el nombre del responsable legal' }), { status: 400, headers: corsHeaders });
         if (!['madre', 'padre', 'tutor', 'representante'].includes(rRelacion)) return new Response(JSON.stringify({ error: 'Elegí la relación del responsable con la menor' }), { status: 400, headers: corsHeaders });
-        if (!rTelefono && !rCorreo) return new Response(JSON.stringify({ error: 'Necesitamos teléfono o correo del responsable legal' }), { status: 400, headers: corsHeaders });
+        if (!rTelefono) return new Response(JSON.stringify({ error: 'Falta el teléfono del responsable legal' }), { status: 400, headers: corsHeaders });
         if (!autorizacion) return new Response(JSON.stringify({ error: 'El responsable legal debe autorizar la compra' }), { status: 400, headers: corsHeaders });
       }
 
@@ -358,6 +360,7 @@ serve(async (req) => {
         menor_de_edad: esMenorC,
         menor_nombre: esMenorC ? mNombre : null,
         menor_fecha_nac: esMenorC ? mFechaNac : null,
+        menor_telefono: esMenorC ? mTelefono : null,
         responsable_nombre: esMenorC ? rNombre : null,
         responsable_relacion: esMenorC ? rRelacion : null,
         responsable_telefono: esMenorC ? rTelefono : null,
