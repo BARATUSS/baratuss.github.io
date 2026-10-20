@@ -434,6 +434,52 @@ function verClienta(tel8) {
     caja.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// 🪪 ASISTENCIA — buscar clienta por DUI y editar teléfono/correo (20-oct-2026)
+// Solo cuentas registradas (profiles). De invitadas NO guardamos datos ✅
+async function buscarPorDui() {
+    const input = $('asistencia-dui');
+    const caja = $('asistencia-resultado');
+    const dui = String(input ? input.value : '').replace(/\D/g, '').trim();
+    if (!caja) return;
+    if (dui.length < 8) { caja.innerHTML = '<p style="color:#c0392b;">Escribí el DUI completo (9 dígitos).</p>'; return; }
+    caja.innerHTML = '<p style="color:#999;">Buscando…</p>';
+    try {
+        const res = await api('GET', 'profiles?select=id,name,dui,phone,email&dui=eq.' + dui);
+        const lista = Array.isArray(res) ? res : [];
+        if (!lista.length) {
+            caja.innerHTML = '<p style="color:#c0392b;">❌ No encontré ninguna cuenta con ese DUI.</p>'
+                + '<p style="color:#999;font-size:.85rem;margin:4px 0 0;">Las invitadas no guardan datos — acá solo aparecen las cuentas registradas.</p>';
+            return;
+        }
+        caja.innerHTML = lista.map((p, i) => (
+            '<div style="background:#fff;border:1px solid #eee;border-radius:8px;padding:12px;margin-bottom:10px;">'
+            + '<p style="margin:0 0 10px;"><strong>' + agEsc(p.name || 'Sin nombre') + '</strong>'
+            + (p.dui ? ' · 🪪 <code>' + agEsc(p.dui) + '</code>' : '') + '</p>'
+            + '<label style="font-size:.78rem;color:#666;">📱 Teléfono (con código de país, ej: 50377778888)</label>'
+            + '<input type="text" id="asist-tel-' + i + '" value="' + agEsc(p.phone || '') + '" style="width:100%;margin-bottom:8px;">'
+            + '<label style="font-size:.78rem;color:#666;">📧 Correo</label>'
+            + '<input type="text" id="asist-email-' + i + '" value="' + agEsc(p.email || '') + '" style="width:100%;margin-bottom:10px;">'
+            + '<button class="admin-btn admin-btn--primary" style="width:auto;padding:6px 14px;font-size:.78rem;" onclick="guardarDatosCliente(\'' + p.id + '\',' + i + ')">💾 Guardar datos</button>'
+            + '</div>'
+        )).join('');
+    } catch (e) {
+        caja.innerHTML = '<p style="color:#c0392b;">❌ ' + agEsc(e.message || e) + '</p>';
+    }
+}
+
+async function guardarDatosCliente(id, i) {
+    const tel = ($('asist-tel-' + i) || {}).value;
+    const email = ($('asist-email-' + i) || {}).value;
+    if (!confirm('¿Guardar los nuevos datos de esta clienta?')) return;
+    try {
+        await api('PATCH', 'profiles?id=eq.' + id, { phone: String(tel || '').trim(), email: String(email || '').trim() });
+        showToast('✅ Datos de la clienta actualizados');
+        buscarPorDui();
+    } catch (e) {
+        showToast('❌ No se pudo guardar: ' + (e.message || e));
+    }
+}
+
 // ===== INVENTORY =====
 async function loadInventory() {
     const data = await api('GET', 'inventory?select=*&order=id.desc');

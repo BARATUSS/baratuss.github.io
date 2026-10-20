@@ -283,6 +283,16 @@
                 <input type="text" id="ag-buscar" placeholder="Ej: María  ó  7777" oninput="renderAgenda()">
             </div>
 
+            <div class="admin-form__field" style="max-width:480px;margin-top:18px;padding:16px;background:#fff6ef;border:1px solid #f2d3b8;border-radius:10px;">
+                <label style="font-weight:600;">🪪 Asistencia — buscar por DUI</label>
+                <p style="color:#8a8a8a;font-size:.82rem;margin:4px 0 10px;">Cuando una clienta no logra verificar su teléfono/correo: buscala por su DUI y corregí sus datos acá.</p>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="asistencia-dui" placeholder="DUI · 9 dígitos (ej: 040426296)" inputmode="numeric" style="flex:1;" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')buscarPorDui()">
+                    <button class="admin-btn admin-btn--primary" style="width:auto;white-space:nowrap;" onclick="buscarPorDui()">🔍 Buscar</button>
+                </div>
+                <div id="asistencia-resultado" style="margin-top:12px;"></div>
+            </div>
+
             <p style="color:#8a8a8a;font-size:.85rem;margin:6px 0 14px;">
                 👆 Tocá una clienta para ver <strong>todo su historial</strong> y escribirle por WhatsApp.
             </p>
@@ -623,6 +633,6 @@
 <div class="admin-toast" id="admin-toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="admin.js?v=20260930agencia"></script>
+<script src="admin.js?v=20261020asistencia"></script>
 </body>
 </html>
