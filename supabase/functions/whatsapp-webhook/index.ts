@@ -136,6 +136,28 @@ function fechaBloque(destino: string, createdAt: string): Date | null {
   return null;
 }
 
+function fechaBonitaISO(iso: string): string {
+  const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+                 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const d = new Date(iso + 'T12:00:00Z');
+  return dias[d.getUTCDay()] + ' ' + d.getUTCDate() + ' de ' + meses[d.getUTCMonth()];
+}
+
+// Quién entrega: Cindy por defecto; si ese día Cindy escaló, la persona elegida.
+async function personaEntrega(destino: string, createdAt: string): Promise<{ nombre: string; tel: string }> {
+  const f = fechaBloque(destino, createdAt);
+  if (f) {
+    const iso = f.toISOString().slice(0, 10);
+    const { data } = await supabase.from('entregas_dias')
+      .select('accion, entregador, entregador_tel').eq('fecha', iso).maybeSingle();
+    if (data && data.accion === 'escalar' && data.entregador) {
+      return { nombre: data.entregador, tel: data.entregador_tel || '' };
+    }
+  }
+  return { nombre: 'Cindy', tel: '7662-6575' };
+}
+
 function ventanaDe(destino: string): string | null {
   const d = (destino || '').toLowerCase();
   const esMie = d.includes('mié') || d.includes('mie');
@@ -552,7 +574,7 @@ serve(async (req) => {
             // 1) Despacho activo de ese cliente
             const { data: desp } = await supabase
               .from('despachos')
-              .select('id, notas, estado_logistico, customer_phone, customer_name, destino, order_reference')
+              .select('id, notas, estado_logistico, customer_phone, customer_name, destino, order_reference, created_at')
               .ilike('customer_phone', '%' + ult8 + '%')
               .neq('estado_logistico', 'entregado')
               .order('id', { ascending: false })
@@ -654,6 +676,45 @@ serve(async (req) => {
                   if (pend && pend.length) {
                     await llamarCont({ accion: 'aprobar_nivel', incidencia_id: pend[0].id, nivel: n });
                     await avisarTelegram('🎚️ Nivel ' + n + ' aprobado por Cindy (caso #' + pend[0].id + ')');
+                    continue;
+                  }
+                }
+              }
+
+              // (a2) CINDY responde el menú de PERSONA DE ENTREGA (1 = escalar · 2 = cancelar)
+              if (t8 === '50376626575') {
+                const nEsc = parseInt(limpio.replace(/[^1-2]/g, '').slice(0, 1), 10);
+                if (nEsc === 1 || nEsc === 2) {
+                  const hoyDia = new Date(Date.now() - 6 * 3600000).toISOString().slice(0, 10);
+                  const { data: pendDia } = await supabase.from('entregas_dias')
+                    .select('fecha').is('accion', null).not('notificado_en', 'is', null)
+                    .gte('fecha', hoyDia).order('fecha', { ascending: true }).limit(1);
+                  if (pendDia && pendDia.length) {
+                    const fechaDia = pendDia[0].fecha;
+                    const bonita = fechaBonitaISO(fechaDia);
+                    if (nEsc === 1) {
+                      // ESCALAR → la siguiente persona (Isabel), y se desbloquea el día
+                      const { data: cfg } = await supabase.from('config_operativa')
+                        .select('clave,valor').in('clave', ['isabel_nombre', 'isabel_telefono']);
+                      const mapa: Record<string, string> = {};
+                      for (const c of cfg || []) mapa[c.clave] = c.valor;
+                      const nombreE = mapa['isabel_nombre'] || 'Isabel';
+                      const telE = mapa['isabel_telefono'] || '7888-0766';
+                      await supabase.from('entregas_dias').update({
+                        accion: 'escalar', entregador: nombreE, entregador_tel: telE,
+                        decidido_en: new Date().toISOString()
+                      }).eq('fecha', fechaDia);
+                      await supabase.from('ventanas_bloqueadas').delete().eq('fecha_bloqueada', fechaDia);
+                      await responderWhatsApp(t8, '¡Listo! 🙌 El ' + bonita + ' entrega ' + nombreE + ' (' + telE + '). A cada clienta le aviso quién le toca. 💛');
+                      await avisarTelegram('🔗 Cindy ESCALÓ las entregas del ' + bonita + ' → ' + nombreE + ' ' + telE);
+                    } else {
+                      // CANCELAR → se bloquea el día (ya lo bloquea el calendario)
+                      await supabase.from('entregas_dias').update({
+                        accion: 'cancelar', decidido_en: new Date().toISOString()
+                      }).eq('fecha', fechaDia);
+                      await responderWhatsApp(t8, '¡Listo! 🚫 Cancelaste las entregas del ' + bonita + '. Ese día queda bloqueado. 💛');
+                      await avisarTelegram('🚫 Cindy CANCELÓ las entregas del ' + bonita);
+                    }
                     continue;
                   }
                 }
@@ -842,9 +903,11 @@ serve(async (req) => {
             if (clase === 'confirmacion') {
               if (!notas.includes('✅ CONF')) notas += '\n✅ CONF ' + sello + ': ' + texto;
               if (!respondidoConf) {
+                const quien = await personaEntrega(destino, (desp as any).created_at || '');
                 const ok = await responderWhatsApp(tel,
                   '¡Gracias a vos, ' + nombre + '! 🛍️ Te esperamos: ' + destino +
-                  '. Cualquier cosa que necesites, escribinos por acá. ¡Que la disfrutes!');
+                  '. Te entrega ' + quien.nombre + ' · ' + quien.tel +
+                  '. ¡Que la disfrutes! 💛');
                 if (ok) { notas += '\n📤 RESP-CONF ' + sello; respondidos++; }
               }
               await supabase.from('despachos').update({ notas: notas.trim().slice(-4000), visto: false }).eq('id', (desp as any).id);

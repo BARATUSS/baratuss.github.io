@@ -1,6 +1,6 @@
 // BARATUSS — Seguimiento automático de entregas EN LA NUBE (no depende de ninguna PC)
 // Corre por cron de Supabase cada 5 minutos. Envía: agradecimiento (plantilla), recordatorio
-// día antes (mañana y tarde), confirmación 1h antes, resumen go/no-go a Cindy, y libera reservas.
+// día antes (mañana y tarde), confirmación 2h antes, resumen go/no-go a Cindy, y libera reservas.
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -313,7 +313,7 @@ serve(async (_req) => {
   const pedidosAgrad = new Set<string>();
   const pedidosRecAM = new Set<string>();
   const pedidosRecPM = new Set<string>();
-  const pedidosConf1h = new Set<string>();
+  const pedidosConf2h = new Set<string>();
   for (const d of despachos || []) {
     const n = d.notas || '';
     const r = d.order_reference || '';
@@ -321,7 +321,7 @@ serve(async (_req) => {
     if (n.includes('AGRAD')) pedidosAgrad.add(r);
     if (n.includes('RECORD-AM')) pedidosRecAM.add(r);
     if (n.includes('RECORD-PM')) pedidosRecPM.add(r);
-    if (n.includes('CONF-1H')) pedidosConf1h.add(r);
+    if (n.includes('CONF-2H')) pedidosConf2h.add(r);
   }
 
   for (const d of despachos || []) {
@@ -407,20 +407,20 @@ serve(async (_req) => {
       }
     }
 
-    // (3) CONFIRMACIÓN 1 hora antes (mismo día) — una sola por PEDIDO
-    if (fechaStr === hoyStr && !notas.includes('CONF-1H') && !pedidosConf1h.has(ref)) {
+    // (3) CONFIRMACIÓN 2 horas antes (mismo día) — una sola por PEDIDO
+    if (fechaStr === hoyStr && !notas.includes('CONF-2H') && !pedidosConf2h.has(ref)) {
       const minutos = (hi - hora) * 60;
-      if (minutos >= 0 && minutos <= 60) {
-        if (await reclamarPedido(ref, notas, '📤 CONF-1H ' + sello, 'CONF-1H')) {
-          const env = await enviarPaso(tel, 'recordatorio', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-1H',
+      if (minutos >= 0 && minutos <= 120) {
+        if (await reclamarPedido(ref, notas, '📤 CONF-2H ' + sello, 'CONF-2H')) {
+          const env = await enviarPaso(tel, 'recordatorio', [nombre, 'HOY ' + destino, destino], 'CONFIRMACION-2H',
             textoNatural('confirmacion', nombre, ref, '', 'HOY', destino));
           if (env) {
             await registrarSaliente(env.wamid, tel, env.plantilla, ref, env.texto || '');
-            pedidosConf1h.add(ref);
-            log.push('CONF-1H -> ' + tel + ' [' + env.plantilla + ']');
+            pedidosConf2h.add(ref);
+            log.push('CONF-2H -> ' + tel + ' [' + env.plantilla + ']');
           } else {
             await devolverReclamo(ref, notas);
-            log.push('CONF-1H FALLO (se reintenta) -> ' + tel);
+            log.push('CONF-2H FALLO (se reintenta) -> ' + tel);
           }
         }
       }
@@ -470,6 +470,46 @@ serve(async (_req) => {
     await avisarTG(aviso);
     log.push('go/no-go enviado: ' + clave);
   }
+
+  // (7) MENÚ ESCALAR/CANCELAR a Cindy — días de entrega con actividad sin decidir
+  try {
+    const hoyISO = hoy.toISOString().slice(0, 10);
+    const { data: pendDias } = await supabase
+      .from('entregas_dias')
+      .select('fecha')
+      .eq('cindy_ocupada', true)
+      .is('accion', null)
+      .is('notificado_en', null)
+      .gte('fecha', hoyISO)
+      .order('fecha', { ascending: true })
+      .limit(10);
+    for (const pd of pendDias || []) {
+      const f = pd.fecha;
+      // reclamo atómico: solo quien escribe notificado_en envía (anti-duplicado)
+      const nowISO = new Date().toISOString();
+      const { data: reclamado } = await supabase
+        .from('entregas_dias')
+        .update({ notificado_en: nowISO })
+        .eq('fecha', f)
+        .is('notificado_en', null)
+        .select('fecha');
+      if (!reclamado || !reclamado.length) continue;   // ya lo reclamó otra corrida
+
+      const menu = '📅 Tenés una actividad marcada el ' + fechaBonita(new Date(f + 'T12:00:00Z')) +
+        '.\n¿Qué hacemos con las entregas de ese día?\n\n' +
+        '1️⃣ Escalar → la hace la siguiente persona (Isabel)\n' +
+        '2️⃣ Cancelar entregas\n\nRespondé 1 o 2 💛';
+      const env = await enviarPaso(CINDY_WA, 'retiro', ['Cindy', 'persona de entrega', f], 'MENU-ENTREGA', menu);
+      if (env) {
+        await registrarSaliente(env.wamid, CINDY_WA, env.plantilla, '', env.texto || '');
+        await avisarTG(menu);
+        log.push('MENU-ENTREGA -> Cindy (' + f + ')');
+      } else {
+        await supabase.from('entregas_dias').update({ notificado_en: null }).eq('fecha', f);
+        log.push('MENU-ENTREGA FALLO (se reintenta) -> ' + f);
+      }
+    }
+  } catch (e) { log.push('error menú escalar/cancelar: ' + String(e).slice(0, 90)); }
 
   // (6) AGRADECIMIENTO POST-ENTREGA
   //     Cuando el pedido se entrega completo, se manda UN mensaje de agradecimiento
