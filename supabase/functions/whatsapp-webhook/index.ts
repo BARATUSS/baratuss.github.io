@@ -175,6 +175,7 @@ async function ocupacionVentanas(): Promise<Record<string, number>> {
     .from('despachos')
     .select('destino, estado_logistico')
     .neq('estado_logistico', 'entregado')
+    .not('estado_logistico', 'in', '("contingencia","reprogramado","cancelado","reembolsado","no-show","no-retirado","vencido","no-disponible")')
     .limit(500);
   const cuenta: Record<string, number> = {};
   for (const d of data || []) {
@@ -577,6 +578,7 @@ serve(async (req) => {
               .select('id, notas, estado_logistico, customer_phone, customer_name, destino, order_reference, created_at')
               .ilike('customer_phone', '%' + ult8 + '%')
               .neq('estado_logistico', 'entregado')
+              .not('estado_logistico', 'in', '("contingencia","reprogramado","cancelado","reembolsado","no-show","no-retirado","vencido","no-disponible")')
               .order('id', { ascending: false })
               .limit(1)
               .maybeSingle();
