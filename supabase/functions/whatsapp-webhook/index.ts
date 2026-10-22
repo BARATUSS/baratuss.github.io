@@ -341,6 +341,9 @@ function clasificarMenu(texto: string, idBoton = ''): MenuIntent {
   if (_incluye(t, ['talla', 'tallas', 'precio', 'cuánto', 'cuanto', 'stock', 'disponible',
     'tienen', 'tenés', 'tenes'])) return 'producto';
 
+  // Código de pedido ("BRT-1024", "BAR-..."): el cliente responde al pedido del bot y quiere su estado
+  if (/\b(brt|bar)-[\w-]+/i.test(t)) return 'pedido';
+
   // Saludo / ayuda / duda / opciones o intención poco clara → menú
   return 'menu';
 }
@@ -356,8 +359,23 @@ async function telefonoCindy(): Promise<string> {
   } catch (_e) { return '+503 7662-6575'; }
 }
 
-async function estadoPedido(tNorm: string): Promise<string> {
+async function estadoPedido(tNorm: string, texto?: string): Promise<string> {
   try {
+    // Si el cliente mandó un código (ej. BRT-1024, BAR-...), buscar por ese código.
+    const m = (texto || '').match(/\b(brt|bar)-[\w-]+/i);
+    if (m) {
+      const codigo = m[0];
+      const { data } = await supabase.from('orders')
+        .select('reference, status')
+        .ilike('reference', '%' + codigo + '%')
+        .order('id', { ascending: false }).limit(1);
+      if (data && data.length) {
+        const o = data[0] as any;
+        return 'Tu pedido *' + (o.reference || '') + '* está *' + (o.status || 'en proceso') +
+          '*. ¿Necesitás algo más? 😊';
+      }
+      return 'No encontré ningún pedido con el código *' + codigo + '*. Revisá que esté bien escrito 😊';
+    }
     const { data } = await supabase.from('orders')
       .select('reference, status')
       .ilike('customer_phone', '%' + tNorm.slice(-8) + '%')
@@ -437,7 +455,7 @@ async function responderMenu(intent: MenuIntent, tel: string, texto: string): Pr
       '\n\n¿Querés saber el *estado de tu pedido*? Pasame el código (ej. BRT-1024) y te digo al toque. '
       + '¿Qué te queda más cómodo?';
   }
-  if (intent === 'pedido') return await estadoPedido(tNorm);
+  if (intent === 'pedido') return await estadoPedido(tNorm, texto);
   if (intent === 'producto') return await infoProducto(texto);
   // 'cambio' se maneja aparte (enviarWALista); 'menu' y cualquier otro → menú principal
   return MENU_PRINCIPAL;
