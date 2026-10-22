@@ -954,6 +954,20 @@ serve(async (req) => {
               cruzados++;
               await avisarTelegram('💬 MENSAJE DE CLIENTE\n\nPedido: ' + (desp as any).order_reference +
                 '\nCliente: ' + (desp as any).customer_name + '\nMensaje: "' + texto + '"');
+              // Cindy (20-oct-2026): aunque tenga pedido activo, si escribe algo que no es de la
+              // entrega (saludo, devolución, promos, etc.), se le responde con el menú de opciones.
+              const intentMenu = clasificarMenu(texto, idInteractivo);
+              if (intentMenu === 'menu') {
+                const okLista = await enviarMenuPrincipal(tel);
+                if (!okLista) await responderWhatsApp(tel, MENU_PRINCIPAL);
+                if (okLista) respondidos++;
+                await registrarClick(tel, texto, intentMenu, 'menú principal', 'menu');
+              } else {
+                const respuestaMenu = await responderMenu(intentMenu, tel, texto);
+                const okMenu = respuestaMenu ? await responderWhatsApp(tel, respuestaMenu) : false;
+                if (okMenu) respondidos++;
+                await registrarClick(tel, texto, intentMenu, respuestaMenu || '', 'texto');
+              }
             }
           }
         }
