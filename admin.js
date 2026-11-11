@@ -1890,6 +1890,10 @@ function renderSalidas() {
         });
         const totalArticulos = g.reduce((s, d) => s + (d.qty || 1), 0);
         const totalPedidos = Object.keys(porPedido).length;
+        const porEstado = {};
+        g.forEach(d => { const e = d.estado_logistico || 'pendiente-preparacion'; porEstado[e] = (porEstado[e] || 0) + 1; });
+        const estadoCorto = { 'pendiente-preparacion': '⏳', 'en-preparacion': '🔨', 'listo': '✅', 'salio': '🚚' };
+        const resumenEstado = ['pendiente-preparacion', 'en-preparacion', 'listo', 'salio'].map(e => porEstado[e] ? (estadoCorto[e] || '') + ' ' + porEstado[e] : '').filter(Boolean).join(' · ');
         const clientesHtml = Object.values(porPedido).map(p => p.cliente).filter((v,i,a) => v && a.indexOf(v) === i).slice(0, 3).join(', ') + (Object.values(porPedido).length > 3 ? '…' : '');
         return '<div class="salida-card salida-card--punto" onclick="abrirSalida(\'' + key + '\')" style="cursor:pointer;" title="Tocá para ver detalle">' +
             '<div class="salida-card__header">' +
@@ -1906,6 +1910,7 @@ function renderSalidas() {
                 '</div>' +
                 '<div style="text-align:right;">' +
                     '<div class="salida-card__count">📦 ' + totalPedidos + ' pedido' + (totalPedidos !== 1 ? 's' : '') + ' · ' + totalArticulos + ' art</div>' +
+                    (resumenEstado ? '<div style="font-size:.75rem;color:#888;margin-top:4px;">' + resumenEstado + '</div>' : '') +
                     '<button class="admin-btn admin-btn--primary" style="margin-top:10px;padding:8px 18px;font-size:.8rem;width:auto;" onclick="event.stopPropagation();abrirSalida(\'' + key + '\')">👁️ Ver salida</button>' +
                 '</div>' +
             '</div>' +
@@ -2093,6 +2098,7 @@ function renderPreparar() {
                 '<div class="prep-item__info">' +
                     '<div><strong>' + (d.nombre_capturado || '') + '</strong> ×' + (d.qty || 1) + (d.talla ? ' (' + d.talla + ')' : '') + '</div>' +
                     '<div class="prep-item__code">Código: #' + (d.inventory_id || '') + '</div>' +
+                    '<div style="margin-top:4px;"><span class="log-estado log-estado--' + (d.estado_logistico || 'pendiente-preparacion') + '">' + (ESTADOS_LABEL[d.estado_logistico || 'pendiente-preparacion'] || '⏳ Pendiente') + '</span></div>' +
                     '<div class="prep-item__desc" data-producto="' + d.inventory_id + '">Cargando descripción...</div>' +
                 '</div>' +
             '</div>').join('');
