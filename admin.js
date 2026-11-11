@@ -2147,15 +2147,23 @@ $('prep-marcar-preparado').addEventListener('click', async () => {
         for (const id of ids) {
             await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: 'en-preparacion', updated_at: new Date().toISOString() });
         }
+        // Actualizar la lista local YA, para que Salidas/Despachos/Preparar
+        // reflejen el cambio de estado de inmediato (no esperar el refresco de 45 s).
+        ids.forEach(id => {
+            const d = despachos.find(x => String(x.id) === String(id));
+            if (d) d.estado_logistico = 'en-preparacion';
+        });
         prepSelected.clear();
         actualizarContadorPrep();
+        renderPreparar();
+        renderSalidas();
+        renderDespachos();
         showToast('✅ ' + ids.length + ' artículo(s) en preparación');
     } catch (e) {
         if (e.status === 401) { showToast('🔒 Tu sesión expiró — volvé a entrar al panel'); }
         else showToast('❌ No se pudo marcar: ' + e.message);
         return;
     }
-    showToast('✅ Artículos en preparación');
     loadPreparar();
 });
 
