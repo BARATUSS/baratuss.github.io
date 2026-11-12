@@ -359,36 +359,54 @@ async function telefonoCindy(): Promise<string> {
   } catch (_e) { return '+503 7662-6575'; }
 }
 
+async function fraseEstadoPedido(ref: string): Promise<string | null> {
+  const { data: ord } = await supabase.from('orders')
+    .select('reference, status')
+    .ilike('reference', '%' + ref + '%')
+    .order('id', { ascending: false }).limit(1);
+  if (!ord || !ord.length) return null;
+  const o = ord[0] as any;
+  const r = o.reference || ref;
+  if (o.status === 'cancelado') {
+    return 'Tu pedido *' + r + '* fue *cancelado*. Si tenés dudas, escribinos 😊';
+  }
+  if (o.status === 'entregado') {
+    return 'Tu pedido *' + r + '* ya fue *entregado ✅*. ¡Gracias por comprar con nosotras! 💛';
+  }
+  const { data: desp } = await supabase.from('despachos')
+    .select('estado_logistico')
+    .eq('order_reference', r);
+  const estados = (desp || []).map((d: any) => d.estado_logistico || '');
+  if (estados.some(e => e === 'salio')) {
+    return 'Tu pedido *' + r + '* va *en camino 🚚*. Ya salió rumbo a tu punto de entrega 😊';
+  }
+  if (estados.some(e => e === 'listo')) {
+    return 'Tu pedido *' + r + '* ya está *listo para entregar 🎉*. Te avisamos cuando salga 😊';
+  }
+  return 'Tu pedido *' + r + '* fue *recibido ✅* y está por prepararse. Te avisamos cuando esté listo 😊';
+}
+
 async function estadoPedido(tNorm: string, texto?: string): Promise<string> {
   try {
-    // Si el cliente mandó un código (ej. BRT-1024, BAR-...), buscar por ese código.
+    // Si el cliente mandó un código (ej. BAR-…), buscar por ese código.
     const m = (texto || '').match(/\b(brt|bar)-[\w-]+/i);
     if (m) {
-      const codigo = m[0];
-      const { data } = await supabase.from('orders')
-        .select('reference, status')
-        .ilike('reference', '%' + codigo + '%')
-        .order('id', { ascending: false }).limit(1);
-      if (data && data.length) {
-        const o = data[0] as any;
-        return 'Tu pedido *' + (o.reference || '') + '* está *' + (o.status || 'en proceso') +
-          '*. ¿Necesitás algo más? 😊';
-      }
-      return 'No encontré ningún pedido con el código *' + codigo + '*. Revisá que esté bien escrito 😊';
+      const frase = await fraseEstadoPedido(m[0]);
+      if (frase) return frase;
+      return 'No encontré ningún pedido con el código *' + m[0] + '*. Revisá que esté bien escrito 😊';
     }
     const { data } = await supabase.from('orders')
-      .select('reference, status')
+      .select('reference')
       .ilike('customer_phone', '%' + tNorm.slice(-8) + '%')
       .order('id', { ascending: false }).limit(1);
     if (data && data.length) {
-      const o = data[0] as any;
-      return 'Tu pedido *' + (o.reference || '') + '* está *' + (o.status || 'en proceso') +
-        '*. ¿Necesitás algo más? 😊';
+      const frase = await fraseEstadoPedido((data[0] as any).reference);
+      if (frase) return frase;
     }
     return 'No encontré pedidos con ese número. Si ya compraste, pasame el *código de tu pedido* '
-      + '(ej. BRT-1024) y te doy el estado al toque 😊';
+      + '(empieza con BAR-…) y te doy el estado al toque 😊';
   } catch (_e) {
-    return 'Pasame el *código de tu pedido* (ej. BRT-1024) y te doy el estado al toque 😊';
+    return 'Pasame el *código de tu pedido* (empieza con BAR-…) y te doy el estado al toque 😊';
   }
 }
 

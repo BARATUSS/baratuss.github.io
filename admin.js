@@ -1397,8 +1397,7 @@ const ESTADOS_LABEL = {
     'cancelado': '🚫 Cancelado'
 };
 const ESTADOS_NEXT = {
-    'pendiente-preparacion': 'en-preparacion',
-    'en-preparacion': 'listo',
+    'pendiente-preparacion': 'listo',
     'listo': 'salio',
     'salio': 'entregado',
     // Un despacho reprogramado vuelve al flujo normal desde "listo"
@@ -2067,7 +2066,7 @@ function renderPreparar() {
     const pendientes = despachos.filter(d => {
         if (estaSinPagar(d.order_reference)) return false;
         const e = d.estado_logistico || 'pendiente-preparacion';
-        if (prepFilter === 'pendiente-preparacion') return e === 'pendiente-preparacion' || e === 'en-preparacion';
+        if (prepFilter === 'pendiente-preparacion') return e === 'pendiente-preparacion';
         return e === prepFilter;
     });
     if (!pendientes.length) {
@@ -2135,7 +2134,7 @@ function actualizarContadorPrep() {
     const b = $('prep-marcar-preparado');
     if (!b) return;
     const n = prepSelected.size;
-    b.textContent = n ? ('✅ Marcar ' + n + ' como en preparación') : '✅ Marcar como en preparación';
+    b.textContent = n ? ('✅ Marcar ' + n + ' como listos') : '✅ Marcar como listos';
 }
 document.querySelectorAll('.prep-filter').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2148,23 +2147,23 @@ document.querySelectorAll('.prep-filter').forEach(btn => {
 $('prep-marcar-preparado').addEventListener('click', async () => {
     const ids = [...prepSelected];
     if (!ids.length) { showToast('📝 Seleccioná al menos un artículo'); return; }
-    if (!confirm('¿Marcar ' + ids.length + ' artículo(s) como EN PREPARACIÓN?')) return;
+    if (!confirm('¿Marcar ' + ids.length + ' artículo(s) como LISTO?')) return;
     try {
         for (const id of ids) {
-            await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: 'en-preparacion', updated_at: new Date().toISOString() });
+            await api('PATCH', 'despachos?id=eq.' + id, { estado_logistico: 'listo', updated_at: new Date().toISOString() });
         }
         // Actualizar la lista local YA, para que Salidas/Despachos/Preparar
         // reflejen el cambio de estado de inmediato (no esperar el refresco de 45 s).
         ids.forEach(id => {
             const d = despachos.find(x => String(x.id) === String(id));
-            if (d) d.estado_logistico = 'en-preparacion';
+            if (d) d.estado_logistico = 'listo';
         });
         prepSelected.clear();
         actualizarContadorPrep();
         renderPreparar();
         renderSalidas();
         renderDespachos();
-        showToast('✅ ' + ids.length + ' artículo(s) en preparación');
+        showToast('✅ ' + ids.length + ' artículo(s) listos');
     } catch (e) {
         if (e.status === 401) { showToast('🔒 Tu sesión expiró — volvé a entrar al panel'); }
         else showToast('❌ No se pudo marcar: ' + e.message);
