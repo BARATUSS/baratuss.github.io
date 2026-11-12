@@ -1891,8 +1891,8 @@ function renderSalidas() {
         const totalPedidos = Object.keys(porPedido).length;
         const porEstado = {};
         g.forEach(d => { const e = d.estado_logistico || 'pendiente-preparacion'; porEstado[e] = (porEstado[e] || 0) + 1; });
-        const estadoCorto = { 'pendiente-preparacion': '⏳', 'en-preparacion': '🔨', 'listo': '✅', 'salio': '🚚' };
-        const resumenEstado = ['pendiente-preparacion', 'en-preparacion', 'listo', 'salio'].map(e => porEstado[e] ? (estadoCorto[e] || '') + ' ' + porEstado[e] : '').filter(Boolean).join(' · ');
+        const estadoCorto = { 'pendiente-preparacion': '⏳', 'listo': '✅', 'salio': '🚚' };
+        const resumenEstado = ['pendiente-preparacion', 'listo', 'salio'].map(e => porEstado[e] ? (estadoCorto[e] || '') + ' ' + porEstado[e] : '').filter(Boolean).join(' · ');
         const clientesHtml = Object.values(porPedido).map(p => p.cliente).filter((v,i,a) => v && a.indexOf(v) === i).slice(0, 3).join(', ') + (Object.values(porPedido).length > 3 ? '…' : '');
         return '<div class="salida-card salida-card--punto" onclick="abrirSalida(\'' + key + '\')" style="cursor:pointer;" title="Tocá para ver detalle">' +
             '<div class="salida-card__header">' +
@@ -2056,13 +2056,13 @@ function renderPreparar() {
     // PLAN 2 (19-sep-2026): los pedidos SIN PAGAR no se preparan (quedan visibles en Despachos
     // con la etiqueta naranja, y saltan acá solos cuando el cliente paga).
     const ocultosSinPagar = despachos.filter(d => estaSinPagar(d.order_reference)
-        && ['pendiente-preparacion', 'en-preparacion'].includes(d.estado_logistico || 'pendiente-preparacion'));
+        && ['pendiente-preparacion'].includes(d.estado_logistico || 'pendiente-preparacion'));
     const avisoSinPagar = ocultosSinPagar.length
         ? '<div style="background:#fff4e5;border:1.5px solid #ffd8a8;border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:.82rem;color:#8a5a1f;line-height:1.5;">'
           + '⏳ <b>' + ocultosSinPagar.length + ' artículo(s) no están acá</b> porque su pedido todavía no está pagado. '
           + 'Los ves en <b>Despachos</b> con la etiqueta <i>«Sin pagar — no preparar»</i> y aparecen acá solos cuando el pago se completa 💛</div>'
         : '';
-    // Vista "Pendiente de preparación" muestra pendientes + en preparación
+    // Vista "Pendientes" muestra solo los pendientes de preparar; al marcarlos pasan a "Listos"
     const pendientes = despachos.filter(d => {
         if (estaSinPagar(d.order_reference)) return false;
         const e = d.estado_logistico || 'pendiente-preparacion';
